@@ -41,6 +41,22 @@ const MenuGridPage: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    // FIX: Helper to display profile picture or emoji (copied from App.tsx logic)
+    const renderProfilePicture = (pic: string | undefined) => {
+        if (!pic) return <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500"><UserCircleIcon className="w-8 h-8" /></div>;
+        
+        const isImage = pic.startsWith('data:image/') || pic.startsWith('http');
+        if (isImage) {
+            return <img src={pic} alt="Profile" className="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm" />;
+        }
+        // Emoji case
+        return (
+            <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 shadow-sm">
+                <span className="text-2xl">{pic}</span>
+            </div>
+        );
+    };
+
     return (
         <div className="animate-fade-in pb-20 space-y-6">
             {/* Header Area */}
@@ -63,13 +79,7 @@ const MenuGridPage: React.FC = () => {
             >
                 <div className="flex items-center gap-3">
                     <div className="relative">
-                        {currentUser?.profilePicture && (currentUser.profilePicture.startsWith('data') || currentUser.profilePicture.startsWith('http')) ? (
-                            <img src={currentUser.profilePicture} alt="Profile" className="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm" />
-                        ) : (
-                            <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500">
-                                <UserCircleIcon className="w-8 h-8" />
-                            </div>
-                        )}
+                        {renderProfilePicture(currentUser?.profilePicture)}
                         <div className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-800 p-1 rounded-full shadow-md">
                             <ChevronDownIcon className="w-2.5 h-2.5 text-gray-400" />
                         </div>

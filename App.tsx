@@ -202,6 +202,22 @@ const AppContent: React.FC = () => {
       );
   }
 
+  // FIX: Helper to display profile picture or emoji
+  const renderProfilePicture = (pic: string | undefined) => {
+      if (!pic) return <div className={`p-1.5 rounded-xl transition-all group-hover:scale-105 ${activeView === 'profile' ? 'text-teal-600 bg-teal-50' : 'text-slate-500'}`}><UserCircleIcon className="w-8 h-8" /></div>;
+      
+      const isImage = pic.startsWith('data:image/') || pic.startsWith('http');
+      if (isImage) {
+          return <img src={pic} alt="Profile" className={`w-10 h-10 rounded-xl object-cover border-2 shadow-sm transition-all group-hover:scale-105 ${activeView === 'profile' ? 'border-teal-500 shadow-teal-100' : 'border-white dark:border-gray-700'}`} />;
+      }
+      // It's an emoji or text
+      return (
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 shadow-sm transition-all group-hover:scale-105 bg-gray-100 dark:bg-gray-700 ${activeView === 'profile' ? 'border-teal-500' : 'border-white dark:border-gray-700'}`}>
+              <span className="text-xl">{pic}</span>
+          </div>
+      );
+  };
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${theme === 'dark' ? 'dark bg-gray-900 text-gray-100' : 'bg-slate-100 text-slate-900'} font-sans pb-10`}>
       {currentUser ? (
@@ -265,11 +281,7 @@ const AppContent: React.FC = () => {
 
                 {/* Profile Button */}
                 <button onClick={() => navigate('profile')} className="relative flex items-center justify-center group">
-                    {currentUser?.profilePicture && (currentUser.profilePicture.startsWith('data') || currentUser.profilePicture.startsWith('http')) ? (
-                        <img src={currentUser.profilePicture} alt="Profile" className={`w-10 h-10 rounded-xl object-cover border-2 shadow-sm transition-all group-hover:scale-105 ${activeView === 'profile' ? 'border-teal-500 shadow-teal-100' : 'border-white dark:border-gray-700'}`} />
-                    ) : (
-                        <div className={`p-1.5 rounded-xl transition-all group-hover:scale-105 ${activeView === 'profile' ? 'text-teal-600 bg-teal-50' : 'text-slate-500'}`}><UserCircleIcon className="w-8 h-8" /></div>
-                    )}
+                    {renderProfilePicture(currentUser?.profilePicture)}
                 </button>
              </div>
           </header>

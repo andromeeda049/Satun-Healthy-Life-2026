@@ -101,6 +101,12 @@ const UserProfile: React.FC = () => {
         if (!groupCode) return alert('กรุณากรอกรหัสกลุ่ม');
         if (!consentGiven) return alert('กรุณายอมรับเงื่อนไขการเปิดเผยข้อมูล');
         
+        // FIX: Ensure user info is present
+        if (!currentUser || !currentUser.username) {
+            alert("ไม่พบข้อมูลผู้ใช้งาน กรุณาออกจากระบบแล้วเข้าใหม่");
+            return;
+        }
+
         setJoining(true);
         const res = await joinGroup(groupCode);
         if (res.success) {
