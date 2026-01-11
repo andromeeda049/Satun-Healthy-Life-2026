@@ -12,7 +12,23 @@ const getRandomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)];
 const UserProfile: React.FC = () => {
     const { userProfile, setUserProfile, currentUser, organizations, joinGroup, refreshGroups } = useContext(AppContext);
     
-    const [healthData, setHealthData] = useState<UserProfileType>(userProfile);
+    // Safety check for userProfile
+    const safeUserProfile = userProfile || {
+        gender: 'male',
+        age: '',
+        weight: '',
+        height: '',
+        waist: '',
+        hip: '',
+        activityLevel: 1.2,
+        healthCondition: HEALTH_CONDITIONS[0],
+        xp: 0,
+        level: 1,
+        badges: [],
+        organization: ''
+    };
+
+    const [healthData, setHealthData] = useState<UserProfileType>(safeUserProfile);
     const [displayName, setDisplayName] = useState(currentUser?.displayName || '');
     const [profilePicture, setProfilePicture] = useState(currentUser?.profilePicture || '');
     
@@ -25,10 +41,12 @@ const UserProfile: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        setHealthData(userProfile);
+        if (userProfile) {
+            setHealthData(userProfile);
+        }
         if (currentUser) {
-            setDisplayName(currentUser.displayName);
-            setProfilePicture(currentUser.profilePicture);
+            setDisplayName(currentUser.displayName || '');
+            setProfilePicture(currentUser.profilePicture || '');
         }
     }, [userProfile, currentUser]);
 
@@ -66,12 +84,12 @@ const UserProfile: React.FC = () => {
         e.preventDefault();
         const updatedProfile = { 
             ...healthData, 
-            pillarScores: userProfile.pillarScores,
-            xp: userProfile.xp,
-            level: userProfile.level,
-            badges: userProfile.badges,
-            pdpaAccepted: userProfile.pdpaAccepted,
-            pdpaAcceptedDate: userProfile.pdpaAcceptedDate
+            pillarScores: userProfile?.pillarScores,
+            xp: userProfile?.xp,
+            level: userProfile?.level,
+            badges: userProfile?.badges,
+            pdpaAccepted: userProfile?.pdpaAccepted,
+            pdpaAcceptedDate: userProfile?.pdpaAcceptedDate
         };
         setUserProfile(updatedProfile, { displayName, profilePicture });
         setSaved(true);
@@ -95,11 +113,12 @@ const UserProfile: React.FC = () => {
         setJoining(false);
     };
     
-    const isImage = profilePicture.startsWith('data:image/') || profilePicture.startsWith('http');
-    const badges = userProfile.badges || [];
-    const currentOrgName = (organizations || []).find(o => o.id === healthData.organization)?.name || 'เลือกหน่วยงาน...';
-
     if (!currentUser) return null;
+
+    const isImage = profilePicture.startsWith('data:image/') || profilePicture.startsWith('http');
+    // Ensure badges is an array to prevent crash
+    const badges = Array.isArray(userProfile?.badges) ? userProfile.badges : [];
+    const currentOrgName = (organizations || []).find(o => o.id === healthData.organization)?.name || 'เลือกหน่วยงาน...';
 
     return (
         <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full transform transition-all duration-300">

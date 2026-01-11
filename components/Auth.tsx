@@ -38,11 +38,9 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                                 userId: profile.userId
                             });
                             
-                            // FIX: Handle Backend Response Format { status: 'success', data: ... }
                             if (res.status === 'success' && res.data) {
                                 onLogin({ ...res.data, authProvider: 'line' });
                             } else if (res.success && res.user) { 
-                                // Fallback for legacy format
                                 onLogin({ ...res.user, authProvider: 'line' }); 
                             } else { 
                                 setError(`Login Error: ${res.message || 'Unknown response'}`); 
@@ -54,15 +52,26 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                         }
                     } else { setError('ไม่พบ URL ของ Google Script'); setLoading(false); }
                 }
-            } catch (err: any) { setIsLineReady(true); }
+            } catch (err: any) { 
+                console.error(err);
+                setIsLineReady(true); 
+                // If LIFF init fails, we might still allow admin login
+            }
         };
         initLine();
     }, [scriptUrl, onLogin]);
 
     const handleLineLogin = () => {
         if (!isLineReady) { setError('LINE ยังไม่พร้อมใช้งาน'); return; }
-        if (!liff.isLoggedIn()) { liff.login(); }
-        else { window.location.reload(); }
+        if (!liff.isLoggedIn()) { 
+            liff.login(); 
+        } else { 
+            // FIX: If already logged in but stuck (e.g. error), force logout to reset session
+            if (window.confirm("คุณต้องการรีเซ็ตการเข้าสู่ระบบหรือไม่?")) {
+                liff.logout();
+                window.location.reload(); 
+            }
+        }
     };
 
     const handleAdminLogin = (e: React.FormEvent) => {
@@ -73,7 +82,6 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
         setTimeout(() => {
             const targetOrgId = ADMIN_CREDENTIALS[password];
             if (targetOrgId) {
-                // Try to find name in organizations context, if not found (e.g. initial load), default to Admin
                 const orgName = (organizations || []).find(o => o.id === targetOrgId)?.name || 'Admin';
                 onLogin({ username: `admin_${targetOrgId}`, displayName: `Admin: ${orgName}`, profilePicture: '🛡️', role: 'admin', organization: targetOrgId, authProvider: 'email' });
             } else { setError('รหัสผ่านไม่ถูกต้อง'); setLoading(false); }
@@ -110,9 +118,16 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                     </div>
 
                     {error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-400 animate-bounce-in">
-                            <ExclamationTriangleIcon className="w-5 h-5" />
-                            <p className="text-xs font-semibold">{error}</p>
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl flex flex-col gap-2 text-red-600 dark:text-red-400 animate-bounce-in">
+                            <div className="flex items-center gap-3">
+                                <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                                <p className="text-xs font-semibold">{error}</p>
+                            </div>
+                            {liff.isLoggedIn() && (
+                                <button onClick={() => { liff.logout(); window.location.reload(); }} className="text-[10px] underline hover:text-red-800 dark:hover:text-red-300 self-end">
+                                    ออกจากระบบแล้วลองใหม่
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
