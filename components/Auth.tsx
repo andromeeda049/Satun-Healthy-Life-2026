@@ -38,10 +38,21 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                                 userId: profile.userId
                             });
                             
+                            // FIX: Force use fresh LINE profile data (Picture & Name)
                             if (res.status === 'success' && res.data) {
-                                onLogin({ ...res.data, authProvider: 'line' });
+                                onLogin({ 
+                                    ...res.data, 
+                                    displayName: profile.displayName || res.data.displayName,
+                                    profilePicture: profile.pictureUrl || res.data.profilePicture,
+                                    authProvider: 'line' 
+                                });
                             } else if (res.success && res.user) { 
-                                onLogin({ ...res.user, authProvider: 'line' }); 
+                                onLogin({ 
+                                    ...res.user, 
+                                    displayName: profile.displayName || res.user.displayName,
+                                    profilePicture: profile.pictureUrl || res.user.profilePicture,
+                                    authProvider: 'line' 
+                                }); 
                             } else { 
                                 setError(`Login Error: ${res.message || 'Unknown response'}`); 
                                 setLoading(false); 
