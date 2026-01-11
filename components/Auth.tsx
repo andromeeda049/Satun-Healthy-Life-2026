@@ -37,22 +37,9 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                                 provider: 'line',
                                 userId: profile.userId
                             });
-                            
-                            // FIX: Handle both GAS response format ({ status: 'success', data: ... }) 
-                            // and potential client-side error format
-                            if (res.status === 'success' && res.data) { 
-                                onLogin({ ...res.data, authProvider: 'line' }); 
-                            } else if (res.success && res.user) {
-                                // Fallback for legacy format
-                                onLogin({ ...res.user, authProvider: 'line' });
-                            } else { 
-                                setError(`Login Error: ${res.message || 'Unknown response format'}`); 
-                                setLoading(false); 
-                            }
-                        } catch (fetchErr: any) { 
-                            setError(`Network Error: ${fetchErr.message}`); 
-                            setLoading(false); 
-                        }
+                            if (res.success && res.user) { onLogin({ ...res.user, authProvider: 'line' }); }
+                            else { setError(`Login Error: ${res.message}`); setLoading(false); }
+                        } catch (fetchErr: any) { setError(`Network Error: ${fetchErr.message}`); setLoading(false); }
                     } else { setError('ไม่พบ URL ของ Google Script'); setLoading(false); }
                 }
             } catch (err: any) { setIsLineReady(true); }
