@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (v14.4 - Optimized Leaderboard & Groups)
+ * Satun Smart Life - Backend Script (v14.5 - Robust Group Code Check)
  */
 
 const SHEET_NAMES = {
@@ -123,8 +123,10 @@ function handleCreateGroup(groupData, adminUser) {
     if (!sheet) sheet = ss.insertSheet(SHEET_NAMES.GROUPS);
     
     const data = sheet.getDataRange().getValues();
+    const newCode = String(groupData.code).trim().toUpperCase();
+
     for(let i=1; i<data.length; i++) {
-        if(data[i][2] === groupData.code) { 
+        if(String(data[i][2]).trim().toUpperCase() === newCode) { 
             return createErrorResponse("รหัสเข้ากลุ่มนี้ถูกใช้งานแล้ว");
         }
     }
@@ -133,7 +135,7 @@ function handleCreateGroup(groupData, adminUser) {
     sheet.appendRow([
         id, 
         groupData.name, 
-        groupData.code, 
+        groupData.code, // Keep original casing in DB if desired, or save newCode
         groupData.description, 
         groupData.lineLink, 
         adminUser.username, 
@@ -151,8 +153,11 @@ function handleJoinGroup(code, user) {
     
     const groups = groupSheet.getDataRange().getValues();
     let targetGroup = null;
+    const searchCode = String(code).trim().toUpperCase();
+
     for(let i=1; i<groups.length; i++) {
-        if(groups[i][2] === code) { 
+        const sheetCode = String(groups[i][2]).trim().toUpperCase();
+        if(sheetCode === searchCode) { 
             targetGroup = {
                 id: groups[i][0],
                 name: groups[i][1],
@@ -167,7 +172,7 @@ function handleJoinGroup(code, user) {
         }
     }
     
-    if(!targetGroup) return createErrorResponse("ไม่พบรหัสกลุ่มนี้");
+    if(!targetGroup) return createErrorResponse("ไม่พบรหัสกลุ่มนี้ (Code not found)");
     
     const members = memberSheet.getDataRange().getValues();
     for(let i=1; i<members.length; i++) {

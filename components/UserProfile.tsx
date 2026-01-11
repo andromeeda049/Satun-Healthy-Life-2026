@@ -147,7 +147,7 @@ const UserProfile: React.FC = () => {
                         <input 
                             type="text" 
                             value={groupCode}
-                            onChange={(e) => setGroupCode(e.target.value)}
+                            onChange={(e) => setGroupCode(e.target.value.toUpperCase())}
                             placeholder="เช่น DM001, FIT2024"
                             className="w-full p-3 border border-blue-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase font-mono"
                         />
