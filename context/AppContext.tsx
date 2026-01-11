@@ -230,6 +230,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (scriptUrl) saveDataToSheet(scriptUrl, 'QuizHistory', newEntry, currentUser).catch(e => console.error(e));
   };
 
+  // FIX: Implement saveEvaluation to actually send data
+  const saveEvaluation = (satisfaction: any, outcomes: any) => {
+      if (!currentUser) return;
+      const newEntry: EvaluationEntry = {
+          id: Date.now().toString(),
+          date: new Date().toISOString(),
+          satisfaction,
+          outcomes
+      };
+      _setEvaluationHistory(prev => [newEntry, ...prev]);
+      if (scriptUrl) {
+          // Use 'EvaluationHistory' as key to match Code.gs switch case exactly (or fuzzy match 'evaluation')
+          saveDataToSheet(scriptUrl, 'EvaluationHistory', newEntry, currentUser).catch(e => console.error(e));
+      }
+  };
+
   const gainXP = useCallback((amount: number, category?: string) => {
     if (!currentUser || currentUser.role === 'guest') return;
     let finalAmount = amount;
@@ -276,7 +292,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         waterHistory, setWaterHistory: _setWaterHistory, calorieHistory, setCalorieHistory: _setCalorieHistory,
         activityHistory, setActivityHistory: _setActivityHistory, sleepHistory, setSleepHistory: _setSleepHistory,
         moodHistory, setMoodHistory: _setMoodHistory, habitHistory, setHabitHistory: _setHabitHistory,
-        socialHistory, setSocialHistory: _setSocialHistory, evaluationHistory, saveEvaluation: (s, o) => {}, quizHistory, saveQuizResult,
+        socialHistory, setSocialHistory: _setSocialHistory, evaluationHistory, saveEvaluation, quizHistory, saveQuizResult,
         waterGoal, setWaterGoal, latestFoodAnalysis, setLatestFoodAnalysis, userProfile, setUserProfile,
         scriptUrl, setScriptUrl, apiKey: '', setApiKey: () => {}, isDataSynced,
         clearBmiHistory: () => { _setBmiHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'bmiHistory', currentUser); },

@@ -106,6 +106,12 @@ const ActivityTracker: React.FC = () => {
     const handleCustomAdd = async (e: React.FormEvent) => {
         e.preventDefault();
         setDuplicateError(null);
+        
+        if (!customImage) {
+            setDuplicateError("กรุณาแนบภาพหลักฐานกิจกรรมก่อนบันทึก");
+            return;
+        }
+
         const calories = parseInt(customCalories);
         if (customName.trim() && calories > 0) {
             try {
@@ -390,7 +396,7 @@ const ActivityTracker: React.FC = () => {
                             
                             <form onSubmit={handleCustomAdd} className="space-y-4">
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase">แนบภาพหลักฐาน (ทางเลือก)</label>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase">แนบภาพหลักฐาน <span className="text-red-500">*</span></label>
                                     {customImagePreview ? (
                                         <div className="space-y-3">
                                             <div className="relative w-full h-48 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/5 shadow-inner">
@@ -484,7 +490,7 @@ const ActivityTracker: React.FC = () => {
                                 
                                 <button 
                                     type="submit" 
-                                    disabled={!customName || !customCalories || isScanningImage || isCalculating} 
+                                    disabled={!customName || !customCalories || !customImage || isScanningImage || isCalculating} 
                                     className="w-full bg-yellow-500 text-white font-black py-4 rounded-xl hover:bg-yellow-600 disabled:bg-gray-300 transition-colors uppercase tracking-widest text-xs shadow-md shadow-yellow-100 dark:shadow-none mt-2"
                                 >
                                     บันทึกกิจกรรมลงในระบบ

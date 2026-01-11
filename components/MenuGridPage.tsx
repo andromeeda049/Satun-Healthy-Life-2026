@@ -28,6 +28,7 @@ const MENU_ITEMS: MenuItem[] = [
     { id: 'weeklyQuiz', label: 'ควิซประจำสัปดาห์', icon: <StarIcon className="w-6 h-6 text-rose-500" />, color: 'bg-white', category: 'main' },
     { id: 'assessment', label: 'ประเมินความเสี่ยง', icon: <ClipboardCheckIcon className="w-6 h-6 text-purple-500" />, color: 'bg-white', category: 'main' },
     { id: 'quiz', label: 'วัดความรู้ HL', icon: <ClipboardCheckIcon className="w-6 h-6 text-gray-500" />, color: 'bg-white', category: 'main' },
+    { id: 'evaluation', label: 'แบบประเมินผล', icon: <HeartIcon className="w-6 h-6 text-pink-500" />, color: 'bg-white', category: 'main' }, // Added evaluation
 ];
 
 const MenuGridPage: React.FC = () => {
@@ -232,7 +233,7 @@ const MenuGridPage: React.FC = () => {
 
             <div className="text-center">
                 <p className="text-[11px] text-gray-400 font-bold tracking-tighter uppercase">
-                    Satun Healthy Life v1.3.0 • แพลตฟอร์มสุขภาพดิจิทัล
+                    Satun Healthy Life v1.4.0 • แพลตฟอร์มสุขภาพดิจิทัล
                 </p>
             </div>
         </div>

@@ -15,7 +15,7 @@ interface LeaderboardUser {
     organization: string;
     role?: string;
     weeklyXp?: number;
-    score?: number; // Generic score for categories
+    score?: number;
 }
 
 interface OrgRanking {
@@ -26,86 +26,123 @@ interface OrgRanking {
     avgXp: number;
 }
 
+interface GlobalLeaderboardData {
+    leaderboard: LeaderboardUser[];
+    trending: LeaderboardUser[];
+    categories: { water: LeaderboardUser[], food: LeaderboardUser[], activity: LeaderboardUser[] };
+}
+
 const Community: React.FC = () => {
-    const { scriptUrl, currentUser, userProfile, organizations } = useContext(AppContext);
-    const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
-    const [trending, setTrending] = useState<LeaderboardUser[]>([]);
-    const [categories, setCategories] = useState<{ water: LeaderboardUser[], food: LeaderboardUser[], activity: LeaderboardUser[] }>({ water: [], food: [], activity: [] });
-    const [loading, setLoading] = useState(true);
+    const { scriptUrl, currentUser, userProfile, organizations, myGroups } = useContext(AppContext);
+    
+    // Split Data States to prevent reload
+    const [globalData, setGlobalData] = useState<GlobalLeaderboardData | null>(null);
+    const [groupData, setGroupData] = useState<LeaderboardUser[]>([]);
+    
+    const [loadingGlobal, setLoadingGlobal] = useState(true);
+    const [loadingGroup, setLoadingGroup] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'users' | 'trending' | 'orgs' | 'water' | 'food' | 'activity'>('users');
+    
+    // UI States
+    const [activeTab, setActiveTab] = useState<'users' | 'trending' | 'myGroup' | 'orgs' | 'water' | 'food' | 'activity'>('users');
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [loadingMessage, setLoadingMessage] = useState("กำลังโหลดข้อมูล...");
     
-    // Debug state
-    const [rawDebugData, setRawDebugData] = useState<any>(null);
+    // Debug
     const [showDebug, setShowDebug] = useState(false);
-    const [apiVersion, setApiVersion] = useState<string>("Unknown");
     
     const shareCardRef = useRef<HTMLDivElement>(null);
     const leaderboardRef = useRef<HTMLDivElement>(null);
 
-    const loadData = async () => {
-        setLoading(true);
-        setError(null);
-        setRawDebugData(null);
-        setApiVersion("Unknown");
-        const messages = ["กำลังจัดอันดับผู้พิชิต...", "ใครคือที่ 1 ของวันนี้?", "กำลังรวบรวมคะแนนสุขภาพ...", "เฟ้นหาสุดยอดคนรักสุขภาพ..."];
-        setLoadingMessage(messages[Math.floor(Math.random() * messages.length)]);
-
-        try {
-            if (!scriptUrl) throw new Error("ไม่พบ URL ของ Web App กรุณาตั้งค่า");
-            const data = await fetchLeaderboard(scriptUrl, currentUser || undefined);
-            
-            setRawDebugData(data);
-            if (data.apiVersion) setApiVersion(data.apiVersion);
-
-            if (!data) throw new Error("ไม่ได้รับข้อมูลจาก Server (Response is null)");
-
-            const filterAdmins = (list: any[]) => {
-                if (!Array.isArray(list)) return [];
-                return list.filter((u: any) => {
-                    const role = String(u.role || '').toLowerCase();
-                    const username = String(u.username || '').toLowerCase();
-                    const name = String(u.displayName || '').toLowerCase();
-                    const org = String(u.organization || '').toLowerCase();
-                    return role !== 'admin' && !username.startsWith('admin') && !name.includes('admin') && org !== 'all';
-                });
-            };
-
-            if (Array.isArray(data.leaderboard)) {
-                const sorted = filterAdmins(data.leaderboard).sort((a: any, b: any) => b.xp - a.xp);
-                setLeaderboard(sorted);
-            }
-            if (Array.isArray(data.trending)) {
-                setTrending(filterAdmins(data.trending));
-            }
-            
-            if (data.categories) {
-                setCategories({
-                    water: filterAdmins(data.categories.water || []),
-                    food: filterAdmins(data.categories.food || []),
-                    activity: filterAdmins(data.categories.activity || [])
-                });
-            } else {
-                console.warn("Categories missing from backend response");
-                setCategories({ water: [], food: [], activity: [] });
-            }
-
-        } catch (err: any) {
-            console.error("Leaderboard Error:", err);
-            setError(err.message || "ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // 1. Initial Load (Global Data) - Run ONCE
     useEffect(() => {
-        loadData();
-    }, [scriptUrl]);
+        const loadGlobalData = async () => {
+            if (!scriptUrl) return;
+            setLoadingGlobal(true);
+            setError(null);
+            
+            try {
+                // Determine initial group selection if available
+                if (myGroups && myGroups.length > 0) {
+                    setSelectedGroupId(myGroups[0].id);
+                }
 
+                const data = await fetchLeaderboard(scriptUrl, currentUser || undefined); // No groupId = Global
+                if (!data) throw new Error("ไม่ได้รับข้อมูลจาก Server");
+
+                const filterAdmins = (list: any[]) => {
+                    if (!Array.isArray(list)) return [];
+                    return list.filter((u: any) => {
+                        const role = String(u.role || '').toLowerCase();
+                        const username = String(u.username || '').toLowerCase();
+                        const name = String(u.displayName || '').toLowerCase();
+                        const org = String(u.organization || '').toLowerCase();
+                        return role !== 'admin' && !username.startsWith('admin') && !name.includes('admin') && org !== 'all';
+                    });
+                };
+
+                setGlobalData({
+                    leaderboard: Array.isArray(data.leaderboard) ? filterAdmins(data.leaderboard).sort((a: any, b: any) => b.xp - a.xp) : [],
+                    trending: Array.isArray(data.trending) ? filterAdmins(data.trending) : [],
+                    categories: {
+                        water: filterAdmins(data.categories?.water || []),
+                        food: filterAdmins(data.categories?.food || []),
+                        activity: filterAdmins(data.categories?.activity || [])
+                    }
+                });
+
+            } catch (err: any) {
+                console.error("Leaderboard Error:", err);
+                setError(err.message || "ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้");
+            } finally {
+                setLoadingGlobal(false);
+            }
+        };
+
+        loadGlobalData();
+    }, [scriptUrl]); // Dependency on scriptUrl only (essentially mount)
+
+    // 2. Group Load - Run when selectedGroupId changes
+    useEffect(() => {
+        const loadGroupData = async () => {
+            if (!scriptUrl || !selectedGroupId) return;
+            
+            // Only fetch if we are actually viewing the group tab (optimization)
+            if (activeTab !== 'myGroup') return;
+
+            setLoadingGroup(true);
+            try {
+                // Pass groupId to Backend for SERVER-SIDE filtering
+                const data = await fetchLeaderboard(scriptUrl, currentUser || undefined, selectedGroupId);
+                
+                const filterAdmins = (list: any[]) => {
+                    if (!Array.isArray(list)) return [];
+                    return list.filter((u: any) => {
+                        const role = String(u.role || '').toLowerCase();
+                        return role !== 'admin'; 
+                    });
+                };
+
+                if (data && Array.isArray(data.leaderboard)) {
+                    setGroupData(filterAdmins(data.leaderboard).sort((a: any, b: any) => b.xp - a.xp));
+                } else {
+                    setGroupData([]);
+                }
+            } catch (err) {
+                console.error("Group Fetch Error:", err);
+            } finally {
+                setLoadingGroup(false);
+            }
+        };
+
+        loadGroupData();
+    }, [selectedGroupId, activeTab, scriptUrl]);
+
+    // Derived Data for Orgs
     const orgRankings = useMemo(() => {
+        if (!globalData?.leaderboard) return [];
         const stats: Record<string, { total: number, count: number }> = {};
-        leaderboard.forEach(user => {
+        globalData.leaderboard.forEach(user => {
             const orgId = user.organization || 'other';
             if (!stats[orgId]) stats[orgId] = { total: 0, count: 0 };
             stats[orgId].total += (user.xp || 0);
@@ -123,11 +160,24 @@ const Community: React.FC = () => {
                 avgXp: count > 0 ? Math.round(total / count) : 0
             };
         }).sort((a, b) => b.avgXp - a.avgXp);
-    }, [leaderboard, organizations]);
+    }, [globalData, organizations]);
 
-    // --- Dynamic Self-Highlight Logic ---
+    // Current Data Source based on Tab
+    const currentList = useMemo(() => {
+        if (!globalData) return [];
+        switch (activeTab) {
+            case 'trending': return globalData.trending;
+            case 'myGroup': return groupData; // From separate fetch
+            case 'orgs': return []; // Handled separately
+            case 'water': return globalData.categories.water;
+            case 'food': return globalData.categories.food;
+            case 'activity': return globalData.categories.activity;
+            default: return globalData.leaderboard;
+        }
+    }, [activeTab, globalData, groupData]);
+
     const myStatsInCurrentTab = useMemo(() => {
-        if (!currentUser) return null;
+        if (!currentUser || !globalData) return null;
 
         let rank = -1;
         let value = '';
@@ -135,27 +185,30 @@ const Community: React.FC = () => {
         let label = '';
 
         if (activeTab === 'users') {
-            rank = leaderboard.findIndex(u => u.username === currentUser.username);
-            const user = leaderboard[rank];
+            rank = globalData.leaderboard.findIndex(u => u.username === currentUser.username);
+            const user = globalData.leaderboard[rank];
             if (user) { value = user.xp.toLocaleString(); unit = 'HP'; label = 'คะแนนสะสม'; }
+        } else if (activeTab === 'myGroup') {
+            rank = groupData.findIndex(u => u.username === currentUser.username);
+            const user = groupData[rank];
+            if (user) { value = user.xp.toLocaleString(); unit = 'HP'; label = 'ในกลุ่มนี้'; }
         } else if (activeTab === 'trending') {
-            rank = trending.findIndex(u => u.username === currentUser.username);
-            const user = trending[rank];
+            rank = globalData.trending.findIndex(u => u.username === currentUser.username);
+            const user = globalData.trending[rank];
             if (user) { value = (user.weeklyXp || 0).toLocaleString(); unit = 'HP'; label = 'สัปดาห์นี้'; }
         } else if (activeTab === 'water') {
-            rank = categories.water.findIndex(u => u.username === currentUser.username);
-            const user = categories.water[rank];
+            rank = globalData.categories.water.findIndex(u => u.username === currentUser.username);
+            const user = globalData.categories.water[rank];
             if (user) { value = ((user.score || 0) / 1000).toFixed(1); unit = 'ลิตร'; label = 'ปริมาณน้ำ'; }
         } else if (activeTab === 'food') {
-            rank = categories.food.findIndex(u => u.username === currentUser.username);
-            const user = categories.food[rank];
+            rank = globalData.categories.food.findIndex(u => u.username === currentUser.username);
+            const user = globalData.categories.food[rank];
             if (user) { value = (user.score || 0).toString(); unit = 'รายการ'; label = 'บันทึกอาหาร'; }
         } else if (activeTab === 'activity') {
-            rank = categories.activity.findIndex(u => u.username === currentUser.username);
-            const user = categories.activity[rank];
+            rank = globalData.categories.activity.findIndex(u => u.username === currentUser.username);
+            const user = globalData.categories.activity[rank];
             if (user) { value = (user.score || 0).toLocaleString(); unit = 'kcal'; label = 'เผาผลาญ'; }
         } else if (activeTab === 'orgs') {
-            // Find my organization rank
             const myOrgId = userProfile.organization;
             rank = orgRankings.findIndex(o => o.id === myOrgId);
             const org = orgRankings[rank];
@@ -164,7 +217,7 @@ const Community: React.FC = () => {
 
         if (rank === -1) return null;
         return { rank: rank + 1, value, unit, label };
-    }, [activeTab, leaderboard, trending, categories, orgRankings, currentUser, userProfile]);
+    }, [activeTab, globalData, groupData, orgRankings, currentUser, userProfile]);
 
     const captureAndShare = async (element: HTMLElement, filename: string) => {
         try {
@@ -198,7 +251,12 @@ const Community: React.FC = () => {
         let gradient = "from-orange-500 to-red-500";
         let subtitle = "สุขภาพดี เริ่มได้ที่ชุมชนของเรา";
 
-        if (activeTab === 'trending') { 
+        if (activeTab === 'myGroup') {
+            title = "กลุ่มของฉัน";
+            icon = <UserGroupIcon className="text-5xl" />;
+            gradient = "from-teal-500 to-blue-500";
+            subtitle = "จัดอันดับภายในกลุ่มเฉพาะ";
+        } else if (activeTab === 'trending') { 
             title = "มาแรง"; icon = <FireIcon className="text-5xl" />; gradient = "from-rose-500 to-pink-500"; 
         } else if (activeTab === 'orgs') { 
             title = "อันดับหน่วยงาน"; icon = <UserGroupIcon className="text-5xl" />; gradient = "from-teal-500 to-emerald-500"; 
@@ -235,65 +293,6 @@ const Community: React.FC = () => {
         );
     };
 
-    if (loading) return (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] relative overflow-hidden pt-10">
-            {/* Ambient Background */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gradient-to-tr from-yellow-300/20 to-orange-500/20 rounded-full blur-[100px] pointer-events-none animate-pulse"></div>
-
-            {/* Main Visual */}
-            <div className="relative mb-12 z-10">
-                {/* Rotating Ring */}
-                <div className="absolute inset-0 -m-8 border-2 border-dashed border-yellow-300/30 rounded-full animate-spin-slow"></div>
-                
-                {/* Floating Trophy Container */}
-                <div className="relative animate-float">
-                    <div className="absolute inset-0 bg-yellow-400 rounded-full blur-2xl opacity-40 animate-pulse"></div>
-                    <div className="bg-gradient-to-br from-white to-yellow-50 dark:from-gray-800 dark:to-gray-900 p-12 rounded-full shadow-[0_20px_50px_rgba(234,179,8,0.3)] border-[6px] border-white dark:border-gray-700 relative z-10">
-                        <TrophyIcon className="w-24 h-24 md:w-32 md:h-32 text-transparent bg-clip-text bg-gradient-to-br from-yellow-400 to-orange-600 drop-shadow-2xl" />
-                    </div>
-                    
-                    {/* Floating Stars */}
-                    <div className="absolute -top-6 -right-6 animate-bounce" style={{ animationDuration: '2s' }}>
-                        <StarIcon className="w-12 h-12 text-yellow-300 drop-shadow-lg transform rotate-12" />
-                    </div>
-                    <div className="absolute bottom-4 -left-8 animate-bounce" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }}>
-                        <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-lg">
-                            <FireIcon className="w-8 h-8 text-orange-500" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Text & Status */}
-            <div className="relative z-10 text-center space-y-4 max-w-xs mx-auto">
-                <h3 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-700 to-slate-500 dark:from-white dark:to-slate-300 tracking-tight leading-tight">
-                    {loadingMessage}
-                </h3>
-                
-                <div className="flex flex-col items-center gap-2">
-                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] animate-pulse">
-                        Retrieving Rankings...
-                    </p>
-                    {/* Shimmer Loading Bar */}
-                    <div className="w-48 h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden relative mt-2">
-                        <div className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-transparent via-yellow-400 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }}></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-
-    if (error) return (
-        <div className="flex flex-col items-center justify-center pt-16 pb-12 px-6 animate-fade-in text-center">
-            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
-                <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">เกิดข้อผิดพลาดในการโหลดข้อมูล</h3>
-            <button onClick={loadData} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors shadow-sm">ลองใหม่อีกครั้ง</button>
-        </div>
-    );
-
-    // Helper to render user row with highlighting
     const renderRankingItem = (user: LeaderboardUser, idx: number, value: string, unit: string, valueColor: string) => {
         const isMe = user.username === currentUser?.username;
         return (
@@ -324,7 +323,6 @@ const Community: React.FC = () => {
         );
     };
 
-    // Helper to render Org row with highlighting and medals
     const renderOrgItem = (org: OrgRanking, idx: number) => {
         const isMyOrg = org.id === userProfile?.organization;
         return (
@@ -336,7 +334,6 @@ const Community: React.FC = () => {
                     : 'bg-white dark:bg-gray-800 border-slate-100 dark:border-gray-700'
             }`}>
                 <div className="flex items-center gap-3">
-                    {/* Use Medal Icon for Orgs too */}
                     <RankIcon index={idx} />
                     <div>
                         <h4 className={`font-bold text-[13px] ${isMyOrg ? 'text-teal-800 dark:text-teal-200' : 'text-slate-800 dark:text-white'}`}>
@@ -359,6 +356,24 @@ const Community: React.FC = () => {
         );
     };
 
+    if (loadingGlobal) return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] pt-10">
+            <div className="w-16 h-16 border-4 border-t-teal-500 border-gray-200 dark:border-gray-700 rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-500 dark:text-gray-400 text-sm animate-pulse">{loadingMessage}</p>
+        </div>
+    );
+
+    if (error) return (
+        <div className="flex flex-col items-center justify-center pt-16 pb-12 px-6 animate-fade-in text-center">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">เกิดข้อผิดพลาดในการโหลดข้อมูล</h3>
+            <p className="text-sm text-gray-500 mb-4">{error}</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors shadow-sm">ลองใหม่อีกครั้ง</button>
+        </div>
+    );
+
     return (
         <div className="animate-fade-in pb-24">
             {renderHeader()}
@@ -371,6 +386,9 @@ const Community: React.FC = () => {
                     </button>
                     <button onClick={() => setActiveTab('trending')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'trending' ? 'bg-rose-500 text-white shadow-sm' : 'bg-gray-50 text-gray-500 dark:bg-gray-700'}`}>
                         <FireIcon className="w-3 h-3" /> มาแรง
+                    </button>
+                    <button onClick={() => setActiveTab('myGroup')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'myGroup' ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-50 text-gray-500 dark:bg-gray-700'}`}>
+                        <UserGroupIcon className="w-3 h-3" /> กลุ่มฉัน
                     </button>
                     <button onClick={() => setActiveTab('water')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === 'water' ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-50 text-gray-500 dark:bg-gray-700'}`}>
                         <WaterDropIcon className="w-3 h-3" /> ดื่มน้ำ
@@ -387,27 +405,61 @@ const Community: React.FC = () => {
                 </div>
             </div>
 
-            <div ref={leaderboardRef} className="space-y-2">
-                {activeTab === 'users' && leaderboard.map((user, idx) => renderRankingItem(user, idx, (user.xp || 0).toLocaleString(), 'HP', 'text-indigo-600 dark:text-indigo-400'))}
+            {/* My Group Selector - Only show in My Group Tab */}
+            {activeTab === 'myGroup' && myGroups && myGroups.length > 0 && (
+                <div className="mb-4">
+                    <p className="text-xs font-bold text-gray-500 mb-2 pl-1">เลือกกลุ่มที่ต้องการดูอันดับ:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                        {myGroups.map(group => (
+                            <button
+                                key={group.id}
+                                onClick={() => setSelectedGroupId(group.id)}
+                                className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                                    selectedGroupId === group.id
+                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-700'
+                                    : 'bg-white text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
+                                }`}
+                            >
+                                {group.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
-                {activeTab === 'trending' && trending.map((user, idx) => renderRankingItem(user, idx, (user.weeklyXp || 0).toLocaleString(), 'Weekly HP', 'text-rose-600 dark:text-rose-400'))}
-                
-                {activeTab === 'water' && categories.water.map((user, idx) => renderRankingItem(user, idx, ((user.score || 0) / 1000).toFixed(1) + ' L', 'ปริมาณรวม', 'text-blue-600 dark:text-blue-400'))}
-                
-                {activeTab === 'food' && categories.food.map((user, idx) => renderRankingItem(user, idx, (user.score || 0).toString(), 'รายการ', 'text-purple-600 dark:text-purple-400'))}
-                
-                {activeTab === 'activity' && categories.activity.map((user, idx) => renderRankingItem(user, idx, (user.score || 0).toLocaleString(), 'kcal', 'text-yellow-600 dark:text-yellow-400'))}
+            <div ref={leaderboardRef} className="space-y-2 min-h-[200px]">
+                {loadingGroup && activeTab === 'myGroup' ? (
+                    <div className="flex justify-center py-10">
+                        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ) : (
+                    <>
+                        {activeTab === 'users' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.xp || 0).toLocaleString(), 'HP', 'text-indigo-600 dark:text-indigo-400'))}
 
-                {activeTab === 'orgs' && orgRankings.map((org, idx) => renderOrgItem(org, idx))}
+                        {activeTab === 'trending' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.weeklyXp || 0).toLocaleString(), 'Weekly HP', 'text-rose-600 dark:text-rose-400'))}
+                        
+                        {activeTab === 'myGroup' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.xp || 0).toLocaleString(), 'HP', 'text-indigo-600 dark:text-indigo-400'))}
+
+                        {activeTab === 'water' && currentList.map((user, idx) => renderRankingItem(user, idx, ((user.score || 0) / 1000).toFixed(1) + ' L', 'ปริมาณรวม', 'text-blue-600 dark:text-blue-400'))}
+                        
+                        {activeTab === 'food' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.score || 0).toString(), 'รายการ', 'text-purple-600 dark:text-purple-400'))}
+                        
+                        {activeTab === 'activity' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.score || 0).toLocaleString(), 'kcal', 'text-yellow-600 dark:text-yellow-400'))}
+
+                        {activeTab === 'orgs' && orgRankings.map((org, idx) => renderOrgItem(org, idx))}
+                    </>
+                )}
                 
-                {(
-                    (activeTab === 'users' && leaderboard.length === 0) ||
-                    (activeTab === 'trending' && trending.length === 0) ||
-                    (activeTab === 'water' && categories.water.length === 0) ||
-                    (activeTab === 'food' && categories.food.length === 0) ||
-                    (activeTab === 'activity' && categories.activity.length === 0) ||
-                    (activeTab === 'orgs' && orgRankings.length === 0)
-                ) && (
+                {activeTab === 'myGroup' && (!myGroups || myGroups.length === 0) && (
+                    <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+                        <UserGroupIcon className="w-16 h-16 text-gray-300 mx-auto mb-3" />
+                        <h3 className="text-lg font-bold text-gray-700 dark:text-white">ท่านยังไม่ได้เข้าร่วมกลุ่ม</h3>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-4">เข้าร่วมกลุ่มเพื่อดูอันดับในกลุ่มของคุณ</p>
+                        <button className="bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-md" onClick={() => window.location.href='?view=profile'}>ไปที่หน้าโปรไฟล์</button>
+                    </div>
+                )}
+
+                {!loadingGroup && currentList.length === 0 && activeTab !== 'orgs' && !(activeTab === 'myGroup' && (!myGroups || myGroups.length === 0)) && (
                     <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
                         <p className="text-4xl mb-3">📭</p>
                         <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">ยังไม่มีข้อมูลในหมวดหมู่นี้</p>
@@ -424,11 +476,9 @@ const Community: React.FC = () => {
             {/* Debug View */}
             {showDebug && (
                 <div className="mt-8 p-4 bg-black text-green-400 font-mono text-[10px] rounded-xl overflow-auto max-h-60">
-                    <div className="flex justify-between border-b border-green-800 pb-1 mb-2">
-                        <h4 className="font-bold uppercase">Raw API Response</h4>
-                        <span className={`font-bold ${apiVersion === "v12.0-FINAL" ? "text-green-400" : "text-red-500"}`}>Server Ver: {apiVersion}</span>
-                    </div>
-                    <pre>{JSON.stringify(rawDebugData, null, 2)}</pre>
+                    <p>Active Tab: {activeTab}</p>
+                    <p>Global Data: {globalData ? 'Loaded' : 'Null'}</p>
+                    <p>Group Data: {groupData ? `Loaded (${groupData.length})` : 'Null'}</p>
                 </div>
             )}
 

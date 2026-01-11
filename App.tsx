@@ -139,6 +139,7 @@ const AppContent: React.FC = () => {
       case 'evaluation': return <EvaluationForm />;
       case 'quiz': return <HealthLiteracyQuiz />;
       case 'weeklyQuiz': return <HealthLiteracyQuiz />;
+      case 'dailyQuiz': return <HealthLiteracyQuiz />;
       case 'settings': return <Settings />;
       case 'hpHistory': return <XPHistory />; 
       case 'rewards': return <RewardsRedemption />;

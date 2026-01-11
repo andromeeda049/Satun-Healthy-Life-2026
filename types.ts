@@ -31,7 +31,7 @@ export interface NutrientInfo {
   items: FoodItem[];
 }
 
-export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'hpHistory' | 'rewards';
+export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards';
 export type Theme = 'light' | 'dark';
 
 export interface User {
@@ -58,6 +58,7 @@ export interface HealthGroup {
     lineLink: string;
     adminId: string;
     createdAt: string;
+    image?: string; // Added image field
 }
 
 export interface PillarScore {
@@ -203,7 +204,7 @@ export interface QuizEntry {
     score: number;
     totalQuestions: number;
     correctAnswers: number;
-    type: 'pre-test' | 'post-test' | 'practice' | 'weekly';
+    type: 'pre-test' | 'post-test' | 'practice' | 'weekly' | 'daily';
     weekNumber?: number;
 }
 
@@ -313,7 +314,7 @@ export interface AppContextType {
   evaluationHistory: EvaluationEntry[];
   saveEvaluation: (satisfaction: any, outcomes: any) => void;
   quizHistory: QuizEntry[];
-  saveQuizResult: (score: number, total: number, correct: number, type?: 'pre-test' | 'post-test' | 'practice' | 'weekly', weekNumber?: number) => void;
+  saveQuizResult: (score: number, total: number, correct: number, type?: 'pre-test' | 'post-test' | 'practice' | 'weekly' | 'daily', weekNumber?: number) => void;
 
   waterGoal: number;
   setWaterGoal: React.Dispatch<React.SetStateAction<number>>;

@@ -6,7 +6,7 @@ import {
     CameraIcon, SparklesIcon, ClipboardListIcon, 
     SquaresIcon, UserCircleIcon, WaterDropIcon, 
     BeakerIcon, BoltIcon, HeartIcon, TrophyIcon, XIcon, MedalIcon, StarIcon, ChartBarIcon,
-    LineIcon, UserGroupIcon
+    LineIcon, UserGroupIcon, BrainIcon
 } from './icons';
 import ProactiveInsight from './ProactiveInsight';
 import { getWeekNumber } from '../constants';
@@ -34,6 +34,7 @@ const HomeMenu: React.FC = () => {
 
   const dailyProgress = useMemo(() => {
       const today = new Date();
+      const todayStr = today.toDateString();
       const weekNum = getWeekNumber(today);
       const isTodayFn = (dStr: string) => {
           const d = new Date(dStr);
@@ -45,7 +46,8 @@ const HomeMenu: React.FC = () => {
           { id: 'food', completed: calorieHistory.some(h => isTodayFn(h.date)) || foodHistory.some(h => isTodayFn(h.date)) },
           { id: 'move', completed: activityHistory.some(h => isTodayFn(h.date)) },
           { id: 'mind', completed: moodHistory.some(h => isTodayFn(h.date)) || sleepHistory.some(h => isTodayFn(h.date)) },
-          { id: 'weekly_quiz', completed: quizHistory.some(q => q.type === 'weekly' && q.weekNumber === weekNum) }
+          { id: 'weekly_quiz', completed: quizHistory.some(q => q.type === 'weekly' && q.weekNumber === weekNum) },
+          { id: 'daily_quiz', completed: quizHistory.some(q => q.type === 'daily' && new Date(q.date).toDateString() === todayStr) }
       ];
       
       const completedCount = missions.filter(m => m.completed).length;
@@ -182,12 +184,12 @@ const HomeMenu: React.FC = () => {
                 ภารกิจรายวัน
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <QuickActionButton view="dailyQuiz" label="ควิซประจำวัน" subLabel="รับ 10 HP" icon={<BrainIcon />} colorClass="bg-gradient-to-tr from-cyan-400 to-blue-500" completed={dailyProgress.missions.find(m => m.id === 'daily_quiz')?.completed}/>
                 <QuickActionButton view="weeklyQuiz" label="ควิซประจำสัปดาห์" subLabel="รับ 30 HP" icon={<StarIcon />} colorClass="bg-gradient-to-tr from-rose-400 to-rose-500" completed={dailyProgress.missions.find(m => m.id === 'weekly_quiz')?.completed}/>
                 <QuickActionButton view="calorieTracker" label="บันทึกอาหาร" subLabel="โภชนาการ" icon={<BeakerIcon />} colorClass="bg-gradient-to-tr from-orange-400 to-orange-500" completed={dailyProgress.missions.find(m => m.id === 'food')?.completed}/>
                 <QuickActionButton view="water" label="ดื่มน้ำ" subLabel="Hydration" icon={<WaterDropIcon />} colorClass="bg-gradient-to-tr from-blue-400 to-blue-500" completed={dailyProgress.missions.find(m => m.id === 'water')?.completed}/>
                 <QuickActionButton view="activityTracker" label="ขยับร่างกาย" subLabel="Exercise" icon={<BoltIcon />} colorClass="bg-gradient-to-tr from-yellow-400 to-yellow-500" completed={dailyProgress.missions.find(m => m.id === 'move')?.completed}/>
                 <QuickActionButton view="wellness" label="เช็คอินสุขภาพ" subLabel="จิตใจและการนอน" icon={<HeartIcon />} colorClass="bg-gradient-to-tr from-red-400 to-red-500" completed={dailyProgress.missions.find(m => m.id === 'mind')?.completed}/>
-                <QuickActionButton view="food" label="AI Food Lens" subLabel="วิเคราะห์ 6 มิติ" icon={<CameraIcon />} colorClass="bg-gradient-to-tr from-purple-500 to-purple-600" />
             </div>
         </div>
 

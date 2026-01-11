@@ -2,7 +2,7 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { AppView, PillarScore } from '../types';
-import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon } from './icons';
+import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon } from './icons';
 import { PILLAR_LABELS, LEVEL_THRESHOLDS } from '../constants';
 import GamificationCard from './GamificationCard';
 
@@ -12,6 +12,122 @@ const getHealthStatus = (score: number) => {
     if (score >= 60) return { level: 'ความเสี่ยงปานกลาง', sub: 'Fair', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-300' };
     if (score >= 50) return { level: 'เริ่มมีความเสี่ยง', sub: 'Fair', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-300' };
     return { level: 'ความเสี่ยงสูง', sub: 'High Risk', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-300' };
+};
+
+const PersonalHealthGrid: React.FC<{
+    userProfile: any;
+    bmiHistory: any[];
+    tdeeHistory: any[];
+    caloriesConsumed: number;
+    caloriesBurned: number;
+    stepsToday: number;
+}> = ({ userProfile, bmiHistory, tdeeHistory, caloriesConsumed, caloriesBurned, stepsToday }) => {
+    const latestBmi = bmiHistory.length > 0 ? bmiHistory[0] : null;
+    const latestTdee = tdeeHistory.length > 0 ? tdeeHistory[0] : null;
+    
+    // Default values if data missing
+    const bmiValue = latestBmi ? latestBmi.value.toFixed(1) : '-';
+    const tdeeValue = latestTdee ? Math.round(latestTdee.value).toLocaleString() : '-';
+    const bmrValue = latestTdee ? Math.round(latestTdee.bmr).toLocaleString() : '-';
+    
+    // Calculate Deficit (Calorie Balance)
+    // Goal (TDEE) + ActiveBurn - Intake
+    const tdeeNum = latestTdee ? latestTdee.value : 2000;
+    const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
+    const isDeficit = calorieBalance >= 0;
+
+    return (
+        <div className="space-y-4 mb-6">
+            {/* Row 1: Key Body Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* BMI Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-full">
+                        <ScaleIcon className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">BMI</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{bmiValue}</p>
+                    <p className="text-[9px] text-slate-500 truncate max-w-full px-1">{latestBmi?.category || 'รอการคำนวณ'}</p>
+                </div>
+
+                {/* TDEE/BMR Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-orange-50 dark:bg-orange-900/30 rounded-full">
+                        <FireIcon className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TDEE</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{tdeeValue}</p>
+                    <p className="text-[9px] text-slate-500">BMR: {bmrValue}</p>
+                </div>
+
+                {/* Waist/Hip Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-purple-50 dark:bg-purple-900/30 rounded-full">
+                        <ChartBarIcon className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">สัดส่วน (ซม.)</p>
+                    <div className="flex gap-3 mt-1">
+                        <div>
+                            <span className="text-[9px] text-slate-400 block">เอว</span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile.waist || '-'}</span>
+                        </div>
+                        <div className="w-[1px] bg-slate-200 dark:bg-gray-600"></div>
+                        <div>
+                            <span className="text-[9px] text-slate-400 block">สะโพก</span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile.hip || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Condition Card */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-900/30 rounded-full">
+                        <HeartIcon className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">โรคประจำตัว</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2 leading-tight mt-1">
+                        {userProfile.healthCondition || 'ไม่มี'}
+                    </p>
+                </div>
+            </div>
+
+            {/* Row 2: Daily Energy Balance */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <BoltIcon className="w-32 h-32" />
+                </div>
+                <div className="relative z-10">
+                    <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                        <BoltIcon className="w-4 h-4 text-yellow-400" /> สรุปพลังงานวันนี้ (Energy Balance)
+                    </h3>
+                    <div className="grid grid-cols-4 gap-2 text-center divide-x divide-slate-600">
+                        <div>
+                            <p className="text-[10px] text-slate-400 mb-1">กินไป</p>
+                            <p className="text-lg font-bold text-orange-400">{caloriesConsumed.toLocaleString()}</p>
+                            <p className="text-[8px] text-slate-500">kcal</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-slate-400 mb-1">เผาผลาญ</p>
+                            <p className="text-lg font-bold text-yellow-400">{caloriesBurned.toLocaleString()}</p>
+                            <p className="text-[8px] text-slate-500">kcal</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-slate-400 mb-1">ก้าวเดิน</p>
+                            <p className="text-lg font-bold text-sky-400">{stepsToday.toLocaleString()}</p>
+                            <p className="text-[8px] text-slate-500">ก้าว</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-slate-400 mb-1">ลดได้ (Balance)</p>
+                            <p className={`text-lg font-bold ${isDeficit ? 'text-green-400' : 'text-red-400'}`}>
+                                {isDeficit ? '-' : '+'}{Math.abs(Math.round(calorieBalance)).toLocaleString()}
+                            </p>
+                            <p className="text-[8px] text-slate-500">kcal</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const HealthSummaryCard: React.FC<{ 
@@ -34,7 +150,7 @@ const HealthSummaryCard: React.FC<{
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden border border-slate-100 dark:border-gray-700">
             <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-4 text-white">
-                <h2 className="text-base font-bold flex items-center gap-2"><ClipboardCheckIcon className="w-5 h-5" /> รายงานสุขภาพ</h2>
+                <h2 className="text-base font-bold flex items-center gap-2"><ClipboardCheckIcon className="w-5 h-5" /> รายงานคะแนนสุขภาพ (Wellness Score)</h2>
             </div>
 
             <div className="p-4 space-y-6">
@@ -52,7 +168,6 @@ const HealthSummaryCard: React.FC<{
                     <div className="text-center sm:text-left">
                         <h2 className={`text-base font-bold ${overallStatus.color}`}>{overallStatus.level}</h2>
                         <div className="flex gap-2 mt-2">
-                            <div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-slate-100 dark:border-gray-600 text-[10px]"><span className="font-bold text-slate-500">BMI:</span> <span className="font-semibold">{currentBmi.toFixed(1)}</span></div>
                             <div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-slate-100 dark:border-gray-600 text-[10px]"><span className="font-bold text-slate-500">ID:</span> <span className="font-semibold">{userProfile.researchId || '-'}</span></div>
                         </div>
                     </div>
@@ -82,17 +197,114 @@ const HealthSummaryCard: React.FC<{
     );
 };
 
+const HistoryList: React.FC<{ 
+    title: string, 
+    data: any[], 
+    renderItem: (item: any) => React.ReactNode, 
+    icon: React.ReactNode,
+    emptyMessage?: string
+}> = ({ title, data, renderItem, icon, emptyMessage = "ยังไม่มีประวัติการบันทึก" }) => (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 overflow-hidden">
+        <div className="p-3 bg-slate-50 dark:bg-gray-700/50 border-b border-slate-100 dark:border-gray-700 flex items-center gap-2">
+            <span className="text-gray-500 dark:text-gray-400">{icon}</span>
+            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
+        </div>
+        <div className="p-2">
+            {data.length > 0 ? (
+                <div className="space-y-2">
+                    {data.slice(0, 5).map((item, idx) => (
+                        <div key={idx} className="p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-700/30 transition-colors">
+                            {renderItem(item)}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-center text-xs text-gray-400 py-4">{emptyMessage}</p>
+            )}
+        </div>
+    </div>
+);
+
 const Dashboard: React.FC = () => {
-  const { setActiveView, bmiHistory, waterHistory, waterGoal, activityHistory, userProfile, currentUser, sleepHistory, moodHistory } = useContext(AppContext);
+  const { 
+      setActiveView, 
+      bmiHistory, 
+      tdeeHistory,
+      waterHistory, 
+      foodHistory,
+      calorieHistory,
+      activityHistory, 
+      sleepHistory, 
+      moodHistory, 
+      waterGoal, 
+      userProfile, 
+      currentUser 
+  } = useContext(AppContext);
+
+  const [activeTab, setActiveTab] = useState<'body' | 'food' | 'activity' | 'rest'>('body');
+
   const isToday = (d: Date) => { const t = new Date(); return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear(); };
+  
+  // Calculate Today's Stats
   const waterToday = useMemo(() => waterHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.amount, 0), [waterHistory]);
+  
   const activityToday = useMemo(() => activityHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.caloriesBurned, 0), [activityHistory]);
+  
+  // Parse Steps from Activity Name (Regex look for digits followed by "ก้าว" or "steps")
+  const stepsToday = useMemo(() => {
+      return activityHistory.filter(e => isToday(new Date(e.date))).reduce((sum, e) => {
+          // Look for numbers before "ก้าว" or "Steps" e.g., "เดิน 5,000 ก้าว"
+          const match = e.name.match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
+          if (match) {
+              const numStr = match[1].replace(/,/g, ''); // Remove commas
+              return sum + parseInt(numStr, 10);
+          }
+          return sum;
+      }, 0);
+  }, [activityHistory]);
+
+  const caloriesConsumedToday = useMemo(() => calorieHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.calories, 0), [calorieHistory]);
+
   const sleepToday = useMemo(() => sleepHistory.find(e => isToday(new Date(e.date))), [sleepHistory]);
   const moodToday = useMemo(() => moodHistory.find(e => isToday(new Date(e.date))), [moodHistory]);
 
+  // Combine food and calorie logs for display
+  const combinedFoodLog = useMemo(() => {
+      const foods = foodHistory.map(f => ({ 
+          date: f.date, 
+          name: f.analysis.description, 
+          calories: f.analysis.calories,
+          type: 'AI Scan'
+      }));
+      const cals = calorieHistory.map(c => ({
+          date: c.date,
+          name: c.name,
+          calories: c.calories,
+          type: 'Manual'
+      }));
+      return [...foods, ...cals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [foodHistory, calorieHistory]);
+
+  const formatDate = (dateStr: string) => {
+      return new Date(dateStr).toLocaleDateString('th-TH', { 
+          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+      });
+  };
+
   return (
-    <div className="space-y-4 animate-fade-in relative pb-10">
+    <div className="space-y-6 animate-fade-in relative pb-10">
         <GamificationCard />
+        
+        {/* New Personal Health Stats Grid */}
+        <PersonalHealthGrid 
+            userProfile={userProfile}
+            bmiHistory={bmiHistory}
+            tdeeHistory={tdeeHistory}
+            caloriesConsumed={caloriesConsumedToday}
+            caloriesBurned={activityToday}
+            stepsToday={stepsToday}
+        />
+
         <HealthSummaryCard 
             userProfile={userProfile} 
             bmiHistory={bmiHistory} 
@@ -101,8 +313,151 @@ const Dashboard: React.FC = () => {
             sleepScore={sleepToday ? (sleepToday.quality * 20) : 0}
             moodScore={moodToday ? (11 - moodToday.stressLevel) * 10 : 0}
         />
-        <div className="flex justify-center gap-3">
-            <button onClick={() => setActiveView('assessment')} className="flex items-center gap-2 bg-teal-500 text-white font-bold py-2.5 px-6 rounded-xl shadow-sm text-[11px] uppercase tracking-wider">ประเมินใหม่อีกครั้ง</button>
+
+        {/* --- Health Data Logs Section --- */}
+        <div>
+            <div className="flex items-center justify-between mb-4 px-1">
+                <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <BookOpenIcon className="w-5 h-5 text-teal-500" />
+                    บันทึกข้อมูลล่าสุด
+                </h3>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4 overflow-x-auto no-scrollbar">
+                <button onClick={() => setActiveTab('body')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'body' ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    ร่างกาย (Body)
+                </button>
+                <button onClick={() => setActiveTab('food')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'food' ? 'bg-white dark:bg-gray-700 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    โภชนาการ (Food)
+                </button>
+                <button onClick={() => setActiveTab('activity')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'activity' ? 'bg-white dark:bg-gray-700 text-yellow-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    กิจกรรม (Active)
+                </button>
+                <button onClick={() => setActiveTab('rest')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'rest' ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    พักผ่อน (Rest)
+                </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="animate-fade-in">
+                {activeTab === 'body' && (
+                    <div className="space-y-4">
+                        <HistoryList 
+                            title="ดัชนีมวลกาย (BMI)" 
+                            icon={<ScaleIcon className="w-4 h-4 text-blue-500" />}
+                            data={bmiHistory}
+                            renderItem={(item) => (
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.value.toFixed(2)}</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                    </div>
+                                    <span className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">{item.category}</span>
+                                </div>
+                            )}
+                        />
+                        <HistoryList 
+                            title="การเผาผลาญ (TDEE)" 
+                            icon={<FireIcon className="w-4 h-4 text-orange-500" />}
+                            data={tdeeHistory}
+                            renderItem={(item) => (
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{Math.round(item.value).toLocaleString()} kcal</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                    </div>
+                                    <span className="text-xs text-gray-400">BMR: {Math.round(item.bmr)}</span>
+                                </div>
+                            )}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'food' && (
+                    <HistoryList 
+                        title="รายการอาหารล่าสุด" 
+                        icon={<BeakerIcon className="w-4 h-4 text-orange-500" />}
+                        data={combinedFoodLog}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-lg">🍽️</div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)} • {item.type}</p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{item.calories} kcal</span>
+                            </div>
+                        )}
+                    />
+                )}
+
+                {activeTab === 'activity' && (
+                    <HistoryList 
+                        title="กิจกรรมการเคลื่อนไหว" 
+                        icon={<BoltIcon className="w-4 h-4 text-yellow-500" />}
+                        data={activityHistory}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-lg">🏃</div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                    </div>
+                                </div>
+                                <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{item.caloriesBurned} kcal</span>
+                            </div>
+                        )}
+                    />
+                )}
+
+                {activeTab === 'rest' && (
+                    <div className="space-y-4">
+                        <HistoryList 
+                            title="บันทึกการนอนหลับ" 
+                            icon={<MoonIcon className="w-4 h-4 text-indigo-500" />}
+                            data={sleepHistory}
+                            renderItem={(item) => (
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.duration.toFixed(1)} ชั่วโมง</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {[...Array(item.quality)].map((_, i) => <span key={i} className="text-xs text-yellow-400">★</span>)}
+                                    </div>
+                                </div>
+                            )}
+                        />
+                        <HistoryList 
+                            title="บันทึกอารมณ์" 
+                            icon={<FaceSmileIcon className="w-4 h-4 text-rose-500" />}
+                            data={moodHistory}
+                            renderItem={(item) => (
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-2xl">{item.moodEmoji}</span>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">ความเครียด {item.stressLevel}/10</p>
+                                            <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        />
+                    </div>
+                )}
+            </div>
+        </div>
+
+        <div className="flex justify-center gap-3 mt-6">
+            <button onClick={() => setActiveView('assessment')} className="flex items-center gap-2 bg-teal-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl hover:bg-teal-600 transition-all text-xs uppercase tracking-wider transform hover:-translate-y-1">
+                <ClipboardCheckIcon className="w-4 h-4" />
+                ทำแบบประเมินสุขภาพใหม่
+            </button>
         </div>
     </div>
   );

@@ -19,7 +19,7 @@ export interface AllAdminData {
     loginLogs: any[];
 }
 
-interface AllData {
+export interface AllData {
     profile: UserProfile | null;
     bmiHistory: BMIHistoryEntry[];
     tdeeHistory: TDEEHistoryEntry[];
@@ -74,54 +74,57 @@ export const fetchAllDataFromSheet = async (scriptUrl: string, user: User): Prom
         const result = await response.json();
         if (result.status === 'success') {
              const data = result.data;
-             
-             let parsedBadges = [];
-             try {
-                parsedBadges = data.profile && data.profile.badges ? (typeof data.profile.badges === 'string' ? JSON.parse(data.profile.badges) : data.profile.badges) : ['novice'];
-             } catch (e) {
-                parsedBadges = ['novice'];
-             }
-
-             const sanitizedProfile = data.profile ? {
-                ...data.profile,
-                age: String(data.profile.age || ''),
-                weight: String(data.profile.weight || ''),
-                height: String(data.profile.height || ''),
-                waist: String(data.profile.waist || ''),
-                hip: String(data.profile.hip || ''),
-                activityLevel: Number(data.profile.activityLevel || 1.2),
-                healthCondition: String(data.profile.healthCondition || 'ไม่มีโรคประจำตัว'),
-                xp: Number(data.profile.xp || 0),
-                level: Number(data.profile.level || 1),
-                badges: parsedBadges,
-                organization: String(data.profile.organization || 'general'),
-                pdpaAccepted: String(data.profile.pdpaAccepted).toLowerCase() === 'true',
-            } : null;
-
-            const sortByDateDesc = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime();
-
-            return {
-                profile: sanitizedProfile,
-                bmiHistory: (data.bmiHistory || []).sort(sortByDateDesc),
-                tdeeHistory: (data.tdeeHistory || []).sort(sortByDateDesc),
-                foodHistory: (data.foodHistory || []).sort(sortByDateDesc),
-                plannerHistory: (data.plannerHistory || []).sort(sortByDateDesc),
-                waterHistory: (data.waterHistory || []).sort(sortByDateDesc),
-                calorieHistory: (data.calorieHistory || []).sort(sortByDateDesc),
-                activityHistory: (data.activityHistory || []).sort(sortByDateDesc),
-                sleepHistory: (data.sleepHistory || []).sort(sortByDateDesc),
-                moodHistory: (data.moodHistory || []).sort(sortByDateDesc),
-                habitHistory: (data.habitHistory || []).sort(sortByDateDesc),
-                socialHistory: (data.socialHistory || []).sort(sortByDateDesc),
-                evaluationHistory: (data.evaluationHistory || []).sort(sortByDateDesc),
-                quizHistory: (data.quizHistory || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-            };
+             return parseUserData(data);
         }
         return null;
     } catch (error: any) {
         console.error("Fetch Data Error:", error);
         return null;
     }
+};
+
+const parseUserData = (data: any): AllData => {
+    let parsedBadges = [];
+    try {
+       parsedBadges = data.profile && data.profile.badges ? (typeof data.profile.badges === 'string' ? JSON.parse(data.profile.badges) : data.profile.badges) : ['novice'];
+    } catch (e) {
+       parsedBadges = ['novice'];
+    }
+
+    const sanitizedProfile = data.profile ? {
+       ...data.profile,
+       age: String(data.profile.age || ''),
+       weight: String(data.profile.weight || ''),
+       height: String(data.profile.height || ''),
+       waist: String(data.profile.waist || ''),
+       hip: String(data.profile.hip || ''),
+       activityLevel: Number(data.profile.activityLevel || 1.2),
+       healthCondition: String(data.profile.healthCondition || 'ไม่มีโรคประจำตัว'),
+       xp: Number(data.profile.xp || 0),
+       level: Number(data.profile.level || 1),
+       badges: parsedBadges,
+       organization: String(data.profile.organization || 'general'),
+       pdpaAccepted: String(data.profile.pdpaAccepted).toLowerCase() === 'true',
+   } : null;
+
+   const sortByDateDesc = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime();
+
+   return {
+       profile: sanitizedProfile,
+       bmiHistory: (data.bmiHistory || []).sort(sortByDateDesc),
+       tdeeHistory: (data.tdeeHistory || []).sort(sortByDateDesc),
+       foodHistory: (data.foodHistory || []).sort(sortByDateDesc),
+       plannerHistory: (data.plannerHistory || []).sort(sortByDateDesc),
+       waterHistory: (data.waterHistory || []).sort(sortByDateDesc),
+       calorieHistory: (data.calorieHistory || []).sort(sortByDateDesc),
+       activityHistory: (data.activityHistory || []).sort(sortByDateDesc),
+       sleepHistory: (data.sleepHistory || []).sort(sortByDateDesc),
+       moodHistory: (data.moodHistory || []).sort(sortByDateDesc),
+       habitHistory: (data.habitHistory || []).sort(sortByDateDesc),
+       socialHistory: (data.socialHistory || []).sort(sortByDateDesc),
+       evaluationHistory: (data.evaluationHistory || []).sort(sortByDateDesc),
+       quizHistory: (data.quizHistory || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+   };
 };
 
 export const saveDataToSheet = async (scriptUrl: string, type: string, payload: any, user: User): Promise<boolean> => {
@@ -219,7 +222,7 @@ export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: st
     }
 };
 
-export const fetchLeaderboard = async (scriptUrl: string, user?: User): Promise<any> => {
+export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?: string): Promise<any> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) {
         throw new Error("Invalid Web App URL");
     }
@@ -227,7 +230,7 @@ export const fetchLeaderboard = async (scriptUrl: string, user?: User): Promise<
     try {
         const response = await fetch(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getLeaderboard', user: user || { username: 'guest' } }),
+            body: JSON.stringify({ action: 'getLeaderboard', user: user || { username: 'guest' }, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
@@ -320,4 +323,35 @@ export const leaveGroup = async (scriptUrl: string, user: User, groupId: string)
         });
         return await response.json();
     } catch (error) { return { status: 'error' }; }
+};
+
+export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: string): Promise<any[]> => {
+    if (!scriptUrl || !user) return [];
+    try {
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getGroupMembers', user, groupId }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : [];
+    } catch (error) { return []; }
+};
+
+export const fetchUserDataByAdmin = async (scriptUrl: string, adminUser: User, targetUsername: string): Promise<AllData | null> => {
+    if (!scriptUrl || !adminUser) return null;
+    try {
+        const response = await fetch(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getUserData', user: adminUser, targetUsername }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        const res = await response.json();
+        if(res.status === 'success') {
+            return parseUserData(res.data);
+        }
+        return null;
+    } catch (error) { return null; }
 };

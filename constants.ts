@@ -163,6 +163,7 @@ export const XP_VALUES = {
     PLANNER: 100,
     QUIZ: 50,
     WEEKLY_QUIZ: 30,
+    DAILY_QUIZ: 10,
     DAILY_BONUS: 100
 };
 
@@ -178,7 +179,8 @@ export const GAMIFICATION_LIMITS: { [key: string]: { maxPerDay: number, label: s
     COACH: { maxPerDay: 1, label: 'ครั้ง' },
     SUMMARY: { maxPerDay: 1, label: 'ครั้ง' },
     QUIZ: { maxPerDay: 1, label: 'ครั้ง' },
-    WEEKLY_QUIZ: { maxPerDay: 1, label: 'ครั้งต่อสัปดาห์' }
+    WEEKLY_QUIZ: { maxPerDay: 1, label: 'ครั้งต่อสัปดาห์' },
+    DAILY_QUIZ: { maxPerDay: 1, label: 'ครั้ง' }
 };
 
 export const LEVEL_THRESHOLDS = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500];
@@ -315,6 +317,19 @@ export const WEEKLY_QUIZ_QUESTIONS: QuizQuestion[] = [
     { id: 10, question: "การดื่มน้ำเปล่าก่อนอาหาร 30 นาที ช่วยเรื่องอะไรได้เด่นชัด?", options: ["ทำให้ขาวขึ้น", "ช่วยลดน้ำหนัก/อิ่มเร็วขึ้น", "ช่วยให้ผมไม่ร่วง", "ช่วยให้ตาสว่าง"], correctIndex: 1, explanation: "การดื่มน้ำก่อนอาหารช่วยให้กระเพาะขยายตัว ทำให้อิ่มเร็วขึ้นและทานได้น้อยลง", category: "nutrition" },
     { id: 11, question: "ข้าวกล้องดีกว่าข้าวขาวในด้านใดมากที่สุด?", options: ["อร่อยกว่า", "ราคาถูกกว่า", "ใยอาหารและวิตามินสูงกว่า", "เก็บได้นานกว่า"], correctIndex: 2, explanation: "ข้าวกล้องไม่ผ่านการขัดสี จึงรักษารำข้าวที่มีใยอาหารและวิตามินบีสูงไว้", category: "nutrition" },
     { id: 12, question: "อัตราการเต้นของหัวใจสูงสุด (Max Heart Rate) คำนวณอย่างไร?", options: ["220 + อายุ", "220 - อายุ", "180 - อายุ", "200 - อายุ"], correctIndex: 1, explanation: "สูตรมาตรฐานคือ 220 ลบด้วยอายุปี", category: "activity" }
+];
+
+export const DAILY_QUIZ_QUESTIONS: QuizQuestion[] = [
+    { id: 1, question: "ผลไม้ชนิดใดมีน้ำตาลน้อยที่สุด?", options: ["ทุเรียน", "แก้วมังกร", "ลำไย", "มะม่วงสุก"], correctIndex: 1, explanation: "แก้วมังกรเป็นผลไม้ที่มีน้ำตาลน้อยและใยอาหารสูง", category: "nutrition" },
+    { id: 2, question: "ควรดื่มน้ำอย่างน้อยวันละกี่แก้ว?", options: ["4-5 แก้ว", "6-8 แก้ว", "10-12 แก้ว", "20 แก้ว"], correctIndex: 1, explanation: "โดยทั่วไปควรดื่มน้ำ 6-8 แก้ว (ประมาณ 1.5 - 2 ลิตร) ต่อวัน", category: "nutrition" },
+    { id: 3, question: "อาหารเช้ามีความสำคัญอย่างไร?", options: ["ไม่สำคัญ", "ช่วยกระตุ้นการเผาผลาญ", "ทำให้อ้วน", "ทำให้ง่วงนอน"], correctIndex: 1, explanation: "อาหารเช้าช่วยเติมพลังงานและกระตุ้นระบบเผาผลาญหลังตื่นนอน", category: "nutrition" },
+    { id: 4, question: "การแกว่งแขนช่วยลดพุงได้หรือไม่?", options: ["ไม่ได้เลย", "ได้ ถ้าทำต่อเนื่องและถูกวิธี", "ทำให้พุงใหญ่ขึ้น", "มีผลเฉพาะแขน"], correctIndex: 1, explanation: "การแกว่งแขนเป็นการออกกำลังกายแบบแอโรบิกเบาๆ ช่วยเผาผลาญได้หากทำต่อเนื่องนานพอ", category: "activity" },
+    { id: 5, question: "ควันบุหรี่มือสองอันตรายหรือไม่?", options: ["ไม่อันตราย", "อันตรายน้อยกว่าสูบเอง", "อันตรายมาก", "มีประโยชน์"], correctIndex: 2, explanation: "ควันบุหรี่มือสองมีสารพิษเช่นเดียวกับที่ผู้สูบได้รับ และเป็นอันตรายต่อคนรอบข้าง", category: "general" },
+    { id: 6, question: "หากเครียด ควรทำอย่างไร?", options: ["ดื่มเหล้า", "สูบบุหรี่", "พูดคุยระบายกับคนที่ไว้ใจ", "เก็บตัวคนเดียว"], correctIndex: 2, explanation: "การพูดคุยระบายความรู้สึกช่วยลดความตึงเครียดได้ดี", category: "stress" },
+    { id: 7, question: "ควรตรวจสุขภาพประจำปีตั้งแต่อายุเท่าไหร่?", options: ["35 ปี", "40 ปี", "50 ปี", "ทุกวัยควรตรวจตามความเหมาะสม"], correctIndex: 3, explanation: "การตรวจสุขภาพควรทำตามความเหมาะสมของช่วงวัยและความเสี่ยง", category: "general" },
+    { id: 8, question: "การกินเค็มมากเสี่ยงโรคอะไร?", options: ["โรคตับ", "โรคไตและความดันโลหิตสูง", "โรคเบาหวาน", "โรคปอด"], correctIndex: 1, explanation: "โซเดียมสูงทำให้ไตทำงานหนักและเพิ่มความดันโลหิต", category: "nutrition" },
+    { id: 9, question: "ก่อนออกกำลังกายควรกินอาหารมื้อใหญ่กี่ชั่วโมง?", options: ["ทันที", "30 นาที", "2-3 ชั่วโมง", "5 ชั่วโมง"], correctIndex: 2, explanation: "ควรเว้นระยะ 2-3 ชั่วโมงให้อาหารย่อย เพื่อป้องกันอาการจุกเสียด", category: "activity" },
+    { id: 10, question: "เครื่องดื่มใดดีต่อสุขภาพที่สุด?", options: ["น้ำอัดลม", "น้ำผลไม้กล่อง", "น้ำเปล่า", "ชาเขียวใส่นม"], correctIndex: 2, explanation: "น้ำเปล่าดีที่สุด ไม่มีแคลอรี่และไม่มีน้ำตาล", category: "nutrition" }
 ];
 
 export const getWeekNumber = (date: Date): number => {

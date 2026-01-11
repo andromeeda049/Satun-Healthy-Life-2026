@@ -72,10 +72,26 @@ const XPHistory: React.FC = () => {
             hp: XP_VALUES.WELLNESS, icon: <UserGroupIcon className="w-4 h-4" />, color: 'bg-teal-100 text-teal-600'
         }));
 
-        quizHistory.forEach(h => logs.push({
-            id: `quiz-${h.id}`, date: new Date(h.date), action: 'แบบทดสอบความรู้', detail: `คะแนน ${h.score}%`,
-            hp: XP_VALUES.QUIZ, icon: <StarIcon className="w-4 h-4" />, color: 'bg-amber-100 text-amber-600'
-        }));
+        quizHistory.forEach(h => {
+            let xp = XP_VALUES.QUIZ;
+            let actionName = 'แบบทดสอบความรู้';
+            let color = 'bg-amber-100 text-amber-600';
+
+            if (h.type === 'weekly') {
+                xp = XP_VALUES.WEEKLY_QUIZ;
+                actionName = 'ควิซประจำสัปดาห์';
+                color = 'bg-rose-100 text-rose-600';
+            } else if (h.type === 'daily') {
+                xp = XP_VALUES.DAILY_QUIZ;
+                actionName = 'ควิซประจำวัน';
+                color = 'bg-cyan-100 text-cyan-600';
+            }
+
+            logs.push({
+                id: `quiz-${h.id}`, date: new Date(h.date), action: actionName, detail: `คะแนน ${h.score}%`,
+                hp: xp, icon: <StarIcon className="w-4 h-4" />, color: color
+            });
+        });
 
         return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
     }, [waterHistory, foodHistory, calorieHistory, activityHistory, sleepHistory, moodHistory, habitHistory, socialHistory, quizHistory]);
