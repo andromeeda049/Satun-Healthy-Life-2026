@@ -37,9 +37,21 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                                 provider: 'line',
                                 userId: profile.userId
                             });
-                            if (res.success && res.user) { onLogin({ ...res.user, authProvider: 'line' }); }
-                            else { setError(`Login Error: ${res.message}`); setLoading(false); }
-                        } catch (fetchErr: any) { setError(`Network Error: ${fetchErr.message}`); setLoading(false); }
+                            
+                            // FIX: Handle Backend Response Format { status: 'success', data: ... }
+                            if (res.status === 'success' && res.data) {
+                                onLogin({ ...res.data, authProvider: 'line' });
+                            } else if (res.success && res.user) { 
+                                // Fallback for legacy format
+                                onLogin({ ...res.user, authProvider: 'line' }); 
+                            } else { 
+                                setError(`Login Error: ${res.message || 'Unknown response'}`); 
+                                setLoading(false); 
+                            }
+                        } catch (fetchErr: any) { 
+                            setError(`Network Error: ${fetchErr.message}`); 
+                            setLoading(false); 
+                        }
                     } else { setError('ไม่พบ URL ของ Google Script'); setLoading(false); }
                 }
             } catch (err: any) { setIsLineReady(true); }
