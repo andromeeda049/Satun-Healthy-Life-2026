@@ -38,21 +38,23 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                                 userId: profile.userId
                             });
                             
-                            // FIX: Ensure user data is valid before login
-                            if (res.status === 'success' && res.data && res.data.username) {
-                                onLogin({ 
-                                    ...res.data, 
-                                    displayName: profile.displayName || res.data.displayName,
-                                    profilePicture: profile.pictureUrl || res.data.profilePicture,
-                                    authProvider: 'line' 
-                                });
-                            } else if (res.success && res.user && res.user.username) { 
-                                onLogin({ 
-                                    ...res.user, 
-                                    displayName: profile.displayName || res.user.displayName,
-                                    profilePicture: profile.pictureUrl || res.user.profilePicture,
-                                    authProvider: 'line' 
-                                }); 
+                            // FIX: Handle nested user object from Google Script response
+                            // Structure: { status: 'success', data: { success: true, user: { ... } } }
+                            if (res.status === 'success') {
+                                const userData = res.data?.user || res.data; // Try nested 'user' first, then direct data
+                                
+                                if (userData && userData.username) {
+                                    onLogin({ 
+                                        ...userData, 
+                                        displayName: profile.displayName || userData.displayName,
+                                        profilePicture: profile.pictureUrl || userData.profilePicture,
+                                        authProvider: 'line' 
+                                    });
+                                } else {
+                                    console.error("Invalid User Data Structure:", res);
+                                    setError(`Login Error: โครงสร้างข้อมูลผู้ใช้ไม่ถูกต้อง`); 
+                                    setLoading(false);
+                                }
                             } else { 
                                 console.error("Login Response Error:", res);
                                 setError(`Login Error: ข้อมูลผู้ใช้ไม่สมบูรณ์จากระบบ (${res.message || 'Unknown'})`); 

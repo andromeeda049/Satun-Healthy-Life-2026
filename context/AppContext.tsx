@@ -3,7 +3,7 @@ import React, { createContext, ReactNode, useState, useEffect, useCallback, useR
 import useLocalStorage from '../hooks/useLocalStorage';
 import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
-import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup, leaveGroup } from '../services/googleSheetService';
+import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService } from '../services/googleSheetService';
 
 // HARDCODED URL (v14.0)
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFZroUmo2RuQmMjWmjMTE9e_466wKnXbIJ7ezDzP3X5_AnUpZXTkU3CZZE2sm0m-eS/exec';
@@ -78,235 +78,213 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Ensure Script URL is always correct (Self-Healing)
   useEffect(() => {
-      if (scriptUrl !== DEFAULT_SCRIPT_URL) {
-          console.warn("URL mismatch detected, resetting to hardcoded default.");
+      if (!scriptUrl || scriptUrl !== DEFAULT_SCRIPT_URL) {
           setScriptUrl(DEFAULT_SCRIPT_URL);
       }
   }, []);
 
   const login = (user: User) => {
-    const lastUser = localStorage.getItem('last_login_user');
-    if (lastUser && lastUser !== user.username) {
-        _setUserProfile(defaultProfile);
-        _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]);
-        _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
-        _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]);
-        _setQuizHistory([]); setLatestFoodAnalysis(null); 
-        setMyGroups([]);
-    }
-    
-    localStorage.setItem('last_login_user', user.username);
     setCurrentUser(user);
-    setIsDataSynced(false); 
-    
-    const currentParams = new URLSearchParams(window.location.search);
-    let viewParam = currentParams.get('view');
-    if (!viewParam) viewParam = initialUrlParams.current.get('view');
-    if (viewParam) setActiveView(viewParam as AppView);
-    else setActiveView('home');
+    // Initial profile sync handled by useEffect
   };
 
-  const logout = () => { 
-      setCurrentUser(null); 
-      setActiveView('home'); 
-      setIsDataSynced(false);
-      setMyGroups([]);
-      sessionStorage.removeItem('dismiss_profile_alert');
+  const logout = () => {
+    setCurrentUser(null);
+    _setUserProfile(defaultProfile);
+    setIsDataSynced(false);
+    setActiveView('home');
+    // Clear sensitive history
+    _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
+    _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
+    _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]);
   };
 
-  // Function to refresh groups
-  const refreshGroups = useCallback(async () => {
-      if (currentUser && scriptUrl) {
-          const groups = await getUserGroups(scriptUrl, currentUser);
-          setMyGroups(groups);
+  const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
+  const setTdeeHistory = (val: any) => { _setTdeeHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'TDEE', val, currentUser); };
+  const setFoodHistory = (val: any) => { _setFoodHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'FOOD', val, currentUser); };
+  const setPlannerHistory = (val: any) => { _setPlannerHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'PLANNER', val, currentUser); };
+  const setWaterHistory = (val: any) => { _setWaterHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'WATER', val, currentUser); };
+  const setCalorieHistory = (val: any) => { _setCalorieHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'CALORIE', val, currentUser); };
+  const setActivityHistory = (val: any) => { _setActivityHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'ACTIVITY', val, currentUser); };
+  const setSleepHistory = (val: any) => { _setSleepHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'SLEEP', val, currentUser); };
+  const setMoodHistory = (val: any) => { _setMoodHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'MOOD', val, currentUser); };
+  const setHabitHistory = (val: any) => { _setHabitHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'HABIT', val, currentUser); };
+  const setSocialHistory = (val: any) => { _setSocialHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'SOCIAL', val, currentUser); };
+  
+  const setUserProfile = (profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
+      const newProfile = { ...profileData };
+      _setUserProfile(newProfile);
+      if (currentUser) {
+          const updatedUser = { ...currentUser, ...accountData, organization: newProfile.organization };
+          setCurrentUser(updatedUser);
+          saveDataToSheet(scriptUrl, 'profile', newProfile, updatedUser);
       }
+  };
+
+  const saveEvaluation = (satisfaction: any, outcomes: any) => {
+      const entry = { id: Date.now().toString(), date: new Date().toISOString(), satisfaction, outcomes };
+      _setEvaluationHistory(prev => [entry, ...prev]);
+      if(currentUser) saveDataToSheet(scriptUrl, 'EVALUATION', entry, currentUser);
+  };
+
+  const saveQuizResult = (score: number, totalQuestions: number, correctAnswers: number, type: any = 'practice', weekNumber?: number) => {
+      const entry: QuizEntry = { id: Date.now().toString(), date: new Date().toISOString(), score, totalQuestions, correctAnswers, type, weekNumber };
+      _setQuizHistory(prev => [entry, ...prev]);
+      if(currentUser) saveDataToSheet(scriptUrl, 'QuizHistory', entry, currentUser);
+  };
+
+  const closeNotification = () => setNotification(prev => ({ ...prev, show: false }));
+  
+  const openSOS = () => setIsSOSOpen(true);
+  const closeSOS = () => setIsSOSOpen(false);
+
+  // Group Management Functions
+  const refreshGroups = useCallback(async () => {
+      if(!currentUser || !scriptUrl) return;
+      const groups = await getUserGroups(scriptUrl, currentUser);
+      setMyGroups(groups);
   }, [currentUser, scriptUrl]);
 
-  // Join Group Wrapper
-  const handleJoinGroup = async (code: string) => {
-      if(!currentUser) return { success: false, message: "Not logged in" };
-      const result = await joinGroup(scriptUrl, currentUser, code);
-      if(result.status === 'success') {
-          refreshGroups();
-          return { success: true, message: "เข้าร่วมกลุ่มสำเร็จ" };
+  const joinGroup = async (code: string) => {
+      if (!currentUser) return { success: false, message: 'Not logged in' };
+      
+      // FIX: Sanitize user object to ensure no large data or circular refs are sent
+      const safeUser = {
+          username: currentUser.username,
+          displayName: currentUser.displayName,
+          role: currentUser.role,
+          profilePicture: currentUser.profilePicture // Assuming this is string URL or small base64
+      };
+
+      if (!safeUser.username) {
+          console.error("Join Group Error: Username missing in currentUser", currentUser);
+          return { success: false, message: 'ข้อมูลผู้ใช้ไม่สมบูรณ์ (Username missing)' };
       }
-      return { success: false, message: result.message || "เกิดข้อผิดพลาด" };
+
+      const res = await joinGroupService(scriptUrl, safeUser as User, code);
+      if (res.status === 'Joined') {
+          refreshGroups();
+          return { success: true, message: 'Joined' };
+      }
+      return { success: false, message: res.message || 'Failed' };
   };
 
-  // Leave Group Wrapper
-  const handleLeaveGroup = async (groupId: string) => {
-      if(!currentUser) return false;
-      const result = await leaveGroup(scriptUrl, currentUser, groupId);
-      if(result.status === 'success') {
+  const leaveGroup = async (groupId: string) => {
+      if (!currentUser) return false;
+      const res = await leaveGroupService(scriptUrl, currentUser, groupId);
+      if (res.status === 'Left') {
           refreshGroups();
           return true;
       }
       return false;
   };
 
+  // --- Gamification Logic ---
+  const gainXP = (amount: number, category?: string) => {
+      if (!currentUser || currentUser.role === 'guest') return;
+      
+      // Anti-cheat / Cap check
+      const todayStr = new Date().toDateString();
+      if (category && GAMIFICATION_LIMITS[category]) {
+          const limit = GAMIFICATION_LIMITS[category];
+          const countKey = `daily_count_${category}_${todayStr}`;
+          const currentCount = parseInt(localStorage.getItem(countKey) || '0');
+          if (currentCount >= limit.maxPerDay) {
+              return; // Cap reached, no XP
+          }
+          localStorage.setItem(countKey, (currentCount + 1).toString());
+      }
+
+      let newXP = (userProfile.xp || 0) + amount;
+      let newLevel = userProfile.level || 1;
+      
+      // Check Level Up
+      let leveledUp = false;
+      const nextThreshold = LEVEL_THRESHOLDS[newLevel];
+      
+      if (nextThreshold && newXP >= nextThreshold) {
+          newLevel++;
+          leveledUp = true;
+          setShowLevelUp({ type: 'level', data: newLevel });
+      }
+
+      const updatedProfile = { ...userProfile, xp: newXP, level: newLevel, deltaXp: amount }; // Add deltaXp for weekly tracking
+      _setUserProfile(updatedProfile);
+      saveDataToSheet(scriptUrl, 'profile', updatedProfile, currentUser);
+      
+      if (!leveledUp) {
+          // Show small notification for XP gain
+          setNotification({ show: true, message: `+${amount} HP!`, type: 'success' });
+          setTimeout(closeNotification, 2000);
+      }
+  };
+
+  const closeLevelUpModal = () => setShowLevelUp(null);
+
+  const clearBmiHistory = () => { _setBmiHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'BMI', currentUser); };
+  const clearTdeeHistory = () => { _setTdeeHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'TDEE', currentUser); };
+  const clearFoodHistory = () => { _setFoodHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'FOOD', currentUser); };
+  const clearWaterHistory = () => { _setWaterHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'WATER', currentUser); };
+  const clearCalorieHistory = () => { _setCalorieHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'CALORIE', currentUser); };
+  const clearActivityHistory = () => { _setActivityHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'ACTIVITY', currentUser); };
+  const clearWellnessHistory = () => {
+      _setSleepHistory([]); _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]);
+      if(currentUser) {
+          clearHistoryInSheet(scriptUrl, 'SLEEP', currentUser);
+          clearHistoryInSheet(scriptUrl, 'MOOD', currentUser);
+          clearHistoryInSheet(scriptUrl, 'HABIT', currentUser);
+          clearHistoryInSheet(scriptUrl, 'SOCIAL', currentUser);
+      }
+  };
+
+  // --- Initial Data Sync ---
   useEffect(() => {
-    const loadAllData = async () => {
-      if (scriptUrl && currentUser && currentUser.role === 'user') {
-        const fetchedData = await fetchAllDataFromSheet(scriptUrl, currentUser);
-        if (fetchedData) {
-          _setUserProfile(prev => {
-              if (!fetchedData.profile) return prev;
-              const cloud = fetchedData.profile;
-              const merge = (cloudVal: any, prevVal: any) => {
-                  return (cloudVal && cloudVal !== "0" && cloudVal !== "") ? cloudVal : prevVal;
-              };
+      if (currentUser && currentUser.role !== 'guest' && scriptUrl && !isDataSynced) {
+          const syncData = async () => {
+              if (currentUser.authProvider === 'line' && !currentUser.username) {
+                  // Fix legacy data
+                  console.warn("User missing username, forcing logout to re-auth");
+                  logout();
+                  return;
+              }
 
-              return {
-                  ...prev,
-                  gender: cloud.gender || prev.gender,
-                  age: merge(cloud.age, prev.age),
-                  weight: merge(cloud.weight, prev.weight),
-                  height: merge(cloud.height, prev.height),
-                  waist: merge(cloud.waist, prev.waist),
-                  hip: merge(cloud.hip, prev.hip),
-                  activityLevel: cloud.activityLevel || prev.activityLevel,
-                  healthCondition: cloud.healthCondition && cloud.healthCondition !== "ไม่มีโรคประจำตัว" ? cloud.healthCondition : prev.healthCondition,
-                  xp: Math.max(cloud.xp || 0, prev.xp || 0),
-                  level: Math.max(cloud.level || 1, prev.level || 1),
-                  badges: cloud.badges?.length ? cloud.badges : prev.badges,
-                  organization: cloud.organization || prev.organization,
-                  pdpaAccepted: cloud.pdpaAccepted || prev.pdpaAccepted,
-                  pdpaAcceptedDate: cloud.pdpaAcceptedDate || prev.pdpaAcceptedDate,
-                  researchId: cloud.researchId || prev.researchId,
-                  aiSystemInstruction: cloud.aiSystemInstruction || prev.aiSystemInstruction
-              };
-          });
-          
-          if (fetchedData.bmiHistory?.length) _setBmiHistory(fetchedData.bmiHistory);
-          if (fetchedData.tdeeHistory?.length) _setTdeeHistory(fetchedData.tdeeHistory);
-          if (fetchedData.foodHistory?.length) _setFoodHistory(fetchedData.foodHistory);
-          if (fetchedData.plannerHistory?.length) _setPlannerHistory(fetchedData.plannerHistory);
-          if (fetchedData.waterHistory?.length) _setWaterHistory(fetchedData.waterHistory);
-          if (fetchedData.calorieHistory?.length) _setCalorieHistory(fetchedData.calorieHistory);
-          if (fetchedData.activityHistory?.length) _setActivityHistory(fetchedData.activityHistory);
-          if (fetchedData.sleepHistory?.length) _setSleepHistory(fetchedData.sleepHistory);
-          if (fetchedData.moodHistory?.length) _setMoodHistory(fetchedData.moodHistory);
-          if (fetchedData.habitHistory?.length) _setHabitHistory(fetchedData.habitHistory);
-          if (fetchedData.socialHistory?.length) _setSocialHistory(fetchedData.socialHistory);
-          if (fetchedData.evaluationHistory?.length) _setEvaluationHistory(fetchedData.evaluationHistory);
-          if (fetchedData.quizHistory?.length) _setQuizHistory(fetchedData.quizHistory);
-        }
-        // Fetch Groups
-        refreshGroups();
-        setIsDataSynced(true);
-      } else {
-        setIsDataSynced(true);
+              const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
+              if (data) {
+                  if (data.profile) _setUserProfile(data.profile);
+                  if (data.bmiHistory) _setBmiHistory(data.bmiHistory);
+                  if (data.tdeeHistory) _setTdeeHistory(data.tdeeHistory);
+                  if (data.foodHistory) _setFoodHistory(data.foodHistory);
+                  if (data.plannerHistory) _setPlannerHistory(data.plannerHistory);
+                  if (data.waterHistory) _setWaterHistory(data.waterHistory);
+                  if (data.calorieHistory) _setCalorieHistory(data.calorieHistory);
+                  if (data.activityHistory) _setActivityHistory(data.activityHistory);
+                  if (data.sleepHistory) _setSleepHistory(data.sleepHistory);
+                  if (data.moodHistory) _setMoodHistory(data.moodHistory);
+                  if (data.habitHistory) _setHabitHistory(data.habitHistory);
+                  if (data.socialHistory) _setSocialHistory(data.socialHistory);
+                  if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
+                  if (data.quizHistory) _setQuizHistory(data.quizHistory);
+                  setIsDataSynced(true);
+                  refreshGroups();
+              }
+          };
+          syncData();
       }
-    };
-    loadAllData();
-  }, [scriptUrl, currentUser?.username]);
-
-  const setUserProfile = useCallback((profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
-    if (!currentUser) return;
-    const updatedUser = { ...currentUser, displayName: accountData.displayName, profilePicture: accountData.profilePicture };
-    if (profileData.organization) updatedUser.organization = profileData.organization;
-    setCurrentUser(updatedUser); 
-    _setUserProfile(profileData);
-    if (scriptUrl) saveDataToSheet(scriptUrl, 'profile', profileData, updatedUser).catch(e => console.error(e));
-  }, [scriptUrl, currentUser, setCurrentUser, _setUserProfile]);
-
-  const showToast = (message: string, type: 'success' | 'info' | 'warning') => {
-      setNotification({ show: true, message, type });
-      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
-  };
-
-  const saveQuizResult = (score: number, total: number, correct: number, type: 'pre-test' | 'post-test' | 'practice' | 'weekly' = 'practice', weekNumber?: number) => {
-    if (!currentUser) return;
-    const newEntry: QuizEntry = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        score,
-        totalQuestions: total,
-        correctAnswers: correct,
-        type,
-        weekNumber
-    };
-    _setQuizHistory(prev => [...prev, newEntry]);
-    if (scriptUrl) saveDataToSheet(scriptUrl, 'QuizHistory', newEntry, currentUser).catch(e => console.error(e));
-  };
-
-  // FIX: Implement saveEvaluation to actually send data
-  const saveEvaluation = (satisfaction: any, outcomes: any) => {
-      if (!currentUser) return;
-      const newEntry: EvaluationEntry = {
-          id: Date.now().toString(),
-          date: new Date().toISOString(),
-          satisfaction,
-          outcomes
-      };
-      _setEvaluationHistory(prev => [newEntry, ...prev]);
-      if (scriptUrl) {
-          // Use 'EvaluationHistory' as key to match Code.gs switch case exactly (or fuzzy match 'evaluation')
-          saveDataToSheet(scriptUrl, 'EvaluationHistory', newEntry, currentUser).catch(e => console.error(e));
-      }
-  };
-
-  const gainXP = useCallback((amount: number, category?: string) => {
-    if (!currentUser || currentUser.role === 'guest') return;
-    let finalAmount = amount;
-    
-    _setUserProfile(currentProfile => {
-        let currentXP = currentProfile.xp || 0; 
-        let currentLevel = currentProfile.level || 1;
-        let currentBadges = currentProfile.badges || ['novice']; 
-        let currentStreak = currentProfile.streak || 0;
-        const todayStr = new Date().toDateString();
-        
-        if (currentProfile.lastLogDate !== todayStr) {
-            const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-            const isConsecutive = (currentProfile.lastLogDate === yesterday.toDateString());
-            currentStreak = isConsecutive ? currentStreak + 1 : 1;
-        }
-        
-        let newXP = currentXP + finalAmount; 
-        let newLevel = currentLevel;
-        while (newLevel < LEVEL_THRESHOLDS.length - 1 && newXP >= LEVEL_THRESHOLDS[newLevel]) newLevel++;
-        
-        const newBadges = [...currentBadges];
-        if (newLevel >= 5 && !newBadges.includes('level5')) newBadges.push('level5');
-        if (newLevel >= 10 && !newBadges.includes('master')) newBadges.push('master');
-        if (newLevel > currentLevel) setShowLevelUp({ type: 'level', data: newLevel });
-        
-        let updatedProfile: UserProfile = { ...currentProfile, xp: newXP, level: newLevel, badges: newBadges, streak: currentStreak, lastLogDate: todayStr };
-        
-        if (scriptUrl) {
-            const payload = { ...updatedProfile, deltaXp: finalAmount };
-            saveDataToSheet(scriptUrl, 'profile', payload, currentUser);
-        }
-        
-        if (finalAmount > 0) showToast(`+${finalAmount} HP! (รวม ${updatedProfile.xp})`, 'success');
-        return updatedProfile;
-    });
-  }, [currentUser, scriptUrl]);
+  }, [currentUser, scriptUrl, isDataSynced, refreshGroups]);
 
   return (
-    <AppContext.Provider value={{ 
-        activeView, setActiveView, currentUser, login, logout, theme, setTheme,
-        bmiHistory, setBmiHistory: _setBmiHistory, tdeeHistory, setTdeeHistory: _setTdeeHistory,
-        foodHistory, setFoodHistory: _setFoodHistory, plannerHistory, setPlannerHistory: _setPlannerHistory,
-        waterHistory, setWaterHistory: _setWaterHistory, calorieHistory, setCalorieHistory: _setCalorieHistory,
-        activityHistory, setActivityHistory: _setActivityHistory, sleepHistory, setSleepHistory: _setSleepHistory,
-        moodHistory, setMoodHistory: _setMoodHistory, habitHistory, setHabitHistory: _setHabitHistory,
-        socialHistory, setSocialHistory: _setSocialHistory, evaluationHistory, saveEvaluation, quizHistory, saveQuizResult,
-        waterGoal, setWaterGoal, latestFoodAnalysis, setLatestFoodAnalysis, userProfile, setUserProfile,
-        scriptUrl, setScriptUrl, apiKey: '', setApiKey: () => {}, isDataSynced,
-        clearBmiHistory: () => { _setBmiHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'bmiHistory', currentUser); },
-        clearTdeeHistory: () => { _setTdeeHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'tdeeHistory', currentUser); },
-        clearFoodHistory: () => { _setFoodHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'foodHistory', currentUser); },
-        clearWaterHistory: () => { _setWaterHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'waterHistory', currentUser); },
-        clearCalorieHistory: () => { _setCalorieHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'calorieHistory', currentUser); },
-        clearActivityHistory: () => { _setActivityHistory([]); if (scriptUrl && currentUser) clearHistoryInSheet(scriptUrl, 'activityHistory', currentUser); },
-        clearWellnessHistory: () => { _setSleepHistory([]); _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); },
-        gainXP, showLevelUp, closeLevelUpModal: () => setShowLevelUp(null),
-        isSOSOpen, openSOS: () => setIsSOSOpen(true), closeSOS: () => setIsSOSOpen(false),
-        notification, closeNotification: () => setNotification(prev => ({ ...prev, show: false })),
-        organizations,
-        myGroups, joinGroup: handleJoinGroup, leaveGroup: handleLeaveGroup, refreshGroups
+    <AppContext.Provider value={{
+      activeView, setActiveView, currentUser, login, logout, theme, setTheme,
+      bmiHistory, setBmiHistory, tdeeHistory, setTdeeHistory, foodHistory, setFoodHistory,
+      plannerHistory, setPlannerHistory, waterHistory, setWaterHistory, calorieHistory, setCalorieHistory,
+      activityHistory, setActivityHistory, sleepHistory, setSleepHistory, moodHistory, setMoodHistory,
+      habitHistory, setHabitHistory, socialHistory, setSocialHistory, evaluationHistory, saveEvaluation,
+      quizHistory, saveQuizResult, waterGoal, setWaterGoal, latestFoodAnalysis, setLatestFoodAnalysis,
+      userProfile, setUserProfile, scriptUrl, setScriptUrl, apiKey: '', setApiKey: () => {}, isDataSynced,
+      clearBmiHistory, clearTdeeHistory, clearFoodHistory, clearWaterHistory, clearCalorieHistory,
+      clearActivityHistory, clearWellnessHistory, gainXP, showLevelUp, closeLevelUpModal,
+      notification, closeNotification, isSOSOpen, openSOS, closeSOS,
+      organizations, myGroups, joinGroup, leaveGroup, refreshGroups
     }}>
       {children}
     </AppContext.Provider>
