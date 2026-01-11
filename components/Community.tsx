@@ -49,7 +49,7 @@ const Community: React.FC = () => {
     });
     
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-    const [loadingMessage, setLoadingMessage] = useState("กำลังโหลดข้อมูล...");
+    const [loadingMessage, setLoadingMessage] = useState("กำลังจัดอันดับผู้พิชิต...");
     
     // Debug
     const [showDebug, setShowDebug] = useState(false);
@@ -360,9 +360,41 @@ const Community: React.FC = () => {
     };
 
     if (loadingGlobal) return (
-        <div className="flex flex-col items-center justify-center min-h-[50vh] pt-10">
-            <div className="w-16 h-16 border-4 border-t-teal-500 border-gray-200 dark:border-gray-700 rounded-full animate-spin mb-4"></div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm animate-pulse">{loadingMessage}</p>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
+            {/* Podium & Trophy Container */}
+            <div className="relative flex flex-col items-center">
+                {/* Floating/Bouncing Trophy */}
+                <div className="relative z-10 animate-bounce mb-[-10px]">
+                    <div className="absolute inset-0 bg-yellow-400 blur-xl opacity-30 rounded-full"></div>
+                    <TrophyIcon className="w-28 h-28 text-yellow-500 drop-shadow-2xl" />
+                    
+                    {/* Sparkles */}
+                    <div className="absolute -top-4 -right-4 animate-pulse">
+                        <StarIcon className="w-8 h-8 text-yellow-300" />
+                    </div>
+                    <div className="absolute top-10 -left-6 animate-pulse delay-75">
+                        <StarIcon className="w-5 h-5 text-yellow-300" />
+                    </div>
+                </div>
+
+                {/* Podium Base */}
+                <div className="flex items-end gap-1">
+                    <div className="w-8 h-12 bg-indigo-200 dark:bg-indigo-900/50 rounded-t-lg"></div>
+                    <div className="w-16 h-16 bg-indigo-500 dark:bg-indigo-600 rounded-t-lg shadow-lg relative flex justify-center pt-2">
+                        <span className="text-white font-bold opacity-50 text-xl">1</span>
+                    </div>
+                    <div className="w-8 h-10 bg-indigo-200 dark:bg-indigo-900/50 rounded-t-lg"></div>
+                </div>
+            </div>
+
+            <div className="text-center mt-8 space-y-2">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white animate-pulse">
+                    กำลังจัดอันดับผู้พิชิต...
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {loadingMessage}
+                </p>
+            </div>
         </div>
     );
 
