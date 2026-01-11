@@ -148,12 +148,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const joinGroup = async (code: string) => {
       if (!currentUser) return { success: false, message: 'Not logged in' };
       
-      // FIX: Sanitize user object to ensure no large data or circular refs are sent
       const safeUser = {
           username: currentUser.username,
           displayName: currentUser.displayName,
           role: currentUser.role,
-          profilePicture: currentUser.profilePicture // Assuming this is string URL or small base64
+          profilePicture: currentUser.profilePicture
       };
 
       if (!safeUser.username) {
@@ -165,6 +164,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (res.status === 'Joined') {
           refreshGroups();
           return { success: true, message: 'Joined' };
+      }
+      // FIX: Treat "Already member" as success to handle race conditions or double clicks
+      if (res.message && (res.message.includes('already') || res.message.includes('เป็นสมาชิกกลุ่มนี้อยู่แล้ว'))) {
+          refreshGroups();
+          return { success: true, message: 'คุณเป็นสมาชิกกลุ่มนี้อยู่แล้ว (Success)' };
       }
       return { success: false, message: res.message || 'Failed' };
   };
@@ -183,7 +187,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const gainXP = (amount: number, category?: string) => {
       if (!currentUser || currentUser.role === 'guest') return;
       
-      // Anti-cheat / Cap check
       const todayStr = new Date().toDateString();
       if (category && GAMIFICATION_LIMITS[category]) {
           const limit = GAMIFICATION_LIMITS[category];
@@ -198,7 +201,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let newXP = (userProfile.xp || 0) + amount;
       let newLevel = userProfile.level || 1;
       
-      // Check Level Up
       let leveledUp = false;
       const nextThreshold = LEVEL_THRESHOLDS[newLevel];
       
@@ -208,12 +210,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setShowLevelUp({ type: 'level', data: newLevel });
       }
 
-      const updatedProfile = { ...userProfile, xp: newXP, level: newLevel, deltaXp: amount }; // Add deltaXp for weekly tracking
+      const updatedProfile = { ...userProfile, xp: newXP, level: newLevel, deltaXp: amount };
       _setUserProfile(updatedProfile);
       saveDataToSheet(scriptUrl, 'profile', updatedProfile, currentUser);
       
       if (!leveledUp) {
-          // Show small notification for XP gain
           setNotification({ show: true, message: `+${amount} HP!`, type: 'success' });
           setTimeout(closeNotification, 2000);
       }
@@ -237,12 +238,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // --- Initial Data Sync ---
   useEffect(() => {
       if (currentUser && currentUser.role !== 'guest' && scriptUrl && !isDataSynced) {
           const syncData = async () => {
               if (currentUser.authProvider === 'line' && !currentUser.username) {
-                  // Fix legacy data
                   console.warn("User missing username, forcing logout to re-auth");
                   logout();
                   return;

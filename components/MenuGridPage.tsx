@@ -21,14 +21,14 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
     { id: 'dashboard', label: 'แดชบอร์ดสุขภาพ', icon: <SquaresIcon className="w-6 h-6 text-indigo-500" />, color: 'bg-white', category: 'main' },
-    { id: 'community', label: 'ลำดับคนรักสุขภาพ', icon: <UserGroupIcon className="w-6 h-6 text-orange-500" />, color: 'bg-white', category: 'main' },
+    { id: 'community', label: 'กลุ่มของฉัน', icon: <UserGroupIcon className="w-6 h-6 text-orange-500" />, color: 'bg-white', category: 'main' }, // Renamed/Mapped to community
     { id: 'rewards', label: 'แลกรางวัลสุขภาพ', icon: <MedalIcon className="w-6 h-6 text-amber-500" />, color: 'bg-white', category: 'main' },
     { id: 'planner', label: 'แผนอาหาร 7 วัน', icon: <ClipboardListIcon className="w-6 h-6 text-emerald-500" />, color: 'bg-white', category: 'main' },
     { id: 'literacy', label: 'คลังความรู้', icon: <BookOpenIcon className="w-6 h-6 text-teal-500" />, color: 'bg-white', category: 'main' },
     { id: 'weeklyQuiz', label: 'ควิซประจำสัปดาห์', icon: <StarIcon className="w-6 h-6 text-rose-500" />, color: 'bg-white', category: 'main' },
     { id: 'assessment', label: 'ประเมินความเสี่ยง', icon: <ClipboardCheckIcon className="w-6 h-6 text-purple-500" />, color: 'bg-white', category: 'main' },
     { id: 'quiz', label: 'วัดความรู้ HL', icon: <ClipboardCheckIcon className="w-6 h-6 text-gray-500" />, color: 'bg-white', category: 'main' },
-    { id: 'evaluation', label: 'แบบประเมินผล', icon: <HeartIcon className="w-6 h-6 text-pink-500" />, color: 'bg-white', category: 'main' }, // Added evaluation
+    { id: 'evaluation', label: 'แบบประเมินผล', icon: <HeartIcon className="w-6 h-6 text-pink-500" />, color: 'bg-white', category: 'main' },
 ];
 
 const MenuGridPage: React.FC = () => {
@@ -41,7 +41,6 @@ const MenuGridPage: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // FIX: Helper to display profile picture or emoji (copied from App.tsx logic)
     const renderProfilePicture = (pic: string | undefined) => {
         if (!pic) return <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500"><UserCircleIcon className="w-8 h-8" /></div>;
         
@@ -49,7 +48,6 @@ const MenuGridPage: React.FC = () => {
         if (isImage) {
             return <img src={pic} alt="Profile" className="w-12 h-12 rounded-full object-cover border border-gray-100 shadow-sm" />;
         }
-        // Emoji case
         return (
             <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100 shadow-sm">
                 <span className="text-2xl">{pic}</span>
@@ -59,7 +57,6 @@ const MenuGridPage: React.FC = () => {
 
     return (
         <div className="animate-fade-in pb-20 space-y-6">
-            {/* Header Area */}
             <div className="flex justify-between items-center px-1">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">เมนู</h1>
                 <div className="flex gap-4">
@@ -72,7 +69,6 @@ const MenuGridPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Profile Card */}
             <button 
                 onClick={() => navigate('profile')}
                 className="w-full bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between group active:scale-[0.98] transition-all"
@@ -96,7 +92,6 @@ const MenuGridPage: React.FC = () => {
                 </div>
             </button>
 
-            {/* Admin Zone Button (Conditional) */}
             {currentUser?.role === 'admin' && (
                 <button
                     onClick={() => navigate('adminDashboard')}
@@ -116,7 +111,6 @@ const MenuGridPage: React.FC = () => {
                 </button>
             )}
 
-            {/* Shortcuts row */}
             <div className="space-y-3">
                 <h3 className="text-sm font-bold text-gray-900 dark:text-white pl-1">ทางลัดของคุณ</h3>
                 <div className="flex overflow-x-auto pb-2 gap-3 no-scrollbar">
@@ -155,7 +149,6 @@ const MenuGridPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Main Feature Grid */}
             <div className="grid grid-cols-2 gap-2 px-1">
                 {MENU_ITEMS.map((item) => (
                     <button
@@ -167,14 +160,9 @@ const MenuGridPage: React.FC = () => {
                         <span className="text-sm font-bold text-gray-800 dark:text-gray-200 text-left line-clamp-1 leading-tight">{item.label}</span>
                     </button>
                 ))}
-                <button className="col-span-2 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl font-bold text-gray-700 dark:text-gray-300 text-sm">
-                    ดูเพิ่มเติม
-                </button>
             </div>
 
-            {/* Collapsible Sections (Bottom) */}
             <div className="space-y-1 border-t border-gray-100 dark:border-gray-700 pt-4">
-                {/* Help & Support */}
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <button 
                         onClick={() => setIsHelpOpen(!isHelpOpen)}
@@ -201,7 +189,6 @@ const MenuGridPage: React.FC = () => {
                     )}
                 </div>
 
-                {/* Settings & Privacy */}
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <button 
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -231,7 +218,6 @@ const MenuGridPage: React.FC = () => {
                     )}
                 </div>
 
-                {/* Logout Button */}
                 <button 
                     onClick={logout}
                     className="w-full py-5 flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-xl mt-6 text-red-600 font-bold active:scale-[0.98] transition-transform"

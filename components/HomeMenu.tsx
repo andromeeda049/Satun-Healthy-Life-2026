@@ -134,45 +134,26 @@ const HomeMenu: React.FC = () => {
             </div>
         </div>
 
-        {/* Health Groups List */}
+        {/* My Groups Banner - Top Access */}
         {myGroups && myGroups.length > 0 && (
-            <div>
-                <h3 className="text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-3 pl-1 flex items-center gap-2">
-                    <div className="w-2 h-0.5 bg-teal-500 rounded-full"></div>
-                    กลุ่มสุขภาพของคุณ
-                </h3>
-                <div className="space-y-3">
-                    {myGroups.map(group => (
-                        <div key={group.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col gap-3 relative overflow-hidden group">
-                            <div className="flex justify-between items-start relative z-10">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-teal-50 dark:bg-teal-900/20 rounded-xl text-teal-600 dark:text-teal-400">
-                                        <UserGroupIcon className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-800 dark:text-white text-sm">{group.name}</h4>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{group.description}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => handleLeaveGroup(group.id, group.name)} className="text-gray-300 hover:text-red-500 p-1 transition-colors">
-                                    <XIcon className="w-4 h-4" />
-                                </button>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 relative z-10">
-                                {group.lineLink ? (
-                                    <a href={group.lineLink} target="_blank" rel="noreferrer" className="flex-1 bg-[#06C755] text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:brightness-95 transition-all shadow-sm">
-                                        <LineIcon className="w-4 h-4" /> เข้า LINE กลุ่ม
-                                    </a>
-                                ) : (
-                                    <div className="flex-1 bg-gray-100 dark:bg-gray-700 text-gray-400 py-2.5 rounded-xl font-bold text-xs text-center">ไม่มีลิงก์ LINE</div>
-                                )}
-                            </div>
-                            
-                            {/* Decorative */}
-                            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-teal-50 dark:bg-teal-900/10 rounded-full blur-2xl group-hover:bg-teal-100 dark:group-hover:bg-teal-900/20 transition-colors"></div>
+            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 rounded-xl p-4 text-white shadow-md relative overflow-hidden animate-slide-up">
+                <div className="absolute -right-4 -bottom-4 bg-white/20 w-20 h-20 rounded-full blur-xl"></div>
+                <div className="flex justify-between items-center relative z-10">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
+                            <UserGroupIcon className="w-6 h-6 text-white" />
                         </div>
-                    ))}
+                        <div>
+                            <h3 className="font-bold text-sm">กลุ่มของคุณ ({myGroups.length})</h3>
+                            <p className="text-[10px] text-teal-100 opacity-90">{myGroups[0].name}</p>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setActiveView('community')}
+                        className="bg-white text-teal-600 px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-all"
+                    >
+                        ดูอันดับกลุ่ม &gt;
+                    </button>
                 </div>
             </div>
         )}

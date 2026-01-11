@@ -43,8 +43,11 @@ const Community: React.FC = () => {
     const [loadingGroup, setLoadingGroup] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // UI States
-    const [activeTab, setActiveTab] = useState<'users' | 'trending' | 'myGroup' | 'orgs' | 'water' | 'food' | 'activity'>('users');
+    // UI States: Default to 'myGroup' if user has groups, else 'users'
+    const [activeTab, setActiveTab] = useState<'users' | 'trending' | 'myGroup' | 'orgs' | 'water' | 'food' | 'activity'>(() => {
+        return (myGroups && myGroups.length > 0) ? 'myGroup' : 'users';
+    });
+    
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [loadingMessage, setLoadingMessage] = useState("กำลังโหลดข้อมูล...");
     
