@@ -164,11 +164,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const res = await joinGroupService(scriptUrl, safeUser as User, code);
+      
+      // FIX logic to correctly check response structure
+      // Success response structure: { status: "success", data: { status: "Joined", ... } }
+      if (res.status === 'success' && res.data?.status === 'Joined') {
+          refreshGroups();
+          return { success: true, message: 'Joined' };
+      }
+      
+      // Fallback for direct response or legacy
       if (res.status === 'Joined') {
           refreshGroups();
           return { success: true, message: 'Joined' };
       }
-      // FIX: Treat "Already member" as success to handle race conditions or double clicks
+
+      // Treat "Already member" as success to handle race conditions or double clicks
       if (res.message && (res.message.includes('already') || res.message.includes('เป็นสมาชิกกลุ่มนี้อยู่แล้ว'))) {
           refreshGroups();
           return { success: true, message: 'คุณเป็นสมาชิกกลุ่มนี้อยู่แล้ว (Success)' };
