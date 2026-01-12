@@ -95,8 +95,7 @@ const RewardsRedemption: React.FC = () => {
 
     const currentXP = userProfile.xp || 0;
 
-    const handleRedeem = (reward: RewardItem) => {
-        if (currentXP < reward.xpCost) return;
+    const handleViewDetail = (reward: RewardItem) => {
         setSelectedReward(reward);
     };
 
@@ -202,7 +201,11 @@ const RewardsRedemption: React.FC = () => {
                     const progress = Math.min(100, (currentXP / reward.xpCost) * 100);
                     
                     return (
-                        <div key={reward.id} className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-5 items-center group transition-all relative overflow-hidden">
+                        <div 
+                            key={reward.id} 
+                            onClick={() => handleViewDetail(reward)}
+                            className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-5 items-center group transition-all relative overflow-hidden cursor-pointer hover:shadow-md"
+                        >
                             {reward.tag && (
                                 <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-3 py-1 rounded-bl-xl shadow-sm uppercase tracking-wider">
                                     {reward.tag}
@@ -232,52 +235,71 @@ const RewardsRedemption: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            <button 
-                                onClick={() => handleRedeem(reward)}
-                                disabled={!isAffordable}
-                                className={`px-4 py-2 rounded-xl text-xs font-semibold uppercase transition-all shrink-0 ${
-                                    isAffordable 
-                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100 hover:bg-indigo-700 active:scale-95' 
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                                }`}
-                            >
-                                แลก
-                            </button>
+                            {/* Visual chevron to indicate clickability */}
+                            <div className="text-gray-300">
+                                <i className="fa-solid fa-chevron-right"></i>
+                            </div>
                         </div>
                     );
                 })}
             </div>
 
-            {/* Redeem Modal */}
+            {/* Reward Detail Modal */}
             {selectedReward && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden relative animate-bounce-in border-4 border-white dark:border-gray-700">
-                        <div className="p-8 text-center">
-                            <div className="w-24 h-24 bg-indigo-50 dark:bg-gray-700 rounded-full flex items-center justify-center text-6xl mx-auto mb-6 shadow-inner">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden relative animate-bounce-in flex flex-col max-h-[90vh]">
+                        {/* Header */}
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                <StarIcon className="w-5 h-5 text-amber-500" />
+                                รายละเอียดรางวัล
+                            </h3>
+                            <button onClick={() => setSelectedReward(null)} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                                <XIcon className="w-4 h-4 text-gray-600 dark:text-white" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 overflow-y-auto">
+                            <div className={`w-24 h-24 rounded-full flex items-center justify-center text-6xl mx-auto mb-6 shadow-inner ${getTypeColor(selectedReward.type)}`}>
                                 {selectedReward.icon}
                             </div>
-                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">ยืนยันการแลก?</h3>
-                            <p className="text-gray-600 dark:text-gray-300 font-bold text-lg mt-2">{selectedReward.name}</p>
                             
-                            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl mt-4 border border-amber-100 dark:border-amber-800">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">แต้มที่จะถูกหัก</p>
-                                <p className="text-2xl font-black text-amber-600 dark:text-amber-400">-{selectedReward.xpCost.toLocaleString()} HP</p>
+                            <div className="text-center mb-6">
+                                {selectedReward.tag && <span className="inline-block bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full mb-2 uppercase tracking-wide">{selectedReward.tag}</span>}
+                                <h3 className="text-xl font-bold text-gray-800 dark:text-white leading-tight">{selectedReward.name}</h3>
+                                <p className="text-xs text-gray-400 mt-1 uppercase font-semibold tracking-wider">{selectedReward.type} Reward</p>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl text-sm text-gray-600 dark:text-gray-300 leading-relaxed font-medium mb-6 border border-gray-100 dark:border-gray-700">
+                                {selectedReward.description}
                             </div>
                             
-                            <div className="mt-8 flex flex-col gap-3">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-100 dark:border-amber-800 flex justify-between items-center">
+                                <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">แต้มที่จะถูกหัก</span>
+                                <span className="text-2xl font-black text-amber-600 dark:text-amber-400">-{selectedReward.xpCost.toLocaleString()} HP</span>
+                            </div>
+                        </div>
+
+                        {/* Footer / Action */}
+                        <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                            {currentXP >= selectedReward.xpCost ? (
                                 <button 
                                     onClick={confirmRedeem}
-                                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transition-all active:scale-95 uppercase tracking-wider"
+                                    className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 uppercase tracking-wider flex items-center justify-center gap-2"
                                 >
-                                    ยืนยัน (Redeem)
+                                    <ClipboardCheckIcon className="w-5 h-5" />
+                                    ยืนยันแลกรางวัล
                                 </button>
+                            ) : (
                                 <button 
-                                    onClick={() => setSelectedReward(null)}
-                                    className="w-full py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold rounded-2xl transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    disabled
+                                    className="w-full py-3.5 bg-gray-200 dark:bg-gray-700 text-gray-400 font-bold rounded-xl cursor-not-allowed uppercase tracking-wider flex items-center justify-center gap-2"
                                 >
-                                    ยกเลิก
+                                    <XIcon className="w-5 h-5" />
+                                    แต้มไม่เพียงพอ
                                 </button>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
