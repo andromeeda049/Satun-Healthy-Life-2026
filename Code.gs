@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (v14.5 - Robust Group Code Check)
+ * Satun Smart Life - Backend Script (v14.7 - Fix User Info Error)
  */
 
 const SHEET_NAMES = {
@@ -42,45 +42,52 @@ function handleRequest(e, method) {
   try {
     const params = method === 'POST' ? JSON.parse(e.postData.contents) : e.parameter;
     const action = params.action;
+    const user = params.user;
     
+    // 1. PUBLIC ACTIONS (No User Required)
     if (action === 'getConfig') return handleGetConfig();
     if (action === 'getAllData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
     if (action === 'getAllAdminData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
-
     if (action === 'verifyUser') return handleVerifyUser(params.email, params.password);
     if (action === 'register') return handleRegisterUser(params.user, params.password);
     if (action === 'socialAuth') return handleSocialAuth(params.payload || params.profile);
-
     if (action === 'getLeaderboard') return handleGetLeaderboardJS(params.groupId); 
 
-    const user = params.user;
-    if (!user || !user.username) throw new Error("User information is missing.");
+    // 2. ACTIONS REQUIRING USER
+    if (user) {
+        // Group Actions
+        if (action === 'createGroup') return handleCreateGroup(params.groupData, user);
+        if (action === 'joinGroup') return handleJoinGroup(params.code, user);
+        if (action === 'leaveGroup') return handleLeaveGroup(params.groupId, user);
+        if (action === 'getUserGroups') return handleGetUserGroups(user);
+        if (action === 'getAdminGroups') return handleGetAdminGroups(user);
+        if (action === 'getGroupMembers') return handleGetGroupMembers(params.groupId, user); 
+        
+        if (action === 'getUserData' && (user.role === 'admin' || isGroupAdmin(params.targetUsername, user.username))) {
+           return handleGetUserDataForAdmin(params.targetUsername);
+        }
     
-    // Group Actions
-    if (action === 'createGroup') return handleCreateGroup(params.groupData, user);
-    if (action === 'joinGroup') return handleJoinGroup(params.code, user);
-    if (action === 'leaveGroup') return handleLeaveGroup(params.groupId, user);
-    if (action === 'getUserGroups') return handleGetUserGroups(user);
-    if (action === 'getAdminGroups') return handleGetAdminGroups(user);
-    if (action === 'getGroupMembers') return handleGetGroupMembers(params.groupId, user); 
-    
-    if (action === 'getUserData' && (user.role === 'admin' || isGroupAdmin(params.targetUsername, user.username))) {
-       return handleGetUserDataForAdmin(params.targetUsername);
+        if (action === 'notifyComplete') return handleNotifyComplete(user);
+        if (action === 'testNotification' || action === 'sendTestLine') return handleTestNotification(user);
+        if (action === 'testTelegramNotification' || action === 'sendTestTelegram') return createSuccessResponse({ message: "Telegram Test OK" });
     }
 
-    if (action === 'notifyComplete') return handleNotifyComplete(user);
-    if (action === 'testNotification' || action === 'sendTestLine') return handleTestNotification(user);
-    if (action === 'testTelegramNotification' || action === 'sendTestTelegram') return createSuccessResponse({ message: "Telegram Test OK" });
-
+    // 3. FALLBACK ACTIONS (Save/Clear/Fetch)
     switch (action) {
-      case 'save': return handleSave(params.type, params.payload, user);
-      case 'clear': return handleClear(params.type, user);
+      case 'save': 
+        if (!user || !user.username) throw new Error("User required for save");
+        return handleSave(params.type, params.payload, user);
+      case 'clear': 
+        if (!user || !user.username) throw new Error("User required for clear");
+        return handleClear(params.type, user);
       default: 
+        // 4. GET USER DATA (Legacy Method - just 'username' param)
         if (method === 'GET' && params.username) {
              const username = params.username;
              return createSuccessResponse(getUserFullData(username));
         }
-        throw new Error("Invalid action specified.");
+        // If we reach here and action is undefined or not handled, and no username in GET
+        throw new Error("Invalid action or missing user information.");
     }
   } catch (error) {
     return createErrorResponse(error);

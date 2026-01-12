@@ -36,15 +36,44 @@ export interface AllData {
     quizHistory: QuizEntry[];
 }
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 2, timeout = 20000): Promise<Response> => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    const config = { ...options, signal: controller.signal };
+
+    try {
+        const response = await fetch(url, config);
+        clearTimeout(id);
+        if (!response.ok) {
+             throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+        }
+        return response;
+    } catch (err: any) {
+        clearTimeout(id);
+        if (retries > 0) {
+            console.warn(`Fetch failed, retrying... (${retries} left). Error: ${err.message}`);
+            await delay(1000); // 1s wait
+            return fetchWithRetry(url, options, retries - 1, timeout);
+        }
+        throw new Error(err.name === 'AbortError' ? 'Connection Timeout' : err.message);
+    }
+};
+
+const appendParams = (url: string, params: string) => {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${params}`;
+};
+
 export const fetchOrganizations = async (scriptUrl: string): Promise<any[]> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return [];
     try {
-        const urlWithParams = `${scriptUrl}?action=getConfig&t=${Date.now()}`;
-        const response = await fetch(urlWithParams, { 
+        const urlWithParams = appendParams(scriptUrl, `action=getConfig&t=${Date.now()}`);
+        const response = await fetchWithRetry(urlWithParams, { 
             method: 'GET', 
             redirect: 'follow', 
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
         const text = await response.text();
         let result;
@@ -62,24 +91,44 @@ export const fetchOrganizations = async (scriptUrl: string): Promise<any[]> => {
 }
 
 export const fetchAllDataFromSheet = async (scriptUrl: string, user: User): Promise<AllData | null> => {
-    if (!scriptUrl || !user || !scriptUrl.startsWith('http')) return null;
+    if (!scriptUrl || !user || !scriptUrl.startsWith('http')) {
+        throw new Error("Configuration Error: Invalid URL or User");
+    }
+    
+    if (!user.username) {
+        throw new Error("User information is missing (username)");
+    }
+    
     try {
-        const urlWithParams = `${scriptUrl}?username=${encodeURIComponent(user.username)}&t=${Date.now()}`;
-        const response = await fetch(urlWithParams, { 
+        const urlWithParams = appendParams(scriptUrl, `username=${encodeURIComponent(user.username)}&t=${Date.now()}`);
+        const response = await fetchWithRetry(urlWithParams, { 
             method: 'GET', 
             redirect: 'follow'
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
-        const result = await response.json();
+        const text = await response.text();
+        
+        // Check for HTML response (Google Script Error Page)
+        if (text.trim().startsWith('<')) {
+            throw new Error("Server Error: Received HTML instead of JSON. Please check Script Deployment.");
+        }
+
+        let result;
+        try {
+            result = JSON.parse(text);
+        } catch (e) {
+            throw new Error("Invalid JSON Response from Server");
+        }
+
         if (result.status === 'success') {
              const data = result.data;
              return parseUserData(data);
+        } else {
+             throw new Error(result.message || "Server Application Error");
         }
-        return null;
     } catch (error: any) {
         console.error("Fetch Data Error:", error);
-        return null;
+        throw error; // Propagate error to allow UI to display it
     }
 };
 
@@ -129,8 +178,12 @@ const parseUserData = (data: any): AllData => {
 
 export const saveDataToSheet = async (scriptUrl: string, type: string, payload: any, user: User): Promise<boolean> => {
     if (!scriptUrl || !user || !scriptUrl.startsWith('http')) return false;
+    if (!user.username) {
+        console.error("Save Data Error: Username missing");
+        return false;
+    }
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'save', type, payload, user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -146,8 +199,9 @@ export const saveDataToSheet = async (scriptUrl: string, type: string, payload: 
 
 export const clearHistoryInSheet = async (scriptUrl: string, type: string, user: User): Promise<boolean> => {
     if (!scriptUrl || !user || !scriptUrl.startsWith('http')) return false;
+    if (!user.username) return false;
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'clear', type, user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -163,7 +217,7 @@ export const clearHistoryInSheet = async (scriptUrl: string, type: string, user:
 export const socialAuth = async (scriptUrl: string, profile: any): Promise<any> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'socialAuth', profile }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -178,7 +232,7 @@ export const socialAuth = async (scriptUrl: string, profile: any): Promise<any> 
 export const sendTestNotification = async (scriptUrl: string, user: User): Promise<any> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'sendTestLine', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -193,7 +247,7 @@ export const sendTestNotification = async (scriptUrl: string, user: User): Promi
 export const sendTelegramTestNotification = async (scriptUrl: string, user: User): Promise<any> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'sendTestTelegram', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -208,7 +262,7 @@ export const sendTelegramTestNotification = async (scriptUrl: string, user: User
 export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: string): Promise<AllAdminData | null> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return null;
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getAllAdminData', adminKey }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -228,17 +282,13 @@ export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?:
     }
     
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getLeaderboard', user: user || { username: 'guest' }, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
         
-        if (!response.ok) {
-            throw new Error(`Network Error: ${response.status}`);
-        }
-
         const result = await response.json();
         
         if (result.status === 'success') {
@@ -257,7 +307,7 @@ export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?:
 export const createGroup = async (scriptUrl: string, user: User, groupData: any): Promise<any> => {
     if (!scriptUrl || !user) return { success: false, message: 'Invalid config' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'createGroup', user, groupData }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -272,7 +322,7 @@ export const createGroup = async (scriptUrl: string, user: User, groupData: any)
 export const joinGroup = async (scriptUrl: string, user: User, code: string): Promise<any> => {
     if (!scriptUrl || !user) return { success: false, message: 'Invalid config' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'joinGroup', user, code }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -287,7 +337,7 @@ export const joinGroup = async (scriptUrl: string, user: User, code: string): Pr
 export const getUserGroups = async (scriptUrl: string, user: User): Promise<any> => {
     if (!scriptUrl || !user) return [];
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getUserGroups', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -301,7 +351,7 @@ export const getUserGroups = async (scriptUrl: string, user: User): Promise<any>
 export const getAdminGroups = async (scriptUrl: string, user: User): Promise<any> => {
     if (!scriptUrl || !user) return [];
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getAdminGroups', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -315,7 +365,7 @@ export const getAdminGroups = async (scriptUrl: string, user: User): Promise<any
 export const leaveGroup = async (scriptUrl: string, user: User, groupId: string): Promise<any> => {
     if (!scriptUrl || !user) return { status: 'error' };
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'leaveGroup', user, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -328,7 +378,7 @@ export const leaveGroup = async (scriptUrl: string, user: User, groupId: string)
 export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: string): Promise<any[]> => {
     if (!scriptUrl || !user) return [];
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getGroupMembers', user, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -342,7 +392,7 @@ export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: 
 export const fetchUserDataByAdmin = async (scriptUrl: string, adminUser: User, targetUsername: string): Promise<AllData | null> => {
     if (!scriptUrl || !adminUser) return null;
     try {
-        const response = await fetch(scriptUrl, {
+        const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getUserData', user: adminUser, targetUsername }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },

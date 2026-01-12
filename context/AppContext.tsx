@@ -65,6 +65,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v14', DEFAULT_SCRIPT_URL);
   
   const [isDataSynced, setIsDataSynced] = useState(false); 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   const [showLevelUp, setShowLevelUp] = useState<{ type: 'level' | 'badge', data: any } | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'info' });
@@ -101,7 +104,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem('lastLogonUser', user.username);
 
     setCurrentUser(user);
-    // Initial profile sync handled by useEffect
+    // Reset sync state to force a fresh sync
+    setIsDataSynced(false);
+    setIsSyncing(false);
+    setSyncError(null);
   };
 
   const logout = () => {
@@ -110,6 +116,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     setCurrentUser(null);
     setIsDataSynced(false);
+    setIsSyncing(false);
     setActiveView('home');
     
     // NOTE: We do NOT clear history or profile data here. 
@@ -117,22 +124,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Data clearing is now handled in 'login' if a DIFFERENT user logs in.
   };
 
-  const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
-  const setTdeeHistory = (val: any) => { _setTdeeHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'TDEE', val, currentUser); };
-  const setFoodHistory = (val: any) => { _setFoodHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'FOOD', val, currentUser); };
-  const setPlannerHistory = (val: any) => { _setPlannerHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'PLANNER', val, currentUser); };
-  const setWaterHistory = (val: any) => { _setWaterHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'WATER', val, currentUser); };
-  const setCalorieHistory = (val: any) => { _setCalorieHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'CALORIE', val, currentUser); };
-  const setActivityHistory = (val: any) => { _setActivityHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'ACTIVITY', val, currentUser); };
-  const setSleepHistory = (val: any) => { _setSleepHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'SLEEP', val, currentUser); };
-  const setMoodHistory = (val: any) => { _setMoodHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'MOOD', val, currentUser); };
-  const setHabitHistory = (val: any) => { _setHabitHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'HABIT', val, currentUser); };
-  const setSocialHistory = (val: any) => { _setSocialHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'SOCIAL', val, currentUser); };
+  const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
+  const setTdeeHistory = (val: any) => { _setTdeeHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'TDEE', val, currentUser); };
+  const setFoodHistory = (val: any) => { _setFoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'FOOD', val, currentUser); };
+  const setPlannerHistory = (val: any) => { _setPlannerHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'PLANNER', val, currentUser); };
+  const setWaterHistory = (val: any) => { _setWaterHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'WATER', val, currentUser); };
+  const setCalorieHistory = (val: any) => { _setCalorieHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'CALORIE', val, currentUser); };
+  const setActivityHistory = (val: any) => { _setActivityHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'ACTIVITY', val, currentUser); };
+  const setSleepHistory = (val: any) => { _setSleepHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'SLEEP', val, currentUser); };
+  const setMoodHistory = (val: any) => { _setMoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'MOOD', val, currentUser); };
+  const setHabitHistory = (val: any) => { _setHabitHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'HABIT', val, currentUser); };
+  const setSocialHistory = (val: any) => { _setSocialHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'SOCIAL', val, currentUser); };
   
   const setUserProfile = (profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
       const newProfile = { ...profileData };
       _setUserProfile(newProfile);
-      if (currentUser) {
+      if (currentUser && isDataSynced) {
           const updatedUser = { ...currentUser, ...accountData, organization: newProfile.organization };
           setCurrentUser(updatedUser);
           saveDataToSheet(scriptUrl, 'profile', newProfile, updatedUser);
@@ -142,13 +149,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const saveEvaluation = (satisfaction: any, outcomes: any) => {
       const entry = { id: Date.now().toString(), date: new Date().toISOString(), satisfaction, outcomes };
       _setEvaluationHistory(prev => [entry, ...prev]);
-      if(currentUser) saveDataToSheet(scriptUrl, 'EVALUATION', entry, currentUser);
+      if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'EVALUATION', entry, currentUser);
   };
 
   const saveQuizResult = (score: number, totalQuestions: number, correctAnswers: number, type: any = 'practice', weekNumber?: number) => {
       const entry: QuizEntry = { id: Date.now().toString(), date: new Date().toISOString(), score, totalQuestions, correctAnswers, type, weekNumber };
       _setQuizHistory(prev => [entry, ...prev]);
-      if(currentUser) saveDataToSheet(scriptUrl, 'QuizHistory', entry, currentUser);
+      if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'QuizHistory', entry, currentUser);
   };
 
   const closeNotification = () => setNotification(prev => ({ ...prev, show: false }));
@@ -215,6 +222,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const gainXP = (amount: number, category?: string) => {
       if (!currentUser || currentUser.role === 'guest') return;
       
+      // Prevent XP spamming using LocalStorage counters
       const todayStr = new Date().toDateString();
       if (category && GAMIFICATION_LIMITS[category]) {
           const limit = GAMIFICATION_LIMITS[category];
@@ -240,7 +248,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const updatedProfile = { ...userProfile, xp: newXP, level: newLevel, deltaXp: amount };
       _setUserProfile(updatedProfile);
-      saveDataToSheet(scriptUrl, 'profile', updatedProfile, currentUser);
+      if (isDataSynced) {
+          saveDataToSheet(scriptUrl, 'profile', updatedProfile, currentUser);
+      }
       
       if (!leveledUp) {
           setNotification({ show: true, message: `+${amount} HP!`, type: 'success' });
@@ -250,15 +260,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const closeLevelUpModal = () => setShowLevelUp(null);
 
-  const clearBmiHistory = () => { _setBmiHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'BMI', currentUser); };
-  const clearTdeeHistory = () => { _setTdeeHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'TDEE', currentUser); };
-  const clearFoodHistory = () => { _setFoodHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'FOOD', currentUser); };
-  const clearWaterHistory = () => { _setWaterHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'WATER', currentUser); };
-  const clearCalorieHistory = () => { _setCalorieHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'CALORIE', currentUser); };
-  const clearActivityHistory = () => { _setActivityHistory([]); if(currentUser) clearHistoryInSheet(scriptUrl, 'ACTIVITY', currentUser); };
+  const clearBmiHistory = () => { _setBmiHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'BMI', currentUser); };
+  const clearTdeeHistory = () => { _setTdeeHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'TDEE', currentUser); };
+  const clearFoodHistory = () => { _setFoodHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'FOOD', currentUser); };
+  const clearWaterHistory = () => { _setWaterHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'WATER', currentUser); };
+  const clearCalorieHistory = () => { _setCalorieHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'CALORIE', currentUser); };
+  const clearActivityHistory = () => { _setActivityHistory([]); if(currentUser && isDataSynced) clearHistoryInSheet(scriptUrl, 'ACTIVITY', currentUser); };
   const clearWellnessHistory = () => {
       _setSleepHistory([]); _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]);
-      if(currentUser) {
+      if(currentUser && isDataSynced) {
           clearHistoryInSheet(scriptUrl, 'SLEEP', currentUser);
           clearHistoryInSheet(scriptUrl, 'MOOD', currentUser);
           clearHistoryInSheet(scriptUrl, 'HABIT', currentUser);
@@ -266,38 +276,75 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  useEffect(() => {
-      if (currentUser && currentUser.role !== 'guest' && scriptUrl && !isDataSynced) {
-          const syncData = async () => {
-              if (currentUser.authProvider === 'line' && !currentUser.username) {
-                  console.warn("User missing username, forcing logout to re-auth");
-                  logout();
-                  return;
-              }
+  // --- SYNC LOGIC ---
+  const syncData = useCallback(async () => {
+      if (!currentUser || currentUser.role === 'guest' || !scriptUrl) {
+          setIsDataSynced(true); // Treat guest as synced
+          return;
+      }
 
-              const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
-              if (data) {
-                  if (data.profile) _setUserProfile(data.profile);
-                  if (data.bmiHistory) _setBmiHistory(data.bmiHistory);
-                  if (data.tdeeHistory) _setTdeeHistory(data.tdeeHistory);
-                  if (data.foodHistory) _setFoodHistory(data.foodHistory);
-                  if (data.plannerHistory) _setPlannerHistory(data.plannerHistory);
-                  if (data.waterHistory) _setWaterHistory(data.waterHistory);
-                  if (data.calorieHistory) _setCalorieHistory(data.calorieHistory);
-                  if (data.activityHistory) _setActivityHistory(data.activityHistory);
-                  if (data.sleepHistory) _setSleepHistory(data.sleepHistory);
-                  if (data.moodHistory) _setMoodHistory(data.moodHistory);
-                  if (data.habitHistory) _setHabitHistory(data.habitHistory);
-                  if (data.socialHistory) _setSocialHistory(data.socialHistory);
-                  if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
-                  if (data.quizHistory) _setQuizHistory(data.quizHistory);
-                  setIsDataSynced(true);
-                  refreshGroups();
-              }
-          };
+      setIsSyncing(true);
+      setSyncError(null);
+
+      try {
+          if (currentUser.authProvider === 'line' && !currentUser.username) {
+              console.warn("User missing username, forcing logout to re-auth");
+              // This is a critical error, so we stop here
+              throw new Error("ข้อมูลผู้ใช้ไม่สมบูรณ์ (Missing Username)");
+          }
+
+          const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
+          if (data) {
+              // Priority: Server Data > Local Data (Source of Truth)
+              if (data.profile) _setUserProfile(data.profile);
+              if (data.bmiHistory) _setBmiHistory(data.bmiHistory);
+              if (data.tdeeHistory) _setTdeeHistory(data.tdeeHistory);
+              if (data.foodHistory) _setFoodHistory(data.foodHistory);
+              if (data.plannerHistory) _setPlannerHistory(data.plannerHistory);
+              if (data.waterHistory) _setWaterHistory(data.waterHistory);
+              if (data.calorieHistory) _setCalorieHistory(data.calorieHistory);
+              if (data.activityHistory) _setActivityHistory(data.activityHistory);
+              if (data.sleepHistory) _setSleepHistory(data.sleepHistory);
+              if (data.moodHistory) _setMoodHistory(data.moodHistory);
+              if (data.habitHistory) _setHabitHistory(data.habitHistory);
+              if (data.socialHistory) _setSocialHistory(data.socialHistory);
+              if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
+              if (data.quizHistory) _setQuizHistory(data.quizHistory);
+              
+              setIsDataSynced(true);
+              refreshGroups();
+          } else {
+              throw new Error("ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์");
+          }
+      } catch (e: any) {
+          console.error("Sync Error:", e);
+          setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
+          setIsDataSynced(false); // Ensure we don't treat partial/failed sync as true
+      } finally {
+          setIsSyncing(false);
+      }
+  }, [currentUser, scriptUrl, refreshGroups]);
+
+  // Initial Sync Effect
+  useEffect(() => {
+      if (currentUser && currentUser.role !== 'guest' && !isDataSynced && !isSyncing && !syncError) {
           syncData();
       }
-  }, [currentUser, scriptUrl, isDataSynced, refreshGroups]);
+  }, [currentUser, isDataSynced, isSyncing, syncError, syncData]);
+
+  // Retry Function
+  const retrySync = () => {
+      setSyncError(null);
+      syncData();
+  };
+
+  // Offline Mode Function
+  const useOfflineData = () => {
+      setSyncError(null);
+      setIsDataSynced(true); // Bypass the guard
+      // Note: Data saved in this mode might be overwritten if user syncs from another device later.
+      // But for "Sync Fast", this is the trade-off if network is down.
+  };
 
   return (
     <AppContext.Provider value={{
@@ -311,7 +358,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       clearBmiHistory, clearTdeeHistory, clearFoodHistory, clearWaterHistory, clearCalorieHistory,
       clearActivityHistory, clearWellnessHistory, gainXP, showLevelUp, closeLevelUpModal,
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
-      organizations, myGroups, joinGroup, leaveGroup, refreshGroups
+      organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
+      // Sync States
+      isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData
     }}>
       {children}
     </AppContext.Provider>

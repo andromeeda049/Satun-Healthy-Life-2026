@@ -31,7 +31,7 @@ import RewardsRedemption from './components/RewardsRedemption';
 import MenuGridPage from './components/MenuGridPage';
 import { AppProvider, AppContext } from './context/AppContext';
 import { AppView, User, WaterHistoryEntry } from './types';
-import { HomeIcon, CameraIcon, SparklesIcon, MenuIcon, XIcon, SquaresIcon, UserCircleIcon, WaterDropIcon, HeartIcon, BellIcon, UserGroupIcon, PhoneIcon, BeakerIcon, BoltIcon } from './components/icons';
+import { HomeIcon, CameraIcon, SparklesIcon, MenuIcon, XIcon, SquaresIcon, UserCircleIcon, WaterDropIcon, HeartIcon, BellIcon, UserGroupIcon, PhoneIcon, BeakerIcon, BoltIcon, ExclamationTriangleIcon } from './components/icons';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import useLocalStorage from './hooks/useLocalStorage';
 import { XP_VALUES } from './constants';
@@ -59,6 +59,53 @@ const ToastNotification: React.FC = () => {
             </div>
         </div>
     );
+};
+
+const DataSyncGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { isSyncing, syncError, retrySync, useOfflineData, currentUser, isDataSynced } = useContext(AppContext);
+
+    // Only guard logged in users who are NOT guests
+    if (!currentUser || currentUser.role === 'guest') return <>{children}</>;
+
+    // Case 1: Syncing
+    if (isSyncing) {
+        return (
+            <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[999] flex flex-col items-center justify-center p-6 animate-fade-in">
+                <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin mb-4"></div>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white">กำลังซิงค์ข้อมูลล่าสุด...</h2>
+                <p className="text-gray-500 text-sm mt-2 text-center">ระบบกำลังดึงข้อมูลสะสมของคุณจาก Cloud <br/>กรุณารอสักครู่ เพื่อป้องกันข้อมูลสูญหาย</p>
+            </div>
+        );
+    }
+
+    // Case 2: Error
+    if (syncError) {
+        return (
+            <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[999] flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                    <ExclamationTriangleIcon className="w-10 h-10 text-red-500" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">เชื่อมต่อล้มเหลว</h2>
+                <p className="text-gray-500 text-sm mb-8">{syncError} <br/> คุณต้องการลองใหม่หรือใช้ข้อมูลเดิมในเครื่อง?</p>
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                    <button onClick={retrySync} className="w-full py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">ลองอีกครั้ง (Retry)</button>
+                    <button onClick={useOfflineData} className="w-full py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-xl active:scale-95 transition-all">ใช้งานแบบออฟไลน์ (Offline)</button>
+                </div>
+            </div>
+        );
+    }
+
+    // Case 3: Initial State (Not synced, not syncing, no error) - Should be brief or covered by isSyncing
+    if (!isDataSynced) {
+         // Fallback loader if effect hasn't fired yet
+         return (
+            <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[999] flex items-center justify-center">
+                <div className="w-10 h-10 border-4 border-gray-200 border-t-gray-500 rounded-full animate-spin"></div>
+            </div>
+         );
+    }
+
+    return <>{children}</>;
 };
 
 const AppContent: React.FC = () => {
@@ -221,7 +268,7 @@ const AppContent: React.FC = () => {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${theme === 'dark' ? 'dark bg-gray-900 text-gray-100' : 'bg-slate-100 text-slate-900'} font-sans pb-10`}>
       {currentUser ? (
-        <>
+        <DataSyncGuard>
           <header className="fixed top-0 left-0 right-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md shadow-md z-30 px-5 py-4 flex justify-between items-center transition-all duration-300 border-b border-slate-200/50 dark:border-gray-700/50">
              <div className="flex items-center gap-3" onClick={() => navigate('home')}>
                 <div className="w-9 h-9 bg-gradient-to-tr from-teal-500 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg transform hover:rotate-6 transition-transform cursor-pointer">
@@ -294,7 +341,7 @@ const AppContent: React.FC = () => {
           {isDataSynced && showOrgModal && !showPDPA && <OrganizationModal onSelect={handleOrgSelect} />}
           {isSOSOpen && <SOSModal onClose={closeSOS} />}
           {showLevelUp && <LevelUpModal type={showLevelUp.type} data={showLevelUp.data} onClose={closeLevelUpModal} />}
-        </>
+        </DataSyncGuard>
       ) : (
         <Auth />
       )}
