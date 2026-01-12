@@ -1,5 +1,5 @@
 
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState, useEffect } from 'react';
 import { AppView } from '../types';
 import { AppContext } from '../context/AppContext';
 import { 
@@ -12,8 +12,15 @@ import ProactiveInsight from './ProactiveInsight';
 import { getWeekNumber } from '../constants';
 
 const HomeMenu: React.FC = () => {
-  const { setActiveView, currentUser, userProfile, waterHistory, calorieHistory, activityHistory, moodHistory, sleepHistory, isDataSynced, foodHistory, quizHistory, myGroups, leaveGroup } = useContext(AppContext);
+  const { setActiveView, currentUser, userProfile, waterHistory, calorieHistory, activityHistory, moodHistory, sleepHistory, isDataSynced, foodHistory, quizHistory, myGroups, leaveGroup, refreshGroups } = useContext(AppContext);
   const [showProfileAlert, setShowProfileAlert] = useState(() => sessionStorage.getItem('dismiss_profile_alert') !== 'true');
+
+  // Force refresh groups on mount to ensure banner visibility
+  useEffect(() => {
+      if (currentUser && currentUser.role !== 'guest') {
+          refreshGroups();
+      }
+  }, [currentUser, refreshGroups]);
 
   const isProfileIncomplete = useMemo(() => {
       if (!userProfile) return true;
