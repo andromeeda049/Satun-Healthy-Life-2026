@@ -355,6 +355,13 @@ const Dashboard: React.FC = () => {
             moodScore={moodToday ? (11 - moodToday.stressLevel) * 10 : 0}
         />
 
+        <div className="flex justify-center gap-3">
+            <button onClick={() => setActiveView('assessment')} className="flex items-center gap-2 bg-teal-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl hover:bg-teal-600 transition-all text-xs uppercase tracking-wider transform hover:-translate-y-1 w-full sm:w-auto justify-center">
+                <ClipboardCheckIcon className="w-4 h-4" />
+                ทำแบบประเมินสุขภาพใหม่
+            </button>
+        </div>
+
         {/* --- Health Data Logs Section --- */}
         <div>
             <div className="flex items-center justify-between mb-4 px-1">
@@ -492,13 +499,6 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
             </div>
-        </div>
-
-        <div className="flex justify-center gap-3 mt-6">
-            <button onClick={() => setActiveView('assessment')} className="flex items-center gap-2 bg-teal-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl hover:bg-teal-600 transition-all text-xs uppercase tracking-wider transform hover:-translate-y-1">
-                <ClipboardCheckIcon className="w-4 h-4" />
-                ทำแบบประเมินสุขภาพใหม่
-            </button>
         </div>
     </div>
   );
