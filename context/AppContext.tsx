@@ -84,6 +84,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const login = (user: User) => {
+    // Check if a different user is logging in
+    const lastLogonUser = localStorage.getItem('lastLogonUser');
+    
+    if (lastLogonUser && lastLogonUser !== user.username) {
+        // Different user detected, clear previous user's data from local storage
+        console.log("User switch detected. Clearing previous user data.");
+        _setUserProfile(defaultProfile);
+        _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
+        _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
+        _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]);
+        setMyGroups([]);
+    }
+
+    // Update last logon user
+    localStorage.setItem('lastLogonUser', user.username);
+
     setCurrentUser(user);
     // Initial profile sync handled by useEffect
   };
@@ -93,14 +109,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sessionStorage.setItem('isLoggedOut', 'true');
     
     setCurrentUser(null);
-    _setUserProfile(defaultProfile);
     setIsDataSynced(false);
     setActiveView('home');
-    // Clear sensitive history
-    _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
-    _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
-    _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]);
-    setMyGroups([]); // Clear groups on logout
+    
+    // NOTE: We do NOT clear history or profile data here. 
+    // This allows data to persist if the SAME user logs back in.
+    // Data clearing is now handled in 'login' if a DIFFERENT user logs in.
   };
 
   const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
