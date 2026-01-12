@@ -69,7 +69,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'info' });
   const [organizations, setOrganizations] = useLocalStorage<Organization[]>('organizations', DEFAULT_ORGANIZATIONS);
-  const [myGroups, setMyGroups] = useState<HealthGroup[]>([]);
+  const [myGroups, setMyGroups] = useLocalStorage<HealthGroup[]>('myGroups', []);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -100,6 +100,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
     _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
     _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]);
+    setMyGroups([]); // Clear groups on logout
   };
 
   const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
