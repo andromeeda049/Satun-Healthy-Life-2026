@@ -1,7 +1,8 @@
 
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ArrowLeftIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, XIcon, MedalIcon, HeartIcon } from './icons';
+import { ArrowLeftIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, XIcon, MedalIcon, HeartIcon, ClipboardListIcon } from './icons';
+import { RedemptionHistoryEntry } from '../types';
 
 interface RewardItem {
     id: string;
@@ -87,9 +88,10 @@ const REWARDS: RewardItem[] = [
 ];
 
 const RewardsRedemption: React.FC = () => {
-    const { userProfile, setUserProfile, setActiveView, currentUser } = useContext(AppContext);
+    const { userProfile, setUserProfile, setActiveView, currentUser, redemptionHistory, setRedemptionHistory } = useContext(AppContext);
     const [selectedReward, setSelectedReward] = useState<RewardItem | null>(null);
     const [redeemSuccess, setRedeemSuccess] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const currentXP = userProfile.xp || 0;
 
@@ -112,12 +114,20 @@ const RewardsRedemption: React.FC = () => {
 
         // Update Profile
         const updatedProfile = { ...userProfile, xp: newXP };
-        
-        // Save to Context & Backend
         setUserProfile(updatedProfile, { 
             displayName: currentUser.displayName, 
             profilePicture: currentUser.profilePicture 
         });
+
+        // Add to Redemption History
+        const newHistoryEntry: RedemptionHistoryEntry = {
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            rewardId: selectedReward.id,
+            rewardName: selectedReward.name,
+            cost: selectedReward.xpCost
+        };
+        setRedemptionHistory(prev => [newHistoryEntry, ...prev]);
 
         // UI Feedback
         setRedeemSuccess(true);
@@ -152,6 +162,16 @@ const RewardsRedemption: React.FC = () => {
                 <div className="absolute top-0 right-0 p-4 opacity-20 transform rotate-12">
                     <TrophyIcon className="w-24 h-24" />
                 </div>
+                
+                {/* History Button - Added */}
+                <button 
+                    onClick={() => setShowHistory(true)}
+                    className="absolute top-4 right-4 text-[10px] bg-black/20 hover:bg-black/30 px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors font-bold text-white backdrop-blur-sm z-20"
+                >
+                    <ClipboardListIcon className="w-3 h-3" />
+                    ประวัติแลก
+                </button>
+
                 <div className="relative z-10">
                     <p className="text-amber-100 text-xs font-semibold uppercase tracking-widest">แต้มสะสมของคุณ (Your Balance)</p>
                     <div className="flex items-center gap-3 mt-2">
@@ -258,6 +278,44 @@ const RewardsRedemption: React.FC = () => {
                                     ยกเลิก
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* History Modal */}
+            {showHistory && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] relative animate-slide-up">
+                        <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-700/50">
+                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                <ClipboardListIcon className="w-5 h-5 text-amber-500" />
+                                ประวัติการแลกรางวัล
+                            </h3>
+                            <button onClick={() => setShowHistory(false)} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                <XIcon className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto p-4 space-y-3">
+                            {redemptionHistory.length === 0 ? (
+                                <div className="text-center py-8 text-gray-400">
+                                    <p>ยังไม่มีประวัติการแลกรางวัล</p>
+                                </div>
+                            ) : (
+                                redemptionHistory.map(entry => (
+                                    <div key={entry.id} className="bg-white dark:bg-gray-700 p-3 rounded-xl border border-gray-100 dark:border-gray-600 flex justify-between items-center shadow-sm">
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-800 dark:text-white">{entry.rewardName}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {new Date(entry.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-bold text-red-500 text-sm">-{entry.cost.toLocaleString()} HP</span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

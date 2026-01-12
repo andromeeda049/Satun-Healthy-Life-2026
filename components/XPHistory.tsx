@@ -170,7 +170,9 @@ const XPHistory: React.FC = () => {
                     </div>
                 ) : (
                     // Group by date for display
-                    Object.entries(groupedHistoryLogs).map(([dateKey, logs]) => (
+                    Object.keys(groupedHistoryLogs).map((dateKey) => {
+                        const logs = groupedHistoryLogs[dateKey];
+                        return (
                         <div key={dateKey} className="animate-slide-up">
                             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3 sticky top-16 bg-gray-50 dark:bg-gray-900 py-2 z-10">{dateKey}</h3>
                             <div className="space-y-3">
@@ -188,7 +190,7 @@ const XPHistory: React.FC = () => {
                                 ))}
                             </div>
                         </div>
-                    ))
+                    )})
                 )}
             </div>
         </div>

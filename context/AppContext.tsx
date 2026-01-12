@@ -1,7 +1,7 @@
 
 import React, { createContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup } from '../types';
+import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
 import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService } from '../services/googleSheetService';
 
@@ -57,6 +57,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [socialHistory, _setSocialHistory] = useLocalStorage<SocialEntry[]>('socialHistory', []);
   const [evaluationHistory, _setEvaluationHistory] = useLocalStorage<EvaluationEntry[]>('evaluationHistory', []);
   const [quizHistory, _setQuizHistory] = useLocalStorage<QuizEntry[]>('quizHistory', []);
+  const [redemptionHistory, _setRedemptionHistory] = useLocalStorage<RedemptionHistoryEntry[]>('redemptionHistory', []);
   const [waterGoal, setWaterGoal] = useLocalStorage<number>('waterGoal', 2000);
   const [latestFoodAnalysis, setLatestFoodAnalysis] = useLocalStorage<NutrientInfo | null>('latestFoodAnalysis', null);
   const [userProfile, _setUserProfile] = useLocalStorage<UserProfile>('userProfile', defaultProfile);
@@ -96,7 +97,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         _setUserProfile(defaultProfile);
         _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
         _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
-        _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]);
+        _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]); _setRedemptionHistory([]);
         setMyGroups([]);
     }
 
@@ -135,6 +136,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const setMoodHistory = (val: any) => { _setMoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'MOOD', val, currentUser); };
   const setHabitHistory = (val: any) => { _setHabitHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'HABIT', val, currentUser); };
   const setSocialHistory = (val: any) => { _setSocialHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'SOCIAL', val, currentUser); };
+  const setRedemptionHistory = (val: any) => { _setRedemptionHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'REDEMPTION', val, currentUser); };
   
   const setUserProfile = (profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
       const newProfile = { ...profileData };
@@ -310,6 +312,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (data.socialHistory) _setSocialHistory(data.socialHistory);
               if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
               if (data.quizHistory) _setQuizHistory(data.quizHistory);
+              if (data.redemptionHistory) _setRedemptionHistory(data.redemptionHistory);
               
               setIsDataSynced(true);
               refreshGroups();
@@ -359,6 +362,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       clearActivityHistory, clearWellnessHistory, gainXP, showLevelUp, closeLevelUpModal,
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
       organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
+      redemptionHistory, setRedemptionHistory,
       // Sync States
       isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData
     }}>

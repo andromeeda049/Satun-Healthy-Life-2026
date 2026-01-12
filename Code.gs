@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (v14.7 - Fix User Info Error)
+ * Satun Smart Life - Backend Script (v14.8 - Add RedemptionHistory)
  */
 
 const SHEET_NAMES = {
@@ -22,7 +22,8 @@ const SHEET_NAMES = {
   CATEGORY_RANKINGS: "CategoryRankings", 
   ORGANIZATIONS: "Organization",
   GROUPS: "Groups",
-  GROUP_MEMBERS: "GroupMembers"
+  GROUP_MEMBERS: "GroupMembers",
+  REDEMPTION: "RedemptionHistory" // New Sheet
 };
 
 const ADMIN_KEY = "ADMIN1234!";
@@ -113,7 +114,8 @@ function getUserFullData(username) {
       habitHistory: getAllHistoryForUser(SHEET_NAMES.HABIT, username),
       socialHistory: getAllHistoryForUser(SHEET_NAMES.SOCIAL, username),
       evaluationHistory: getAllHistoryForUser(SHEET_NAMES.EVALUATION, username),
-      quizHistory: getAllHistoryForUser('QuizHistory', username)
+      quizHistory: getAllHistoryForUser('QuizHistory', username),
+      redemptionHistory: getAllHistoryForUser(SHEET_NAMES.REDEMPTION, username)
     };
 }
 
@@ -511,6 +513,7 @@ function handleSave(type, payload, user) {
         newRow = [timestamp, user.username, user.displayName, user.role, safeSatisfaction, safeOutcomes]; 
         break;
     case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
+    case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break; // New Case
     default:
         newRow = [timestamp, user.username, JSON.stringify(item)];
   }
@@ -643,6 +646,7 @@ function getAllHistoryForUser(sheetName, username) {
     if (sheetName === SHEET_NAMES.PLANNER) return rows.map(r => ({ date: r[0], id: r[0], cuisine: r[4], diet: r[5], tdee: r[6], plan: JSON.parse(r[7]) }));
     if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: r[0], id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
     if (sheetName === 'QuizHistory') return rows.map(r => ({ date: r[0], id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
+    if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: r[0], id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); // New Parsing
     return [];
   } catch(e) { return []; }
 }
@@ -705,6 +709,9 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.FOOD, [...common, "description", "calories", "analysis_json"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcome_json"]);
   
+  // NEW SHEET FOR REDEMPTION
+  ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]);
+
   const catHeaders = [
       "Username", "Water (ml)", "Name", "Picture", "", 
       "Username", "Food Logs", "Name", "Picture", "", 
@@ -728,7 +735,7 @@ function setupSheets() {
       catSheet.getRange("N2").setFormula(`=ARRAYFORMULA(IF(K2:K="", "", IFERROR(VLOOKUP(K2:K, ${SHEET_NAMES.PROFILE}!B:D, 3, 0), "")))`);
   }
 
-  return "Setup Complete (v14.3) - Evaluation & Groups";
+  return "Setup Complete (v14.8) - Redemption History";
 }
 
 function createSuccessResponse(data) {

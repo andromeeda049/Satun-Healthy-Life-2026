@@ -208,6 +208,14 @@ export interface QuizEntry {
     weekNumber?: number;
 }
 
+export interface RedemptionHistoryEntry {
+    id: string;
+    date: string;
+    rewardId: string;
+    rewardName: string;
+    cost: number;
+}
+
 export interface NotificationState {
     show: boolean;
     message: string;
@@ -315,6 +323,8 @@ export interface AppContextType {
   saveEvaluation: (satisfaction: any, outcomes: any) => void;
   quizHistory: QuizEntry[];
   saveQuizResult: (score: number, total: number, correct: number, type?: 'pre-test' | 'post-test' | 'practice' | 'weekly' | 'daily', weekNumber?: number) => void;
+  redemptionHistory: RedemptionHistoryEntry[];
+  setRedemptionHistory: React.Dispatch<React.SetStateAction<RedemptionHistoryEntry[]>>;
 
   waterGoal: number;
   setWaterGoal: React.Dispatch<React.SetStateAction<number>>;

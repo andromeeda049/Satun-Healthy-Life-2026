@@ -1,5 +1,5 @@
 
-import { UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User } from '../types';
+import { UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, RedemptionHistoryEntry } from '../types';
 
 export interface AllAdminData {
     profiles: any[];
@@ -34,6 +34,7 @@ export interface AllData {
     socialHistory: SocialEntry[];
     evaluationHistory: EvaluationEntry[];
     quizHistory: QuizEntry[];
+    redemptionHistory: RedemptionHistoryEntry[];
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -173,6 +174,7 @@ const parseUserData = (data: any): AllData => {
        socialHistory: (data.socialHistory || []).sort(sortByDateDesc),
        evaluationHistory: (data.evaluationHistory || []).sort(sortByDateDesc),
        quizHistory: (data.quizHistory || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+       redemptionHistory: (data.redemptionHistory || []).sort(sortByDateDesc),
    };
 };
 
