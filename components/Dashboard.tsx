@@ -14,6 +14,42 @@ const getHealthStatus = (score: number) => {
     return { level: 'ความเสี่ยงสูง', sub: 'High Risk', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-300' };
 };
 
+const getBmiCategory = (bmi: number): string => {
+    if (bmi < 18.5) return 'น้ำหนักน้อยกว่าเกณฑ์';
+    if (bmi < 23) return 'สมส่วน';
+    if (bmi < 25) return 'น้ำหนักเกิน';
+    if (bmi < 30) return 'โรคอ้วนระดับที่ 1';
+    return 'โรคอ้วนระดับที่ 2';
+};
+
+const calculateMetrics = (profile: any) => {
+    const weight = parseFloat(profile.weight || '0');
+    const height = parseFloat(profile.height || '0');
+    const age = parseFloat(profile.age || '0');
+    const gender = profile.gender || 'male';
+    const activityLevel = profile.activityLevel || 1.2;
+
+    let bmi = 0;
+    let bmr = 0;
+    let tdee = 0;
+    let bmiCategory = 'รอการคำนวณ';
+
+    if (weight > 0 && height > 0) {
+        const hM = height / 100;
+        bmi = weight / (hM * hM);
+        bmiCategory = getBmiCategory(bmi);
+    }
+
+    if (weight > 0 && height > 0 && age > 0) {
+        bmr = gender === 'male' 
+            ? (10 * weight + 6.25 * height - 5 * age + 5)
+            : (10 * weight + 6.25 * height - 5 * age - 161);
+        tdee = bmr * activityLevel;
+    }
+
+    return { bmi, bmiCategory, bmr, tdee };
+};
+
 const PersonalHealthGrid: React.FC<{
     userProfile: any;
     bmiHistory: any[];
@@ -25,14 +61,19 @@ const PersonalHealthGrid: React.FC<{
     const latestBmi = bmiHistory.length > 0 ? bmiHistory[0] : null;
     const latestTdee = tdeeHistory.length > 0 ? tdeeHistory[0] : null;
     
-    // Default values if data missing
-    const bmiValue = latestBmi ? latestBmi.value.toFixed(1) : '-';
-    const tdeeValue = latestTdee ? Math.round(latestTdee.value).toLocaleString() : '-';
-    const bmrValue = latestTdee ? Math.round(latestTdee.bmr).toLocaleString() : '-';
+    // Auto-calculate from profile
+    const { bmi, bmiCategory, bmr, tdee } = calculateMetrics(userProfile);
+
+    // Prefer calculated values (live), fallback to history
+    const displayBMI = bmi > 0 ? bmi.toFixed(1) : (latestBmi ? latestBmi.value.toFixed(1) : '-');
+    const displayCategory = bmi > 0 ? bmiCategory : (latestBmi ? latestBmi.category : 'รอการคำนวณ');
+    
+    const displayTDEE = tdee > 0 ? Math.round(tdee).toLocaleString() : (latestTdee ? Math.round(latestTdee.value).toLocaleString() : '-');
+    const displayBMR = bmr > 0 ? Math.round(bmr).toLocaleString() : (latestTdee ? Math.round(latestTdee.bmr).toLocaleString() : '-');
     
     // Calculate Deficit (Calorie Balance)
     // Goal (TDEE) + ActiveBurn - Intake
-    const tdeeNum = latestTdee ? latestTdee.value : 2000;
+    const tdeeNum = tdee > 0 ? tdee : (latestTdee ? latestTdee.value : 2000);
     const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
     const isDeficit = calorieBalance >= 0;
 
@@ -46,8 +87,8 @@ const PersonalHealthGrid: React.FC<{
                         <ScaleIcon className="w-5 h-5 text-blue-500" />
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">BMI</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{bmiValue}</p>
-                    <p className="text-[9px] text-slate-500 truncate max-w-full px-1">{latestBmi?.category || 'รอการคำนวณ'}</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{displayBMI}</p>
+                    <p className="text-[9px] text-slate-500 truncate max-w-full px-1">{displayCategory}</p>
                 </div>
 
                 {/* TDEE/BMR Card */}
@@ -56,8 +97,8 @@ const PersonalHealthGrid: React.FC<{
                         <FireIcon className="w-5 h-5 text-orange-500" />
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TDEE</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{tdeeValue}</p>
-                    <p className="text-[9px] text-slate-500">BMR: {bmrValue}</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{displayTDEE}</p>
+                    <p className="text-[9px] text-slate-500">BMR: {displayBMR}</p>
                 </div>
 
                 {/* Waist/Hip Card */}
