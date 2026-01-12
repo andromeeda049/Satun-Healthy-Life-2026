@@ -67,13 +67,32 @@ const DataSyncGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     // Only guard logged in users who are NOT guests
     if (!currentUser || currentUser.role === 'guest') return <>{children}</>;
 
-    // Case 1: Syncing
+    // Case 1: Syncing - New Friendly Animation with Custom Image
     if (isSyncing) {
         return (
-            <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[999] flex flex-col items-center justify-center p-6 animate-fade-in">
-                <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin mb-4"></div>
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white">กำลังซิงค์ข้อมูลล่าสุด...</h2>
-                <p className="text-gray-500 text-sm mt-2 text-center">ระบบกำลังดึงข้อมูลสะสมของคุณจาก Cloud <br/>กรุณารอสักครู่ เพื่อป้องกันข้อมูลสูญหาย</p>
+            <div className="fixed inset-0 bg-white dark:bg-gray-900 z-[999] flex flex-col items-center justify-center p-8 animate-fade-in text-center">
+                <div className="relative mb-6">
+                    <img 
+                        src="https://cdn.dribbble.com/userupload/32768031/file/original-a4e52e6c66a839f7967c349df387620c.gif" 
+                        alt="Loading..." 
+                        className="w-64 h-auto object-contain mx-auto rounded-2xl mix-blend-multiply dark:mix-blend-normal"
+                    />
+                </div>
+                
+                <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-3 tracking-tight">
+                    ฮึบๆ... กำลังฟิตข้อมูล!
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium leading-relaxed max-w-xs mx-auto">
+                    ระบบกำลังซิงค์ประวัติสุขภาพของคุณจาก Cloud <br/>
+                    <span className="text-teal-600 dark:text-teal-400 text-xs mt-1 block font-bold">"สุขภาพดี เริ่มต้นที่ความสม่ำเสมอ"</span>
+                </p>
+
+                {/* Bouncing Dots */}
+                <div className="mt-8 flex gap-2">
+                    <div className="w-2.5 h-2.5 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                    <div className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2.5 h-2.5 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
             </div>
         );
     }
