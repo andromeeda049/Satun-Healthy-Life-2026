@@ -110,6 +110,15 @@ const XPHistory: React.FC = () => {
         return historyLogs.reduce((sum, log) => sum + log.hp, 0);
     }, [historyLogs]);
 
+    const groupedHistoryLogs = useMemo(() => {
+        return historyLogs.reduce((groups, log) => {
+            const dateKey = log.date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(log);
+            return groups;
+        }, {} as { [key: string]: HPLogItem[] });
+    }, [historyLogs]);
+
     // Auto-sync: If userProfile.xp doesn't match sum of logs, update profile
     useEffect(() => {
         if (currentUser && currentUser.role !== 'guest' && userProfile) {
@@ -154,19 +163,14 @@ const XPHistory: React.FC = () => {
             </div>
 
             <div className="space-y-6 pb-20">
-                {Object.keys(historyLogs).length === 0 ? (
+                {historyLogs.length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                         <p className="mb-2">📭</p>
                         <p className="font-medium">ยังไม่มีประวัติการได้รับแต้ม</p>
                     </div>
                 ) : (
                     // Group by date for display
-                    Object.entries(historyLogs.reduce((groups, log) => {
-                        const dateKey = log.date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' });
-                        if (!groups[dateKey]) groups[dateKey] = [];
-                        groups[dateKey].push(log);
-                        return groups;
-                    }, {} as { [key: string]: HPLogItem[] })).map(([dateKey, logs]) => (
+                    Object.entries(groupedHistoryLogs).map(([dateKey, logs]) => (
                         <div key={dateKey} className="animate-slide-up">
                             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3 sticky top-16 bg-gray-50 dark:bg-gray-900 py-2 z-10">{dateKey}</h3>
                             <div className="space-y-3">

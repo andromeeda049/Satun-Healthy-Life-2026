@@ -87,7 +87,7 @@ const REWARDS: RewardItem[] = [
 ];
 
 const RewardsRedemption: React.FC = () => {
-    const { userProfile, setActiveView, currentUser } = useContext(AppContext);
+    const { userProfile, setUserProfile, setActiveView, currentUser } = useContext(AppContext);
     const [selectedReward, setSelectedReward] = useState<RewardItem | null>(null);
     const [redeemSuccess, setRedeemSuccess] = useState(false);
 
@@ -99,7 +99,27 @@ const RewardsRedemption: React.FC = () => {
     };
 
     const confirmRedeem = () => {
-        // In a real app, this would send a request to backend to deduct XP and record redemption
+        if (!selectedReward || !currentUser) return;
+
+        // Calculate new XP
+        const newXP = currentXP - selectedReward.xpCost;
+        
+        // Prevent negative XP (just in case)
+        if (newXP < 0) {
+            alert("แต้มสะสมไม่เพียงพอ");
+            return;
+        }
+
+        // Update Profile
+        const updatedProfile = { ...userProfile, xp: newXP };
+        
+        // Save to Context & Backend
+        setUserProfile(updatedProfile, { 
+            displayName: currentUser.displayName, 
+            profilePicture: currentUser.profilePicture 
+        });
+
+        // UI Feedback
         setRedeemSuccess(true);
         setSelectedReward(null);
         setTimeout(() => {
@@ -150,7 +170,7 @@ const RewardsRedemption: React.FC = () => {
                     <div className="bg-green-500 text-white rounded-full p-1"><ClipboardCheckIcon className="w-5 h-5" /></div>
                     <div>
                         <p className="font-bold text-sm">แลกรางวัลสำเร็จ!</p>
-                        <p className="text-xs">เจ้าหน้าที่จะติดต่อกลับเพื่อจัดส่งของรางวัล (หรือดำเนินการตามเงื่อนไข)</p>
+                        <p className="text-xs">หักคะแนนเรียบร้อยแล้ว เจ้าหน้าที่จะติดต่อกลับเพื่อจัดส่งของรางวัล</p>
                     </div>
                 </div>
             )}
