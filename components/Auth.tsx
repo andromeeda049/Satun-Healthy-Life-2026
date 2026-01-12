@@ -23,6 +23,19 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
             try {
                 if (!liff.id) { await liff.init({ liffId: LINE_LIFF_ID }); }
                 setIsLineReady(true);
+
+                // Check if the user has just logged out
+                // If yes, we force a LIFF logout to clear tokens and prevent auto-login
+                const isLoggedOut = sessionStorage.getItem('isLoggedOut');
+                if (isLoggedOut === 'true') {
+                    if (liff.isLoggedIn()) {
+                        liff.logout();
+                    }
+                    sessionStorage.removeItem('isLoggedOut');
+                    setLoading(false);
+                    return; // Stop here, do not auto-login
+                }
+
                 if (liff.isLoggedIn()) {
                     setLoading(true);
                     setStatusText('กำลังยืนยันตัวตน...');

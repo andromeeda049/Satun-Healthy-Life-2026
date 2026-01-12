@@ -89,6 +89,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const logout = () => {
+    // Set flag to prevent auto-login loop in Auth.tsx
+    sessionStorage.setItem('isLoggedOut', 'true');
+    
     setCurrentUser(null);
     _setUserProfile(defaultProfile);
     setIsDataSynced(false);
