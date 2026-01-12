@@ -1,8 +1,8 @@
 
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ArrowLeftIcon, WaterDropIcon, BeakerIcon, BoltIcon, MoonIcon, FaceSmileIcon, HeartIcon, TrophyIcon, ClipboardListIcon, StarIcon, UserGroupIcon } from './icons';
-import { XP_VALUES } from '../constants';
+import { XP_VALUES, LEVEL_THRESHOLDS } from '../constants';
 
 interface HPLogItem {
     id: string;
@@ -18,6 +18,8 @@ const XPHistory: React.FC = () => {
     const { 
         setActiveView, 
         userProfile,
+        setUserProfile,
+        currentUser,
         waterHistory,
         foodHistory,
         calorieHistory,
@@ -26,7 +28,8 @@ const XPHistory: React.FC = () => {
         moodHistory,
         habitHistory,
         socialHistory,
-        quizHistory
+        quizHistory,
+        plannerHistory
     } = useContext(AppContext);
 
     const historyLogs = useMemo(() => {
@@ -93,18 +96,42 @@ const XPHistory: React.FC = () => {
             });
         });
 
-        return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
-    }, [waterHistory, foodHistory, calorieHistory, activityHistory, sleepHistory, moodHistory, habitHistory, socialHistory, quizHistory]);
+        // Added Planner History
+        plannerHistory.forEach(h => logs.push({
+            id: `plan-${h.id}`, date: new Date(h.date), action: 'สร้างแผนสุขภาพ', detail: `${Math.round(h.tdee)} kcal`,
+            hp: XP_VALUES.PLANNER, icon: <ClipboardListIcon className="w-4 h-4" />, color: 'bg-teal-100 text-teal-600'
+        }));
 
-    const groupedLogs = useMemo(() => {
-        const groups: { [key: string]: HPLogItem[] } = {};
-        historyLogs.forEach(log => {
-            const dateKey = log.date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' });
-            if (!groups[dateKey]) groups[dateKey] = [];
-            groups[dateKey].push(log);
-        });
-        return groups;
+        return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
+    }, [waterHistory, foodHistory, calorieHistory, activityHistory, sleepHistory, moodHistory, habitHistory, socialHistory, quizHistory, plannerHistory]);
+
+    // Calculate actual total from logs
+    const calculatedTotalXP = useMemo(() => {
+        return historyLogs.reduce((sum, log) => sum + log.hp, 0);
     }, [historyLogs]);
+
+    // Auto-sync: If userProfile.xp doesn't match sum of logs, update profile
+    useEffect(() => {
+        if (currentUser && currentUser.role !== 'guest' && userProfile) {
+            if (userProfile.xp !== calculatedTotalXP) {
+                // Recalculate Level based on corrected XP
+                let newLevel = 1;
+                for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+                    if (calculatedTotalXP >= LEVEL_THRESHOLDS[i]) {
+                        newLevel = i + 1;
+                    }
+                }
+                
+                console.log(`Auto-correcting XP: ${userProfile.xp} -> ${calculatedTotalXP}, Level: ${newLevel}`);
+                
+                const updatedProfile = { ...userProfile, xp: calculatedTotalXP, level: newLevel };
+                setUserProfile(updatedProfile, { 
+                    displayName: currentUser.displayName, 
+                    profilePicture: currentUser.profilePicture 
+                });
+            }
+        }
+    }, [calculatedTotalXP, userProfile, currentUser, setUserProfile]);
 
     return (
         <div className="w-full space-y-6 animate-fade-in">
@@ -120,23 +147,30 @@ const XPHistory: React.FC = () => {
                 <div className="absolute top-0 right-0 p-4 opacity-20"><TrophyIcon className="w-24 h-24" /></div>
                 <div className="relative z-10">
                     <p className="text-yellow-100 font-medium text-sm">แต้มสะสมทั้งหมด (Total HP)</p>
-                    <h1 className="text-4xl font-semibold mt-1">{userProfile.xp?.toLocaleString()} <span className="text-lg font-medium opacity-80">HP</span></h1>
+                    {/* Display calculatedTotalXP to ensure it matches the list */}
+                    <h1 className="text-4xl font-semibold mt-1">{calculatedTotalXP.toLocaleString()} <span className="text-lg font-medium opacity-80">HP</span></h1>
                     <p className="text-xs text-white/80 mt-2">*สะสมได้จากการบันทึกสุขภาพรายวัน</p>
                 </div>
             </div>
 
             <div className="space-y-6 pb-20">
-                {Object.keys(groupedLogs).length === 0 ? (
+                {Object.keys(historyLogs).length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                         <p className="mb-2">📭</p>
                         <p className="font-medium">ยังไม่มีประวัติการได้รับแต้ม</p>
                     </div>
                 ) : (
-                    Object.keys(groupedLogs).map(dateKey => (
+                    // Group by date for display
+                    Object.entries(historyLogs.reduce((groups, log) => {
+                        const dateKey = log.date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' });
+                        if (!groups[dateKey]) groups[dateKey] = [];
+                        groups[dateKey].push(log);
+                        return groups;
+                    }, {} as { [key: string]: HPLogItem[] })).map(([dateKey, logs]) => (
                         <div key={dateKey} className="animate-slide-up">
                             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3 sticky top-16 bg-gray-50 dark:bg-gray-900 py-2 z-10">{dateKey}</h3>
                             <div className="space-y-3">
-                                {groupedLogs[dateKey].map(log => (
+                                {logs.map(log => (
                                     <div key={log.id} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className={`p-2 rounded-full ${log.color}`}>{log.icon}</div>
