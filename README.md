@@ -39,7 +39,7 @@ const SHEET_NAMES = {
   TRENDING_VIEW: "TrendingView"
 };
 
-const ADMIN_KEY = "ADMIN1234!";
+const ADMIN_KEY = "";
 const LINE_CHANNEL_ACCESS_TOKEN = "";
 
 // --- CORE HANDLERS ---
