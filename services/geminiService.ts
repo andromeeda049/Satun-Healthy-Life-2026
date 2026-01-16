@@ -217,12 +217,90 @@ export const getLocalFoodSuggestions = async (lat: number, lng: number): Promise
 
 export const generateMealPlan = async (results: any, cuisine: string, diet: string, healthCondition: string, lifestyleGoal: string, foodHistory: any[], systemInstruction?: string): Promise<any> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const mealSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        day: { type: Type.STRING },
+        breakfast: {
+          type: Type.OBJECT,
+          properties: {
+            menu: { type: Type.STRING },
+            protein: { type: Type.NUMBER },
+            carbohydrate: { type: Type.NUMBER },
+            fat: { type: Type.NUMBER },
+            calories: { type: Type.NUMBER }
+          },
+          required: ['menu', 'calories']
+        },
+        lunch: {
+          type: Type.OBJECT,
+          properties: {
+            menu: { type: Type.STRING },
+            protein: { type: Type.NUMBER },
+            carbohydrate: { type: Type.NUMBER },
+            fat: { type: Type.NUMBER },
+            calories: { type: Type.NUMBER }
+          },
+          required: ['menu', 'calories']
+        },
+        dinner: {
+          type: Type.OBJECT,
+          properties: {
+            menu: { type: Type.STRING },
+            protein: { type: Type.NUMBER },
+            carbohydrate: { type: Type.NUMBER },
+            fat: { type: Type.NUMBER },
+            calories: { type: Type.NUMBER }
+          },
+          required: ['menu', 'calories']
+        },
+        activities: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              activity: { type: Type.STRING },
+              duration: { type: Type.STRING },
+              benefit: { type: Type.STRING },
+              caloriesBurned: { type: Type.NUMBER }
+            }
+          }
+        },
+        dailyTotal: {
+            type: Type.OBJECT,
+            properties: {
+                protein: { type: Type.NUMBER },
+                carbohydrate: { type: Type.NUMBER },
+                fat: { type: Type.NUMBER },
+                calories: { type: Type.NUMBER }
+            }
+        }
+      },
+      required: ['day', 'breakfast', 'lunch', 'dinner', 'activities']
+    }
+  };
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `สร้างแผนอาหาร 7 วัน สำหรับความต้องการ ${results.tdee} kcal. Return JSON.`,
-      config: { responseMimeType: 'application/json' }
+      contents: `สร้างแผนอาหาร 7 วัน สำหรับความต้องการ ${results.tdee} kcal.
+      ความชอบอาหาร: ${cuisine}
+      รูปแบบการกิน: ${diet}
+      เงื่อนไขสุขภาพ: ${healthCondition}
+      เป้าหมาย: ${lifestyleGoal}
+      
+      ให้จัดแผนอาหาร เช้า กลางวัน เย็น และกิจกรรมออกกำลังกาย ในรูปแบบ JSON ที่ถูกต้อง`,
+      config: { 
+        responseMimeType: 'application/json',
+        responseSchema: mealSchema
+      }
     });
-    return JSON.parse(response.text);
-  } catch (error) { throw new Error('ล้มเหลว'); }
+    return JSON.parse(response.text || '[]');
+  } catch (error) { 
+    console.error("Generate Meal Plan Error:", error);
+    throw new Error('ล้มเหลวในการสร้างแผนอาหาร'); 
+  }
 };

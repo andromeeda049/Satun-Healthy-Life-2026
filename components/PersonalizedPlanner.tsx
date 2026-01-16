@@ -269,11 +269,11 @@ const PersonalizedPlanner: React.FC = () => {
                                     {mealPlan.map(day => (
                                         <tr key={day.day} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                             <td className="p-3 font-bold text-teal-600 dark:text-teal-400 whitespace-nowrap">{day.day}</td>
-                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.breakfast.menu}</td>
-                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.lunch.menu}</td>
-                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.dinner.menu}</td>
+                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.breakfast?.menu || '-'}</td>
+                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.lunch?.menu || '-'}</td>
+                                            <td className="p-3 text-gray-700 dark:text-gray-300">{day.dinner?.menu || '-'}</td>
                                             <td className="p-3 text-xs text-gray-500 dark:text-gray-400">
-                                                {day.activities.map(a => a.activity).join(", ")}
+                                                {day.activities?.map(a => a.activity).join(", ") || '-'}
                                             </td>
                                         </tr>
                                     ))}
