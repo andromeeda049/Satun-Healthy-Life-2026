@@ -104,6 +104,9 @@ export interface UserProfile {
   lastLogDate?: string;
   aiSystemInstruction?: string;
   deltaXp?: number;
+  username?: string;
+  displayName?: string;
+  profilePicture?: string;
 }
 
 export interface UserGamification {
@@ -337,6 +340,10 @@ export interface AppContextType {
   apiKey: string;
   setApiKey: React.Dispatch<React.SetStateAction<string>>;
   isDataSynced: boolean;
+  isSyncing: boolean;
+  syncError: string | null;
+  retrySync: () => void;
+  useOfflineData: () => void;
   
   clearBmiHistory: () => void;
   clearTdeeHistory: () => void;

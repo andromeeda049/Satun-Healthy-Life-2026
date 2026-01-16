@@ -264,12 +264,13 @@ export const sendTelegramTestNotification = async (scriptUrl: string, user: User
 export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: string): Promise<AllAdminData | null> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return null;
     try {
+        // Increase timeout to 60s for heavy admin data load
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getAllAdminData', adminKey }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
-        });
+        }, 2, 60000); 
         const result = await response.json();
         return result.status === 'success' ? result.data : null;
     } catch (error) {

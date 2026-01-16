@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (v14.8 - Add RedemptionHistory)
+ * Satun Smart Life - Backend Script (v14.9 - Profile Fix)
  */
 
 const SHEET_NAMES = {
@@ -624,7 +624,31 @@ function getLatestProfileForUser(username) {
   const lastEntry = userRows[userRows.length - 1];
   let badges = [];
   try { badges = JSON.parse(lastEntry[14] || '["novice"]'); } catch(e) { badges = ['novice']; }
-  return { gender: lastEntry[4], age: lastEntry[5], weight: lastEntry[6], height: lastEntry[7], waist: lastEntry[8], hip: lastEntry[9], activityLevel: lastEntry[10], xp: Number(lastEntry[12] || 0), level: Number(lastEntry[13] || 1), badges: badges, email: lastEntry[15], healthCondition: lastEntry[17], lineUserId: lastEntry[18], receiveDailyReminders: String(lastEntry[19]).toLowerCase() !== 'false', researchId: lastEntry[20], pdpaAccepted: lastEntry[21], pdpaAcceptedDate: lastEntry[22], organization: lastEntry[23] || 'general', birthDate: lastEntry[25], targetWeight: lastEntry[26] };
+  return { 
+      username: lastEntry[1],
+      displayName: lastEntry[2],
+      profilePicture: lastEntry[3],
+      gender: lastEntry[4], 
+      age: lastEntry[5], 
+      weight: lastEntry[6], 
+      height: lastEntry[7], 
+      waist: lastEntry[8], 
+      hip: lastEntry[9], 
+      activityLevel: lastEntry[10], 
+      xp: Number(lastEntry[12] || 0), 
+      level: Number(lastEntry[13] || 1), 
+      badges: badges, 
+      email: lastEntry[15], 
+      healthCondition: lastEntry[17], 
+      lineUserId: lastEntry[18], 
+      receiveDailyReminders: String(lastEntry[19]).toLowerCase() !== 'false', 
+      researchId: lastEntry[20], 
+      pdpaAccepted: lastEntry[21], 
+      pdpaAcceptedDate: lastEntry[22], 
+      organization: lastEntry[23] || 'general', 
+      birthDate: lastEntry[25], 
+      targetWeight: lastEntry[26] 
+  };
 }
 
 function getAllHistoryForUser(sheetName, username) {
@@ -735,7 +759,7 @@ function setupSheets() {
       catSheet.getRange("N2").setFormula(`=ARRAYFORMULA(IF(K2:K="", "", IFERROR(VLOOKUP(K2:K, ${SHEET_NAMES.PROFILE}!B:D, 3, 0), "")))`);
   }
 
-  return "Setup Complete (v14.8) - Redemption History";
+  return "Setup Complete (v14.9) - Profile Fix";
 }
 
 function createSuccessResponse(data) {

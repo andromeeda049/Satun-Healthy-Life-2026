@@ -12,17 +12,38 @@ interface RewardItem {
     icon: string;
     type: 'physical' | 'digital' | 'impact' | 'experience';
     tag?: string;
+    status?: 'available' | 'coming_soon';
 }
 
 const REWARDS: RewardItem[] = [
     {
         id: 'book_satun',
-        name: 'Pocketbook "ชีวิตดีที่สตูล"',
-        description: 'หนังสือคู่มือดูแลสุขภาพฉบับพกพา รวมเคล็ดลับวิถีคนสตูล กินดี อยู่ดี มีสุข',
+        name: 'E-Pocketbook "ชีวิตดีที่สตูล"',
+        description: 'หนังสือคู่มือดูแลสุขภาพฉบับพกพา (Digital) รวมเคล็ดลับวิถีคนสตูล กินดี อยู่ดี มีสุข',
         xpCost: 2500,
         icon: '📖',
-        type: 'physical',
-        tag: 'Recommended'
+        type: 'digital',
+        tag: 'Recommended',
+        status: 'available'
+    },
+    {
+        id: 'cert_digital',
+        name: 'E-Certificate "ผู้พิชิตสุขภาพ"',
+        description: 'ใบประกาศนียบัตรดิจิทัลระบุชื่อคุณ สำหรับผู้ที่มีความตั้งใจดูแลสุขภาพยอดเยี่ยม',
+        xpCost: 500,
+        icon: '📜',
+        type: 'digital',
+        status: 'available'
+    },
+    {
+        id: 'coupon_fitness',
+        name: 'ส่วนลดร้านฟิตเนส',
+        description: 'คูปองส่วนลดพิเศษสำหรับใช้บริการฟิตเนสและยิมที่ร่วมรายการในจังหวัดสตูล',
+        xpCost: 1500,
+        icon: '🏋️',
+        type: 'experience',
+        tag: 'Partner',
+        status: 'coming_soon'
     },
     {
         id: 'bottle_satun',
@@ -31,7 +52,8 @@ const REWARDS: RewardItem[] = [
         xpCost: 3500,
         icon: '🍶',
         type: 'physical',
-        tag: 'Popular'
+        tag: 'Popular',
+        status: 'coming_soon'
     },
     {
         id: 'shirt_satun',
@@ -39,7 +61,8 @@ const REWARDS: RewardItem[] = [
         description: 'เสื้อวิ่งผ้า Micro-polyester ระบายเหงื่อดีเยี่ยม สวมใส่สบายทุกการเคลื่อนไหว',
         xpCost: 5000,
         icon: '👕',
-        type: 'physical'
+        type: 'physical',
+        status: 'coming_soon'
     },
     {
         id: 'coupon_checkup',
@@ -48,7 +71,8 @@ const REWARDS: RewardItem[] = [
         xpCost: 4500,
         icon: '🩺',
         type: 'experience',
-        tag: 'Health Care'
+        tag: 'Health Care',
+        status: 'coming_soon'
     },
     {
         id: 'discount_food',
@@ -57,7 +81,8 @@ const REWARDS: RewardItem[] = [
         xpCost: 800,
         icon: '🥗',
         type: 'experience',
-        tag: 'Partner'
+        tag: 'Partner',
+        status: 'coming_soon'
     },
     {
         id: 'ticket_run',
@@ -66,7 +91,8 @@ const REWARDS: RewardItem[] = [
         xpCost: 3000,
         icon: '🏃',
         type: 'experience',
-        tag: 'Activity'
+        tag: 'Activity',
+        status: 'coming_soon'
     },
     {
         id: 'donate_patient',
@@ -75,15 +101,8 @@ const REWARDS: RewardItem[] = [
         xpCost: 1000,
         icon: '🤝',
         type: 'impact',
-        tag: 'Charity'
-    },
-    {
-        id: 'cert_digital',
-        name: 'E-Certificate "ผู้พิชิตสุขภาพ"',
-        description: 'ใบประกาศนียบัตรดิจิทัลระบุชื่อคุณ สำหรับผู้ที่มีความตั้งใจดูแลสุขภาพยอดเยี่ยม',
-        xpCost: 500,
-        icon: '📜',
-        type: 'digital'
+        tag: 'Charity',
+        status: 'coming_soon'
     }
 ];
 
@@ -96,6 +115,7 @@ const RewardsRedemption: React.FC = () => {
     const currentXP = userProfile.xp || 0;
 
     const handleViewDetail = (reward: RewardItem) => {
+        if (reward.status === 'coming_soon') return;
         setSelectedReward(reward);
     };
 
@@ -199,20 +219,21 @@ const RewardsRedemption: React.FC = () => {
                 {REWARDS.map((reward) => {
                     const isAffordable = currentXP >= reward.xpCost;
                     const progress = Math.min(100, (currentXP / reward.xpCost) * 100);
+                    const isComingSoon = reward.status === 'coming_soon';
                     
                     return (
                         <div 
                             key={reward.id} 
                             onClick={() => handleViewDetail(reward)}
-                            className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-5 items-center group transition-all relative overflow-hidden cursor-pointer hover:shadow-md"
+                            className={`bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-5 items-center group transition-all relative overflow-hidden ${isComingSoon ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}`}
                         >
-                            {reward.tag && (
+                            {reward.tag && !isComingSoon && (
                                 <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-3 py-1 rounded-bl-xl shadow-sm uppercase tracking-wider">
                                     {reward.tag}
                                 </div>
                             )}
                             
-                            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-inner group-hover:scale-105 transition-transform shrink-0 ${getTypeColor(reward.type)}`}>
+                            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-inner shrink-0 ${isComingSoon ? 'bg-gray-100 text-gray-400 grayscale' : `${getTypeColor(reward.type)} group-hover:scale-105 transition-transform`}`}>
                                 {reward.icon}
                             </div>
                             
@@ -222,23 +243,33 @@ const RewardsRedemption: React.FC = () => {
                                 
                                 <div className="space-y-1.5">
                                     <div className="flex justify-between text-[10px] font-semibold">
-                                        <span className={isAffordable ? 'text-green-600' : 'text-amber-600'}>
-                                            {isAffordable ? 'แต้มของคุณเพียงพอแล้ว!' : `ขาดอีก ${(reward.xpCost - currentXP).toLocaleString()} HP`}
-                                        </span>
-                                        <span className="text-gray-400">{reward.xpCost.toLocaleString()} HP</span>
+                                        {isComingSoon ? (
+                                            <span className="text-gray-400 italic">Coming Soon</span>
+                                        ) : (
+                                            <span className={isAffordable ? 'text-green-600' : 'text-amber-600'}>
+                                                {isAffordable ? 'แต้มของคุณเพียงพอแล้ว!' : `ขาดอีก ${(reward.xpCost - currentXP).toLocaleString()} HP`}
+                                            </span>
+                                        )}
+                                        <span className={isComingSoon ? 'text-gray-300' : 'text-gray-400'}>{reward.xpCost.toLocaleString()} HP</span>
                                     </div>
                                     <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                                         <div 
-                                            className={`h-full transition-all duration-1000 ${isAffordable ? 'bg-green-500' : 'bg-amber-500'}`}
-                                            style={{ width: `${progress}%` }}
+                                            className={`h-full transition-all duration-1000 ${isComingSoon ? 'bg-gray-300' : isAffordable ? 'bg-green-500' : 'bg-amber-500'}`}
+                                            style={{ width: isComingSoon ? '0%' : `${progress}%` }}
                                         />
                                     </div>
                                 </div>
                             </div>
-                            {/* Visual chevron to indicate clickability */}
-                            <div className="text-gray-300">
-                                <i className="fa-solid fa-chevron-right"></i>
-                            </div>
+                            
+                            {isComingSoon ? (
+                                <div className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-bold rounded-lg shrink-0">
+                                    เร็วๆนี้
+                                </div>
+                            ) : (
+                                <div className="text-gray-300">
+                                    <i className="fa-solid fa-chevron-right"></i>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

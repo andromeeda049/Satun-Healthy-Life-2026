@@ -298,6 +298,9 @@ const Community: React.FC = () => {
 
     const renderRankingItem = (user: LeaderboardUser, idx: number, value: string, unit: string, valueColor: string) => {
         const isMe = user.username === currentUser?.username;
+        const org = organizations.find(o => o.id === user.organization);
+        const orgDisplay = org ? org.name : (user.organization === 'general' ? 'บุคคลทั่วไป' : user.organization || 'ทั่วไป');
+
         return (
             <div key={user.username} className={`p-3 rounded-xl shadow-sm border transition-all flex items-center gap-3 animate-slide-up ${
                 isMe 
@@ -314,7 +317,7 @@ const Community: React.FC = () => {
                     <h4 className={`font-bold text-[13px] tracking-tight truncate ${isMe ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>
                         {user.displayName} {isMe && '(คุณ)'}
                     </h4>
-                    <p className="text-[9px] font-medium text-slate-400 uppercase">{user.organization || 'ทั่วไป'}</p>
+                    <p className="text-[9px] font-medium text-slate-400 truncate">{orgDisplay}</p>
                 </div>
                 <div className="text-right">
                     <div className="flex items-center justify-end gap-1">

@@ -14,8 +14,6 @@ const Spinner: React.FC = () => (
     </div>
 );
 
-// ... (UserDetailModal, GroupDetailView, convertToCSV, DataTable, GroupManagementTab components remain the same - omitting for brevity but will be included in full structure if I wasn't doing partial updates. Since I'm replacing the file, I must include them) ...
-
 const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ userData, onClose }) => {
     if(!userData) return null;
     
@@ -119,6 +117,20 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
         setLoadingUser(true);
         const data = await fetchUserDataByAdmin(scriptUrl, currentUser!, username);
         if(data) {
+            // FIX: If backend returns profile without name (older script version), use name from member list
+            const memberInfo = members.find(m => m.username === username);
+            if (data.profile) {
+                if (!data.profile.displayName && memberInfo) data.profile.displayName = memberInfo.displayName;
+                if (!data.profile.profilePicture && memberInfo) data.profile.profilePicture = memberInfo.profilePicture;
+                if (!data.profile.username) data.profile.username = username;
+            } else if (memberInfo) {
+                // Fallback if profile is null but user is in member list
+                data.profile = { 
+                    ...memberInfo, 
+                    gender: '-', age: '-', weight: '-', height: '-', 
+                    activityLevel: 1.2, healthCondition: 'N/A' 
+                };
+            }
             setSelectedUser(data);
         } else {
             alert('ไม่สามารถดึงข้อมูลได้');
@@ -745,7 +757,7 @@ const AdminDashboard: React.FC = () => {
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
                         {isSuperAdmin ? 'Research Admin Dashboard' : `Dashboard: ${currentOrgName}`}
                     </h2>
-                    <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผลสำหรับงานวิชาการสาธารณสุข</p>
+                    <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผล</p>
                 </div>
                 
                 {isSuperAdmin && activeTab !== 'groups' && (
