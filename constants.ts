@@ -30,14 +30,38 @@ export const DEFAULT_ORGANIZATIONS = [
 // ใช้ DEFAULT_ORGANIZATIONS เสมอ (Hardcoded mode)
 export const ORGANIZATIONS = DEFAULT_ORGANIZATIONS;
 
+// Access Tokens for Admin Login
 export const ADMIN_CREDENTIALS: { [key: string]: string } = {
+    // Super Admin (View All)
     "ADMIN1234!": "all",
+    "ADMIN@SUPER": "all",
+
+    // Provincial Health Office
     "PHO@SATUN": "pho_satun",
+    "ADMIN@PHO": "pho_satun",
+
+    // Hospitals (รพ.)
     "HOSP@SATUN": "hosp_satun",
+    "ADMIN@HOSP_SATUN": "hosp_satun",
+    "ADMIN@HOSP_KHUANDON": "hosp_khuandon",
+    "ADMIN@HOSP_LANGU": "hosp_la-ngu",
+    "ADMIN@HOSP_THUNGWA": "hosp_thungwa",
+    "ADMIN@HOSP_MANANG": "hosp_manang",
+    "ADMIN@HOSP_KK": "hosp_khuan-kalong",
+    "ADMIN@HOSP_TP": "hosp_tha-phae",
+
+    // District Health Offices (สสอ.)
     "DHO@MUANG": "dho_muang",
-    "ADMIN00878": "dho_muang",
-    "RPH@KHUAN": "rph_khuan",
-    "RPH@CHALUNG": "rph_chalung"
+    "ADMIN@DHO_MUANG": "dho_muang",
+    "ADMIN@DHO_KHUANDON": "dho_khuandon",
+    "ADMIN@DHO_LANGU": "dho_la-ngu",
+    "ADMIN@DHO_THUNGWA": "dho_thungwa",
+    "ADMIN@DHO_MANANG": "dho_manang",
+    "ADMIN@DHO_KK": "dho_khuan-kalong",
+    "ADMIN@DHO_TP": "dho_tha-phae",
+
+    // General
+    "ADMIN@GENERAL": "general"
 };
 
 export const ACTIVITY_LEVELS = [

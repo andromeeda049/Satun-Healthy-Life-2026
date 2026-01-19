@@ -5,8 +5,8 @@ import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEn
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
 import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService } from '../services/googleSheetService';
 
-// HARDCODED URL (v14.0)
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFZroUmo2RuQmMjWmjMTE9e_466wKnXbIJ7ezDzP3X5_AnUpZXTkU3CZZE2sm0m-eS/exec';
+// HARDCODED URL (v16.0) - Updated Verified URL
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHuu_5cWXQd4wqhELc8a1iGBfjA3mFDuNYzLp2twnFkTi7tW7V7xjSLk-zuisc9lyQuQ/exec';
 
 const defaultProfile: UserProfile = {
   gender: 'male',
@@ -62,8 +62,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [latestFoodAnalysis, setLatestFoodAnalysis] = useLocalStorage<NutrientInfo | null>('latestFoodAnalysis', null);
   const [userProfile, _setUserProfile] = useLocalStorage<UserProfile>('userProfile', defaultProfile);
   
-  // Updated key to force refresh to new Hardcoded URL
-  const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v14', DEFAULT_SCRIPT_URL);
+  // Updated key to force refresh to new Hardcoded URL (v16)
+  const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v16', DEFAULT_SCRIPT_URL);
   
   const [isDataSynced, setIsDataSynced] = useState(false); 
   const [isSyncing, setIsSyncing] = useState(false);

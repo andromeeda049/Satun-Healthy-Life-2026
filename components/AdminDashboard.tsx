@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { fetchAllAdminDataFromSheet, AllAdminData, createGroup, getAdminGroups, fetchGroupMembers, fetchUserDataByAdmin } from '../services/googleSheetService';
-import { ChartBarIcon, UserGroupIcon, FireIcon, ClipboardCheckIcon, UserCircleIcon, PrinterIcon, BeakerIcon, WaterDropIcon, BoltIcon, HeartIcon, LineIcon, ArrowLeftIcon, XIcon, ScaleIcon, StarIcon, TrophyIcon, BookOpenIcon, SquaresIcon, CameraIcon } from './icons';
+import { ChartBarIcon, UserGroupIcon, FireIcon, ClipboardCheckIcon, UserCircleIcon, PrinterIcon, BeakerIcon, WaterDropIcon, BoltIcon, HeartIcon, LineIcon, ArrowLeftIcon, XIcon, ScaleIcon, StarIcon, TrophyIcon, BookOpenIcon, SquaresIcon, CameraIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon } from './icons';
 import { SATISFACTION_QUESTIONS, OUTCOME_QUESTIONS } from '../constants';
 
 const ADMIN_KEY = "ADMIN1234!"; 
@@ -97,6 +97,7 @@ const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ use
 };
 
 const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, onBack }) => {
+    // ... existing implementation ...
     const { scriptUrl, currentUser } = useContext(AppContext);
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -117,14 +118,12 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
         setLoadingUser(true);
         const data = await fetchUserDataByAdmin(scriptUrl, currentUser!, username);
         if(data) {
-            // FIX: If backend returns profile without name (older script version), use name from member list
             const memberInfo = members.find(m => m.username === username);
             if (data.profile) {
                 if (!data.profile.displayName && memberInfo) data.profile.displayName = memberInfo.displayName;
                 if (!data.profile.profilePicture && memberInfo) data.profile.profilePicture = memberInfo.profilePicture;
                 if (!data.profile.username) data.profile.username = username;
             } else if (memberInfo) {
-                // Fallback if profile is null but user is in member list
                 data.profile = { 
                     ...memberInfo, 
                     gender: '-', age: '-', weight: '-', height: '-', 
@@ -209,6 +208,7 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
 };
 
 const convertToCSV = (objArray: any[]) => {
+    // ... existing implementation ...
     const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
     let str = '';
     let headers = Object.keys(array[0] || {}).join(',') + '\r\n';
@@ -233,6 +233,7 @@ const convertToCSV = (objArray: any[]) => {
 };
 
 const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }> = ({ data, title, allowExport }) => {
+    // ... existing implementation ...
     if (!data || data.length === 0) {
         return <p className="text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">ไม่มีข้อมูลในส่วน {title}</p>;
     }
@@ -296,6 +297,7 @@ const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }>
 };
 
 const GroupManagementTab: React.FC = () => {
+    // ... existing implementation ...
     const { scriptUrl, currentUser } = useContext(AppContext);
     const [groups, setGroups] = useState<any[]>([]);
     const [newGroup, setNewGroup] = useState({ name: '', code: '', description: '', lineLink: '', image: '' });
@@ -421,13 +423,38 @@ const BarChart: React.FC<{ data: { label: string; value: number; color: string }
     </div>
 );
 
+// New Component for Mini Stats Grid (Min/Max/Avg)
+const StatGrid: React.FC<{ title: string; stats: { label: string; value: string }[], icon: React.ReactNode, color: string }> = ({ title, stats, icon, color }) => (
+    <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
+        <h4 className={`font-bold ${color} mb-4 text-sm uppercase flex items-center gap-2`}>
+            {icon} {title}
+        </h4>
+        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-gray-200 dark:divide-gray-600">
+            {stats.map((s, i) => (
+                <div key={i} className="px-1">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-tight">{s.label}</p>
+                    <p className="text-lg font-black text-gray-800 dark:text-white">{s.value}</p>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 const AdminDashboard: React.FC = () => {
     const { scriptUrl, currentUser, organizations } = useContext(AppContext);
+    // ... existing states ...
     const [allData, setAllData] = useState<AllAdminData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'groups' | 'allUsers' | 'profiles' | 'evaluation'>('overview');
     const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>('all'); 
+    
+    // Date Range Filter States
+    const [startDate, setStartDate] = useState<string>('');
+    const [endDate, setEndDate] = useState<string>('');
+    const [tempStartDate, setTempStartDate] = useState<string>('');
+    const [tempEndDate, setTempEndDate] = useState<string>('');
+    const [isFiltering, setIsFiltering] = useState<boolean>(false);
 
     const isSuperAdmin = currentUser?.organization === 'all';
     const assignedOrg = currentUser?.organization || 'general';
@@ -468,40 +495,207 @@ const AdminDashboard: React.FC = () => {
         fetchData();
     }, [scriptUrl, activeTab]);
     
+    // Helper function to filter data by date range
+    const filterByDate = useCallback((data: any[], dateKey: string = 'timestamp') => {
+        if (!startDate && !endDate) return data;
+        
+        const start = startDate ? new Date(startDate) : new Date('2000-01-01');
+        start.setHours(0, 0, 0, 0);
+        
+        const end = endDate ? new Date(endDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+
+        return data.filter(item => {
+            if(!item) return false;
+            const val = item[dateKey] || item.date; 
+            if(!val) return false;
+            const itemDate = new Date(val);
+            return itemDate >= start && itemDate <= end;
+        });
+    }, [startDate, endDate]);
+
+    // Apply Filter Handlers
+    const applyDateFilter = () => {
+        setIsFiltering(true);
+        setTimeout(() => {
+            setStartDate(tempStartDate);
+            setEndDate(tempEndDate);
+            setIsFiltering(false);
+        }, 300);
+    };
+
+    const clearDateFilter = () => {
+        setTempStartDate('');
+        setTempEndDate('');
+        setStartDate('');
+        setEndDate('');
+    };
+
     // --- Data Calculation Logic ---
     const userProfilesWithOrg = useMemo(() => {
         if (!allData?.profiles) return [];
-        return allData.profiles.map(p => ({
-            ...p,
-            organization: p.organization || 'general' 
-        }));
+        const uniqueProfilesMap = new Map();
+        allData.profiles.forEach(p => {
+            if (p.username) {
+                uniqueProfilesMap.set(p.username, {
+                    ...p,
+                    organization: p.organization || 'general'
+                });
+            }
+        });
+        return Array.from(uniqueProfilesMap.values());
     }, [allData]);
 
     const filteredUsers = useMemo(() => {
-        if (selectedOrgFilter === 'all') return userProfilesWithOrg;
-        return userProfilesWithOrg.filter(u => u.organization === selectedOrgFilter);
-    }, [userProfilesWithOrg, selectedOrgFilter]);
+        let users = userProfilesWithOrg;
+        if (selectedOrgFilter !== 'all') {
+            users = users.filter(u => u.organization === selectedOrgFilter);
+        }
+        return filterByDate(users, 'timestamp');
+    }, [userProfilesWithOrg, selectedOrgFilter, filterByDate]);
+
+    const filteredLoginLogs = useMemo(() => {
+        if (!allData?.loginLogs) return [];
+        let logs = allData.loginLogs;
+        if (selectedOrgFilter !== 'all') {
+            logs = logs.filter(l => l.organization === selectedOrgFilter);
+        }
+        return filterByDate(logs, 'timestamp');
+    }, [allData, selectedOrgFilter, filterByDate]);
 
     const filteredUsernames = useMemo(() => {
         return new Set(filteredUsers.map(u => u.username));
     }, [filteredUsers]);
 
+    // --- NEW: Detailed Statistics Calculation ---
+    const detailedStats = useMemo(() => {
+        if (!allData) return null;
+
+        // Helper to filter historical data by user filter (Org) AND date filter
+        const filterHistory = (data: any[], dateField = 'timestamp') => {
+            return filterByDate(
+                data.filter(item => filteredUsernames.has(item.username)), 
+                dateField
+            );
+        };
+
+        // 1. BMI Analysis (Pass/Fail) - Use LATEST BMI for each filtered user
+        // Pass: 18.5 - 22.9 (Asian Standard for Normal)
+        const bmiRecords = filterHistory(allData.bmiHistory || []);
+        // Group by user to get latest
+        const userLatestBMI = new Map<string, number>();
+        bmiRecords.forEach((r: any) => {
+            // Assuming data is chronological or we rely on last entry being latest
+            // Better: Check timestamps if available, but here assume append order
+            userLatestBMI.set(r.username, Number(r.bmi));
+        });
+        
+        let bmiPass = 0, bmiFail = 0, totalBMIUsers = 0;
+        userLatestBMI.forEach((bmi) => {
+            totalBMIUsers++;
+            if (bmi >= 18.5 && bmi <= 22.9) bmiPass++;
+            else bmiFail++;
+        });
+        
+        // 2. Sleep Stats (Min/Max/Avg)
+        const sleepRecords = filterHistory(allData.sleepHistory || []);
+        let totalSleep = 0, minSleep = 24, maxSleep = 0, totalQuality = 0;
+        const sleepCount = sleepRecords.length;
+        
+        sleepRecords.forEach((s: any) => {
+            const duration = Number(s.duration || 0);
+            const quality = Number(s.quality || 0);
+            totalSleep += duration;
+            totalQuality += quality;
+            if (duration < minSleep) minSleep = duration;
+            if (duration > maxSleep) maxSleep = duration;
+        });
+
+        // 3. Activity Steps (Min/Max/Avg)
+        const activityRecords = filterHistory(allData.activityHistory || []);
+        const stepRecords = activityRecords
+            .map((a: any) => {
+                const match = String(a.name).match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
+                return match ? parseInt(match[1].replace(/,/g, ''), 10) : 0;
+            })
+            .filter((s: number) => s > 0);
+            
+        let totalSteps = 0, minSteps = 100000, maxSteps = 0;
+        const stepsCount = stepRecords.length;
+        stepRecords.forEach((s: number) => {
+            totalSteps += s;
+            if (s < minSteps) minSteps = s;
+            if (s > maxSteps) maxSteps = s;
+        });
+
+        // 4. Mood Distribution
+        const moodRecords = filterHistory(allData.moodHistory || []);
+        const moodCounts: Record<string, number> = {};
+        moodRecords.forEach((m: any) => {
+            const emoji = m.emoji || m.moodEmoji; // handle field name variation
+            if(emoji) moodCounts[emoji] = (moodCounts[emoji] || 0) + 1;
+        });
+        // Map emojis to labels
+        const moodMapping: Record<string, string> = {
+            '😊': 'มีความสุข', '🥰': 'เปี่ยมรัก', '😐': 'เฉยๆ', 
+            '😫': 'เหนื่อย', '😰': 'กังวล', '😡': 'โกรธ', '😢': 'เศร้า'
+        };
+        const moodStats = Object.keys(moodMapping).map(emoji => ({
+            label: moodMapping[emoji],
+            value: moodCounts[emoji] ? Math.round((moodCounts[emoji] / moodRecords.length) * 100) : 0,
+            color: 'bg-rose-400'
+        })).sort((a,b) => b.value - a.value);
+
+        // 5. Habits (Clean vs User)
+        const habitRecords = filterHistory(allData.habitHistory || []);
+        const cleanCount = habitRecords.filter((h: any) => String(h.isClean) === 'true').length;
+        const userCount = habitRecords.length - cleanCount;
+        const habitStats = [
+            { label: 'ไม่ดื่ม/ไม่สูบ (Clean)', value: habitRecords.length ? Math.round((cleanCount/habitRecords.length)*100) : 0, color: 'bg-green-500' },
+            { label: 'ดื่ม/สูบ (User)', value: habitRecords.length ? Math.round((userCount/habitRecords.length)*100) : 0, color: 'bg-orange-500' }
+        ];
+
+        // 6. Social Feeling
+        const socialRecords = filterHistory(allData.socialHistory || []);
+        const socialCounts: Record<string, number> = { 'energized': 0, 'neutral': 0, 'drained': 0 };
+        socialRecords.forEach((s: any) => {
+            const feel = s.feeling;
+            if(socialCounts[feel] !== undefined) socialCounts[feel]++;
+        });
+        const socialStats = [
+            { label: 'มีพลัง (Energized)', value: socialRecords.length ? Math.round((socialCounts['energized']/socialRecords.length)*100) : 0, color: 'bg-teal-500' },
+            { label: 'เฉยๆ (Neutral)', value: socialRecords.length ? Math.round((socialCounts['neutral']/socialRecords.length)*100) : 0, color: 'bg-gray-400' },
+            { label: 'เหนื่อย (Drained)', value: socialRecords.length ? Math.round((socialCounts['drained']/socialRecords.length)*100) : 0, color: 'bg-red-400' }
+        ];
+
+        return {
+            bmi: { pass: totalBMIUsers ? Math.round((bmiPass/totalBMIUsers)*100) : 0, fail: totalBMIUsers ? Math.round((bmiFail/totalBMIUsers)*100) : 0 },
+            sleep: { min: sleepCount ? minSleep.toFixed(1) : '-', max: sleepCount ? maxSleep.toFixed(1) : '-', avg: sleepCount ? (totalSleep/sleepCount).toFixed(1) : '-', quality: sleepCount ? (totalQuality/sleepCount).toFixed(1) : '-' },
+            steps: { min: stepsCount ? minSteps.toLocaleString() : '-', max: stepsCount ? maxSteps.toLocaleString() : '-', avg: stepsCount ? Math.round(totalSteps/stepsCount).toLocaleString() : '-' },
+            moodStats,
+            habitStats,
+            socialStats
+        };
+
+    }, [allData, filteredUsernames, filterByDate]);
+
+    // ... (Existing stats calculation) ...
     const stats = useMemo(() => {
         const totalUsers = filteredUsers.length;
         const maleCount = filteredUsers.filter(u => u.gender === 'male').length;
         const femaleCount = filteredUsers.filter(u => u.gender === 'female').length;
         
-        // Age & BMI
         let totalAge = 0, ageCount = 0;
         let totalBMI = 0, bmiCount = 0;
         const userLatestBMI: Record<string, number> = {};
 
-        // Find latest BMI for filtered users
         if (allData?.bmiHistory) {
-            const sortedBMI = [...allData.bmiHistory].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            sortedBMI.forEach(b => {
-                if (filteredUsernames.has(b.username)) userLatestBMI[b.username] = b.bmi;
-            });
+            // Apply filteredUsernames check implicitly by iterating filteredUsers? No, logic is separated
+            // Re-filtering bmi history for this stat block to be safe
+            const filteredBMI = (allData.bmiHistory || []).filter(r => filteredUsernames.has(r.username));
+            // Sort ascending to get latest last
+            const sortedBMI = [...filteredBMI].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            sortedBMI.forEach(b => { userLatestBMI[b.username] = b.bmi; });
         }
 
         filteredUsers.forEach(u => {
@@ -512,7 +706,6 @@ const AdminDashboard: React.FC = () => {
         const avgAge = ageCount > 0 ? (totalAge / ageCount).toFixed(1) : '-';
         const avgBMI = bmiCount > 0 ? (totalBMI / bmiCount).toFixed(1) : '-';
 
-        // Health Conditions
         const conditionCounts: Record<string, number> = {};
         filteredUsers.forEach(u => {
             const cond = u.healthCondition || 'ไม่ระบุ';
@@ -520,9 +713,8 @@ const AdminDashboard: React.FC = () => {
         });
         const conditionStats = Object.entries(conditionCounts)
             .map(([label, count]) => ({ label, value: Math.round((count / totalUsers) * 100) || 0, color: 'bg-rose-500' }))
-            .sort((a, b) => b.value - a.value).slice(0, 5); // Top 5
+            .sort((a, b) => b.value - a.value).slice(0, 5); 
 
-        // Levels
         const levelCounts: Record<string, number> = {};
         filteredUsers.forEach(u => {
             const lvl = u.level || 1;
@@ -535,10 +727,9 @@ const AdminDashboard: React.FC = () => {
             { label: 'Lv.10+ (Expert)', value: Math.round((levelCounts['Lv.10+'] || 0) / totalUsers * 100) || 0, color: 'bg-purple-500' },
         ];
 
-        // Global counts (Admin view)
         const totalAdmins = allData?.profiles ? allData.profiles.filter(p => String(p.role).toLowerCase() === 'admin').length : 0;
         const totalOrgs = organizations?.length || 0;
-        const totalGroups = allData?.['Groups']?.length || 0; // Assuming raw sheet name access if not typed
+        const totalGroups = allData?.['Groups']?.length || 0; 
 
         return { 
             totalUsers, malePercent: Math.round((maleCount/totalUsers)*100)||0, femalePercent: Math.round((femaleCount/totalUsers)*100)||0,
@@ -546,84 +737,41 @@ const AdminDashboard: React.FC = () => {
         };
     }, [filteredUsers, allData, organizations, filteredUsernames]);
 
+    // ... (evalStats, quizStats existing code) ...
     const evalStats = useMemo(() => {
         if (!allData?.evaluationHistory) return { satisfaction: [], outcomes: [] };
-        
-        const filteredEvals = allData.evaluationHistory.filter(e => filteredUsernames.has(e.username));
+        let filteredEvals = allData.evaluationHistory.filter(e => filteredUsernames.has(e.username));
+        filteredEvals = filterByDate(filteredEvals, 'timestamp');
         if (filteredEvals.length === 0) return { satisfaction: [], outcomes: [] };
-
-        // Satisfaction Average
         const satSums: Record<string, number> = {};
         const satCounts: Record<string, number> = {};
-        
-        // Outcome Trend (Better/Same/Worse)
         const outCounts: Record<string, { better: number, same: number, worse: number }> = {};
-
         filteredEvals.forEach(e => {
             try {
                 const sat = typeof e.satisfaction_json === 'string' ? JSON.parse(e.satisfaction_json) : e.satisfaction_json;
                 const out = typeof e.outcome_json === 'string' ? JSON.parse(e.outcome_json) : e.outcome_json;
-
-                if (sat) {
-                    Object.entries(sat).forEach(([k, v]) => {
-                        satSums[k] = (satSums[k] || 0) + Number(v);
-                        satCounts[k] = (satCounts[k] || 0) + 1;
-                    });
-                }
-                if (out) {
-                    Object.entries(out).forEach(([k, v]) => {
-                        if (!outCounts[k]) outCounts[k] = { better: 0, same: 0, worse: 0 };
-                        if (v === 'better' || v === 'much_better') outCounts[k].better++;
-                        else if (v === 'same') outCounts[k].same++;
-                        else outCounts[k].worse++;
-                    });
-                }
+                if (sat) { Object.entries(sat).forEach(([k, v]) => { satSums[k] = (satSums[k] || 0) + Number(v); satCounts[k] = (satCounts[k] || 0) + 1; }); }
+                if (out) { Object.entries(out).forEach(([k, v]) => { if (!outCounts[k]) outCounts[k] = { better: 0, same: 0, worse: 0 }; if (v === 'better' || v === 'much_better') outCounts[k].better++; else if (v === 'same') outCounts[k].same++; else outCounts[k].worse++; }); }
             } catch (err) {}
         });
-
-        const satisfactionData = SATISFACTION_QUESTIONS.map(q => ({
-            label: q.label,
-            value: satCounts[q.id] ? (satSums[q.id] / satCounts[q.id]).toFixed(1) : '0',
-            color: 'bg-indigo-500' // Just for bar visualization
-        }));
-
-        const outcomeData = OUTCOME_QUESTIONS.map(q => {
-            const counts = outCounts[q.id] || { better: 0, same: 0, worse: 0 };
-            const total = counts.better + counts.same + counts.worse;
-            return {
-                label: q.label,
-                value: total > 0 ? Math.round((counts.better / total) * 100) : 0,
-                color: 'bg-green-500' // % Improvement
-            };
-        });
-
+        const satisfactionData = SATISFACTION_QUESTIONS.map(q => ({ label: q.label, value: satCounts[q.id] ? (satSums[q.id] / satCounts[q.id]).toFixed(1) : '0', color: 'bg-indigo-500' }));
+        const outcomeData = OUTCOME_QUESTIONS.map(q => { const counts = outCounts[q.id] || { better: 0, same: 0, worse: 0 }; const total = counts.better + counts.same + counts.worse; return { label: q.label, value: total > 0 ? Math.round((counts.better / total) * 100) : 0, color: 'bg-green-500' }; });
         return { satisfaction: satisfactionData, outcomes: outcomeData };
-    }, [allData, filteredUsernames]);
+    }, [allData, filteredUsernames, filterByDate]);
 
     const quizStats = useMemo(() => {
         if (!allData?.quizHistory) return { prePass: 0, postPass: 0 };
-        const filteredQuiz = allData.quizHistory.filter(q => filteredUsernames.has(q.username || q.username)); // Fallback if property differs
-        
-        // Manual mapping from array to object in generic fetch if needed, but assuming fetchAllAdminData maps correctly.
-        // Actually fetchAllAdminData uses generic map which relies on headers. 
-        // QuizHistory header is: timestamp, username, displayName, profilePicture, score, totalQuestions, correctAnswers, type
-        
+        let filteredQuiz = allData.quizHistory.filter(q => filteredUsernames.has(q.username || q.username)); 
+        filteredQuiz = filterByDate(filteredQuiz, 'timestamp');
         const preTests = filteredQuiz.filter((q: any) => q.type === 'pre-test');
         const postTests = filteredQuiz.filter((q: any) => q.type === 'post-test');
-
-        const calcPass = (arr: any[]) => {
-            if (arr.length === 0) return 0;
-            const passCount = arr.filter(q => (Number(q.score) || 0) >= 60).length; // Pass > 60%
-            return Math.round((passCount / arr.length) * 100);
-        };
-
+        const calcPass = (arr: any[]) => { if (arr.length === 0) return 0; const passCount = arr.filter(q => (Number(q.score) || 0) >= 60).length; return Math.round((passCount / arr.length) * 100); };
         return { prePass: calcPass(preTests), postPass: calcPass(postTests) };
-    }, [allData, filteredUsernames]);
+    }, [allData, filteredUsernames, filterByDate]);
 
     // --- Tab Render Logic ---
     const renderContent = () => {
         if (activeTab === 'groups') return <GroupManagementTab />;
-        
         if (loading) return <Spinner />;
         if (error) return <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 dark:text-red-400 p-4 rounded-lg">{error}</p>;
         if (!allData) return <p className="text-center text-gray-500">ไม่มีข้อมูล</p>;
@@ -633,54 +781,101 @@ const AdminDashboard: React.FC = () => {
                  <div className="space-y-6 animate-fade-in">
                      {/* Row 1: Key Metrics */}
                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                         <OverviewStatCard title="ผู้ใช้งานทั้งหมด" value={stats.totalUsers.toLocaleString()} subValue="Active Users" icon={<UserGroupIcon className="w-6 h-6 text-blue-500"/>} colorClass="bg-blue-500 text-blue-500"/>
+                         <OverviewStatCard title="ผู้ใช้งาน (ตามช่วงเวลา)" value={stats.totalUsers.toLocaleString()} subValue="Registered in Period" icon={<UserGroupIcon className="w-6 h-6 text-blue-500"/>} colorClass="bg-blue-500 text-blue-500"/>
                          <OverviewStatCard title="อายุเฉลี่ย" value={stats.avgAge} subValue="ปี (Years)" icon={<UserCircleIcon className="w-6 h-6 text-teal-500"/>} colorClass="bg-teal-500 text-teal-500"/>
                          <OverviewStatCard title="BMI เฉลี่ย" value={stats.avgBMI} subValue="kg/m²" icon={<ScaleIcon className="w-6 h-6 text-orange-500"/>} colorClass="bg-orange-500 text-orange-500"/>
                          {isSuperAdmin && <OverviewStatCard title="องค์กร/กลุ่ม" value={`${stats.totalOrgs} / ${stats.totalGroups}`} subValue="Org / Groups" icon={<SquaresIcon className="w-6 h-6 text-purple-500"/>} colorClass="bg-purple-500 text-purple-500"/>}
                      </div>
 
-                     {/* Row 2: Demographics & Levels */}
+                     {/* Section: BMI & Physical Health */}
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                          <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                             <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><UserCircleIcon className="w-4 h-4"/> สัดส่วนผู้ใช้งาน (Gender)</h4>
-                             <div className="flex items-center gap-4 mt-6">
-                                 <div className="flex-1 text-center">
-                                     <div className="text-3xl font-black text-blue-500">{stats.malePercent}%</div>
-                                     <div className="text-xs text-gray-500 dark:text-gray-400">เพศชาย</div>
-                                     <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-blue-500 rounded-full" style={{width: `${stats.malePercent}%`}}></div></div>
-                                 </div>
-                                 <div className="flex-1 text-center">
-                                     <div className="text-3xl font-black text-pink-500">{stats.femalePercent}%</div>
-                                     <div className="text-xs text-gray-500 dark:text-gray-400">เพศหญิง</div>
-                                     <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-pink-500 rounded-full" style={{width: `${stats.femalePercent}%`}}></div></div>
-                                 </div>
-                             </div>
+                             <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><ScaleIcon className="w-4 h-4"/> สัดส่วน BMI (Pass Criteria)</h4>
+                             {detailedStats && (
+                                <div className="flex items-center gap-4 mt-6">
+                                    <div className="flex-1 text-center">
+                                        <div className="text-3xl font-black text-green-500">{detailedStats.bmi.pass}%</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">สมส่วน (18.5-22.9)</div>
+                                        <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-green-500 rounded-full" style={{width: `${detailedStats.bmi.pass}%`}}></div></div>
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                        <div className="text-3xl font-black text-red-500">{detailedStats.bmi.fail}%</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">เสี่ยง / ไม่ผ่านเกณฑ์</div>
+                                        <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-red-500 rounded-full" style={{width: `${detailedStats.bmi.fail}%`}}></div></div>
+                                    </div>
+                                </div>
+                             )}
                          </div>
-                         <BarChart title="ระดับผู้ใช้งาน (User Levels)" data={stats.levelStats} />
+                         <BarChart title="โรคประจำตัว / ความเสี่ยง (Top 5)" data={stats.conditionStats} />
                      </div>
 
-                     {/* Row 3: Health & Quiz */}
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <BarChart title="โรคประจำตัว / ความเสี่ยง (Top 5)" data={stats.conditionStats} />
-                         <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                             <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><BookOpenIcon className="w-4 h-4"/> ผลการทดสอบความรู้ (Health Literacy)</h4>
-                             <div className="grid grid-cols-2 gap-4 mt-4">
-                                 <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center">
-                                     <p className="text-xs text-orange-600 dark:text-orange-300 font-bold mb-1">Pre-Test Pass Rate</p>
-                                     <p className="text-3xl font-black text-orange-600 dark:text-orange-400">{quizStats.prePass}%</p>
-                                 </div>
-                                 <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl text-center">
-                                     <p className="text-xs text-green-600 dark:text-green-300 font-bold mb-1">Post-Test Pass Rate</p>
-                                     <p className="text-3xl font-black text-green-600 dark:text-green-400">{quizStats.postPass}%</p>
-                                 </div>
+                     {/* Section: Sleep & Activity Metrics */}
+                     {detailedStats && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <StatGrid 
+                                title="การนอนหลับ (Sleep)" 
+                                icon={<MoonIcon className="w-4 h-4" />}
+                                color="text-indigo-600 dark:text-indigo-400"
+                                stats={[
+                                    { label: 'สูงสุด (ชม.)', value: detailedStats.sleep.max },
+                                    { label: 'เฉลี่ย (ชม.)', value: detailedStats.sleep.avg },
+                                    { label: 'คุณภาพเฉลี่ย (เต็ม 5)', value: detailedStats.sleep.quality },
+                                ]}
+                            />
+                            <StatGrid 
+                                title="ก้าวเดิน (Steps)" 
+                                icon={<BoltIcon className="w-4 h-4" />}
+                                color="text-yellow-600 dark:text-yellow-400"
+                                stats={[
+                                    { label: 'สูงสุด (ก้าว)', value: detailedStats.steps.max },
+                                    { label: 'น้อยสุด (ก้าว)', value: detailedStats.steps.min },
+                                    { label: 'เฉลี่ย (ก้าว)', value: detailedStats.steps.avg },
+                                ]}
+                            />
+                        </div>
+                     )}
+
+                     {/* Section: Mental & Social */}
+                     {detailedStats && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <BarChart title="ความรู้สึก (Mood)" data={detailedStats.moodStats} />
+                            <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
+                                <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2">
+                                    <NoSymbolIcon className="w-4 h-4" /> พฤติกรรมเสี่ยง
+                                </h4>
+                                <div className="space-y-4 pt-2">
+                                    {detailedStats.habitStats.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
+                                            <span className="text-xs text-gray-600 dark:text-gray-300 font-bold">{item.label}</span>
+                                            <span className={`text-xs font-black px-2 py-1 rounded text-white ${item.color.replace('bg-', 'bg-opacity-80 bg-')}`}>{item.value}%</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <BarChart title="ความรู้สึกทางสังคม" data={detailedStats.socialStats} />
+                        </div>
+                     )}
+
+                     {/* Section: Quiz Results */}
+                     <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
+                         <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><BookOpenIcon className="w-4 h-4"/> ผลการทดสอบความรู้ (Health Literacy)</h4>
+                         <div className="grid grid-cols-2 gap-4 mt-4">
+                             <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center">
+                                 <p className="text-xs text-orange-600 dark:text-orange-300 font-bold mb-1">Pre-Test Pass Rate</p>
+                                 <p className="text-3xl font-black text-orange-600 dark:text-orange-400">{quizStats.prePass}%</p>
                              </div>
-                             <p className="text-[10px] text-gray-400 text-center mt-3">*เกณฑ์ผ่าน 60%</p>
+                             <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl text-center">
+                                 <p className="text-xs text-green-600 dark:text-green-300 font-bold mb-1">Post-Test Pass Rate</p>
+                                 <p className="text-3xl font-black text-green-600 dark:text-green-400">{quizStats.postPass}%</p>
+                             </div>
                          </div>
+                         <p className="text-[10px] text-gray-400 text-center mt-3">*เกณฑ์ผ่าน 60%</p>
                      </div>
                  </div>
              );
         }
 
+        // ... existing return blocks for other tabs ...
         if (activeTab === 'evaluation') {
             return (
                 <div className="space-y-6 animate-fade-in">
@@ -725,52 +920,99 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                     
-                    {/* Raw Evaluation Data Table */}
                     <DataTable data={allData.evaluationHistory || []} title="ข้อมูลดิบแบบประเมิน (Raw Data)" allowExport={true} />
                 </div>
             );
         }
         
-        // ... Other tabs handling ...
         const tabsDef = [
-            { id: 'allUsers', label: 'สมาชิก', data: [] },
-            { id: 'profiles', label: 'Profiles Data', data: filteredUsers },
+            { id: 'allUsers', label: 'ประวัติการเข้าใช้งาน (Login Logs)', data: filteredLoginLogs },
+            { id: 'profiles', label: 'ข้อมูลสุขภาพ (Profiles)', data: filteredUsers },
         ];
         const activeTabData = tabsDef.find(t => t.id === activeTab);
         return <DataTable data={activeTabData?.data || []} title={activeTabData?.label || ''} allowExport={true} />;
     };
 
+    // ... existing return ...
     const tabs = [
         { id: 'overview', label: 'ภาพรวม (Overview)' },
         { id: 'groups', label: 'จัดการกลุ่ม (Groups)' },
-        { id: 'allUsers', label: 'สมาชิก' },
+        { id: 'allUsers', label: 'สมาชิก (Members/Logs)' },
         { id: 'profiles', label: 'Profiles' },
-        { id: 'evaluation', label: 'แบบประเมิน (Evaluation)' }, // Restored
+        { id: 'evaluation', label: 'แบบประเมิน (Evaluation)' }, 
     ];
 
     const currentOrgName = (organizations || []).find(o => o.id === selectedOrgFilter)?.name || 'ทั้งหมด';
 
     return (
         <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full transform transition-all duration-300">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                <div className="text-center md:text-left">
-                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-                        {isSuperAdmin ? 'Research Admin Dashboard' : `Dashboard: ${currentOrgName}`}
-                    </h2>
-                    <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผล</p>
+            <div className="flex flex-col gap-6 mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="text-center md:text-left">
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
+                            {isSuperAdmin ? 'Research Admin Dashboard' : `Dashboard: ${currentOrgName}`}
+                        </h2>
+                        <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผล</p>
+                    </div>
+                    
+                    {isSuperAdmin && activeTab !== 'groups' && (
+                        <select 
+                            value={selectedOrgFilter} 
+                            onChange={(e) => setSelectedOrgFilter(e.target.value)}
+                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-500 text-sm"
+                        >
+                            <option value="all">-- แสดงข้อมูลทุกพื้นที่ --</option>
+                            {(organizations || []).map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
                 </div>
-                
-                {isSuperAdmin && activeTab !== 'groups' && (
-                    <select 
-                        value={selectedOrgFilter} 
-                        onChange={(e) => setSelectedOrgFilter(e.target.value)}
-                        className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-500 text-sm"
-                    >
-                        <option value="all">-- แสดงข้อมูลทุกพื้นที่ --</option>
-                        {(organizations || []).map(org => (
-                            <option key={org.id} value={org.id}>{org.name}</option>
-                        ))}
-                    </select>
+
+                {/* Date Filter Section */}
+                {activeTab !== 'groups' && (
+                    <div className="flex flex-col md:flex-row gap-4 items-end md:items-center bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                        <div className="flex-1 w-full md:w-auto">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ตั้งแต่วันที่ (Start Date)</label>
+                            <input 
+                                type="date" 
+                                value={tempStartDate} 
+                                onChange={e => setTempStartDate(e.target.value)} 
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                            />
+                        </div>
+                        <div className="flex-1 w-full md:w-auto">
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ถึงวันที่ (End Date)</label>
+                            <input 
+                                type="date" 
+                                value={tempEndDate} 
+                                onChange={e => setTempEndDate(e.target.value)} 
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <button 
+                                onClick={applyDateFilter}
+                                disabled={isFiltering}
+                                className={`flex-1 md:flex-none px-4 py-2 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${isFiltering ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}
+                            >
+                                {isFiltering ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'ตกลง'}
+                            </button>
+                            <button 
+                                onClick={clearDateFilter} 
+                                className="flex-1 md:flex-none px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                            >
+                                ล้าง
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {startDate && endDate && (
+                    <div className="px-1">
+                        <span className="text-xs bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200 px-2 py-1 rounded-full font-bold">
+                            🔍 กำลังกรองข้อมูล: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
+                        </span>
+                    </div>
                 )}
             </div>
 

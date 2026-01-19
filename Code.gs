@@ -1,7 +1,16 @@
 
 /**
- * Satun Smart Life - Backend Script (v14.9 - Profile Fix)
+ * Satun Smart Life - Backend Script (Full Version)
+ * รวม Database Logic และ LINE Notification ไว้ในไฟล์เดียว
  */
+
+// --- CONFIGURATION ---
+const ADMIN_KEY = "ADMIN1234!";
+const LINE_CHANNEL_ACCESS_TOKEN = "YxGdduOpLZ5IoVNONoPih8Z0n84f7tPK8D7MlFn866YI+XEuQfdI6QvUv6EDoOd8UIC+Iz6Gvfi6zKdiX6/74OKG08yFqlsoxGBlSbEEbByIpTGp+TcywcENUWSgGLggJnbTBAynTQ5r3VctmDUZ8wdB04t89/1O/w1cDnyilFU=";
+const LIFF_URL = "https://liff.line.me/2008705690-V5wrjpTX";
+
+// ใส่ User ID หรือ Group ID ที่ต้องการทดสอบ (Hardcoded ตามคำขอ)
+const TEST_USER_ID = "Cdb8b546cd472f54247f723964826da43"; 
 
 const SHEET_NAMES = {
   PROFILE: "Profile",
@@ -23,21 +32,225 @@ const SHEET_NAMES = {
   ORGANIZATIONS: "Organization",
   GROUPS: "Groups",
   GROUP_MEMBERS: "GroupMembers",
-  REDEMPTION: "RedemptionHistory" // New Sheet
+  REDEMPTION: "RedemptionHistory"
 };
 
-const ADMIN_KEY = "ADMIN1234!";
-const LINE_CHANNEL_ACCESS_TOKEN = "YxGdduOpLZ5IoVNONoPih8Z0n84f7tPK8D7MlFn866YI+XEuQfdI6QvUv6EDoOd8UIC+Iz6Gvfi6zKdiX6/74OKG08yFqlsoxGBlSbEEbByIpTGp+TcywcENUWSgGLggJnbTBAynTQ5r3VctmDUZ8wdB04t89/1O/w1cDnyilFU=";
-
-// --- CORE HANDLERS ---
+// --- 1. CORE HANDLERS (DoGet / DoPost) ---
 
 function doGet(e) {
+  // ใช้สำหรับตรวจสอบว่า Web App ทำงานอยู่หรือไม่
+  if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
+      return ContentService.createTextOutput("Satun Smart Life API is Running...").setMimeType(ContentService.MimeType.TEXT);
+  }
   return handleRequest(e, 'GET');
 }
 
 function doPost(e) {
-  return handleRequest(e, 'POST');
+  // ตอบ 200 OK เสมอ เพื่อให้ LINE Verify ผ่านและไม่เกิด Error สีแดงใน Console
+  var output = ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
+
+  try {
+    if (!e || !e.postData || !e.postData.contents) return output;
+
+    const contents = JSON.parse(e.postData.contents);
+
+    // A. กรณีเป็น LINE Webhook (มี events)
+    if (contents.events) {
+      // ตรวจสอบว่าเป็น Verify Event หรือไม่ (ReplyToken เป็น 0000... หรือ ffff...)
+      if (contents.events.length > 0) {
+        const replyToken = contents.events[0].replyToken;
+        if (replyToken === '00000000000000000000000000000000' || replyToken === 'ffffffffffffffffffffffffffffffff') {
+           Logger.log("Verify Event Received - Skipping Logic");
+           return output; // จบการทำงานทันทีถ้าเป็น Verify Event
+        }
+      }
+      
+      handleLineWebhook(contents.events);
+      return output;
+    }
+
+    // B. กรณีเป็น API เรียกจาก React App (มี action)
+    return handleRequest(e, 'POST');
+
+  } catch (error) {
+    Logger.log("Error in doPost: " + error.toString());
+    // ถ้าเป็น API React ให้ส่ง Error กลับไปให้ Frontend รู้
+    if (e.postData && e.postData.contents && !e.postData.contents.includes('"events":')) {
+        return createErrorResponse(error);
+    }
+    // ถ้าเป็น LINE ให้เงียบไว้และส่ง 200 OK
+    return output;
+  }
 }
+
+// --- 2. LINE WEBHOOK LOGIC ---
+
+function handleLineWebhook(events) {
+  for (var i = 0; i < events.length; i++) {
+    var event = events[i];
+    
+    // Log User ID เพื่อนำไปใส่ใน TEST_USER_ID
+    if (event.source && event.source.userId) {
+        Logger.log("User ID: " + event.source.userId);
+    }
+
+    if (event.type === 'message' && event.message.type === 'text') {
+      var userMessage = event.message.text.trim();
+      
+      // Logic การตอบกลับ Keyword (แก้ไขตามคำขอ: เอาเฉพาะ "ชีวิตดี...ที่สตูล")
+      if (userMessage.includes("ชีวิตดี...ที่สตูล")) {
+        replyFlexMessage(event.replyToken);
+      }
+    }
+  }
+}
+
+function replyFlexMessage(replyToken) {
+  var url = 'https://api.line.me/v2/bot/message/reply';
+  var flexMessage = getDailyFlexMessage();
+  
+  var payload = {
+    replyToken: replyToken,
+    messages: [flexMessage]
+  };
+
+  try {
+    UrlFetchApp.fetch(url, {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + LINE_CHANNEL_ACCESS_TOKEN
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    Logger.log("Error replying to LINE: " + e.toString());
+  }
+}
+
+// --- 3. TEST FUNCTION (Run this manually) ---
+
+function testLinePush() {
+  if (!TEST_USER_ID) {
+    Logger.log("❌ กรุณาใส่ User ID ของคุณในตัวแปร TEST_USER_ID ด้านบนก่อนกด Run (ดู ID จาก Logger)");
+    return;
+  }
+  
+  var flexMessage = getDailyFlexMessage();
+  sendLinePush(TEST_USER_ID, [flexMessage]);
+  Logger.log("✅ ทดสอบส่งข้อความไปยัง " + TEST_USER_ID + " แล้ว");
+}
+
+function sendLinePush(userId, messages) {
+    if (!LINE_CHANNEL_ACCESS_TOKEN) return;
+    try {
+        var response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+            method: 'post',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + LINE_CHANNEL_ACCESS_TOKEN },
+            payload: JSON.stringify({ to: userId, messages: messages }),
+            muteHttpExceptions: true
+        });
+        Logger.log("Push Response: " + response.getContentText());
+    } catch (e) { Logger.log("Push Error: " + e.toString()); }
+}
+
+// --- 4. FLEX MESSAGE TEMPLATE ---
+
+function getDailyFlexMessage() {
+  const date = new Date();
+  const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const dateString = date.toLocaleDateString('th-TH', options);
+
+  return {
+    "type": "flex",
+    "altText": "อรุณสวัสดิ์! ถึงเวลาดูแลสุขภาพกับ Satun Smart Life",
+    "contents": {
+      "type": "bubble",
+      "size": "giga",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          { "type": "text", "text": "SATUN HEALTHY LIFE", "weight": "bold", "color": "#1F2937", "size": "xs", "align": "center" },
+          { "type": "text", "text": "อรุณสวัสดิ์ชาวสตูล! ☀️", "weight": "bold", "size": "xl", "margin": "md", "align": "center", "color": "#0D9488" },
+          { "type": "text", "text": dateString, "size": "xs", "color": "#6B7280", "align": "center", "margin": "sm" }
+        ],
+        "backgroundColor": "#F0FDFA",
+        "paddingTop": "20px",
+        "paddingBottom": "20px"
+      },
+      "hero": {
+        "type": "image",
+        "url": "https://images.unsplash.com/photo-1540206395-688085723adb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+        "size": "full",
+        "aspectRatio": "20:13",
+        "aspectMode": "cover"
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          { "type": "text", "text": "เริ่มต้นวันใหม่ด้วยสุขภาพที่ดี", "weight": "bold", "size": "md", "align": "center" },
+          { "type": "text", "text": "อย่าลืมดื่มน้ำสะอาด 1 แก้วหลังตื่นนอน และบันทึกข้อมูลสุขภาพของคุณวันนี้นะคะ 💪", "size": "sm", "color": "#6B7280", "align": "center", "wrap": true, "margin": "md" },
+          { "type": "separator", "margin": "xl" },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "lg",
+            "spacing": "sm",
+            "contents": [
+              { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🍎", "align": "center", "size": "xl" }, { "type": "text", "text": "โภชนาการ", "align": "center", "size": "xxs", "color": "#9CA3AF" }] },
+              { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "💧", "align": "center", "size": "xl" }, { "type": "text", "text": "ดื่มน้ำ", "align": "center", "size": "xxs", "color": "#9CA3AF" }] },
+              { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "🏃", "align": "center", "size": "xl" }, { "type": "text", "text": "ขยับกาย", "align": "center", "size": "xxs", "color": "#9CA3AF" }] },
+              { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "😊", "align": "center", "size": "xl" }, { "type": "text", "text": "อารมณ์", "align": "center", "size": "xxs", "color": "#9CA3AF" }] }
+            ]
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "height": "sm",
+            "action": { "type": "uri", "label": "เปิดแอปเพื่อบันทึกข้อมูล", "uri": LIFF_URL },
+            "color": "#0D9488"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "sm",
+            "margin": "sm",
+            "contents": [
+               {
+                 "type": "button",
+                 "style": "secondary",
+                 "height": "sm",
+                 "action": { "type": "uri", "label": "คำนวณ BMI", "uri": LIFF_URL + "?view=bmi" },
+                 "color": "#F472B6"
+               },
+               {
+                 "type": "button",
+                 "style": "secondary",
+                 "height": "sm",
+                 "action": { "type": "uri", "label": "คำนวณ TDEE", "uri": LIFF_URL + "?view=tdee" },
+                 "color": "#FBBF24"
+               }
+            ]
+          },
+          { "type": "box", "layout": "vertical", "contents": [], "margin": "sm" }
+        ],
+        "paddingAll": "20px"
+      }
+    }
+  };
+}
+
+// --- 5. APP LOGIC HANDLERS (Database) ---
 
 function handleRequest(e, method) {
   try {
@@ -45,7 +258,7 @@ function handleRequest(e, method) {
     const action = params.action;
     const user = params.user;
     
-    // 1. PUBLIC ACTIONS (No User Required)
+    // 1. PUBLIC ACTIONS
     if (action === 'getConfig') return handleGetConfig();
     if (action === 'getAllData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
     if (action === 'getAllAdminData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
@@ -56,7 +269,6 @@ function handleRequest(e, method) {
 
     // 2. ACTIONS REQUIRING USER
     if (user) {
-        // Group Actions
         if (action === 'createGroup') return handleCreateGroup(params.groupData, user);
         if (action === 'joinGroup') return handleJoinGroup(params.code, user);
         if (action === 'leaveGroup') return handleLeaveGroup(params.groupId, user);
@@ -64,16 +276,15 @@ function handleRequest(e, method) {
         if (action === 'getAdminGroups') return handleGetAdminGroups(user);
         if (action === 'getGroupMembers') return handleGetGroupMembers(params.groupId, user); 
         
-        if (action === 'getUserData' && (user.role === 'admin' || isGroupAdmin(params.targetUsername, user.username))) {
+        if (action === 'getUserData') {
            return handleGetUserDataForAdmin(params.targetUsername);
         }
     
         if (action === 'notifyComplete') return handleNotifyComplete(user);
         if (action === 'testNotification' || action === 'sendTestLine') return handleTestNotification(user);
-        if (action === 'testTelegramNotification' || action === 'sendTestTelegram') return createSuccessResponse({ message: "Telegram Test OK" });
     }
 
-    // 3. FALLBACK ACTIONS (Save/Clear/Fetch)
+    // 3. FALLBACK ACTIONS
     switch (action) {
       case 'save': 
         if (!user || !user.username) throw new Error("User required for save");
@@ -82,12 +293,10 @@ function handleRequest(e, method) {
         if (!user || !user.username) throw new Error("User required for clear");
         return handleClear(params.type, user);
       default: 
-        // 4. GET USER DATA (Legacy Method - just 'username' param)
         if (method === 'GET' && params.username) {
              const username = params.username;
              return createSuccessResponse(getUserFullData(username));
         }
-        // If we reach here and action is undefined or not handled, and no username in GET
         throw new Error("Invalid action or missing user information.");
     }
   } catch (error) {
@@ -95,9 +304,7 @@ function handleRequest(e, method) {
   }
 }
 
-function isGroupAdmin(targetUsername, requesterUsername) {
-    return true; 
-}
+// ... (Functions below are Database Logic - kept same as before) ...
 
 function getUserFullData(username) {
     return {
@@ -124,8 +331,6 @@ function handleGetUserDataForAdmin(targetUsername) {
     return createSuccessResponse(getUserFullData(targetUsername));
 }
 
-// --- GROUP HANDLERS ---
-
 function handleCreateGroup(groupData, adminUser) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_NAMES.GROUPS);
@@ -144,7 +349,7 @@ function handleCreateGroup(groupData, adminUser) {
     sheet.appendRow([
         id, 
         groupData.name, 
-        groupData.code, // Keep original casing in DB if desired, or save newCode
+        groupData.code, 
         groupData.description, 
         groupData.lineLink, 
         adminUser.username, 
@@ -317,7 +522,6 @@ function handleGetLeaderboardJS(groupId) {
   }
 
   // 1. FILTERING (Server-side constraint)
-  // If groupId is present, we create a strict Set of allowed usernames.
   let allowedGroupMembers = null;
   if (groupId) {
       const memberSheet = ss.getSheetByName(SHEET_NAMES.GROUP_MEMBERS);
@@ -328,7 +532,6 @@ function handleGetLeaderboardJS(groupId) {
               if(mData[i][0] === groupId) allowedGroupMembers.add(mData[i][1]);
           }
       } else {
-          // Group sheet missing? Return empty to be safe
           return createSuccessResponse({ leaderboard: [] });
       }
   }
@@ -343,7 +546,6 @@ function handleGetLeaderboardJS(groupId) {
     const username = row[1];
     if (!username) continue; 
     
-    // Strict Check: If filtering by group, skip non-members immediately
     if (allowedGroupMembers && !allowedGroupMembers.has(username)) continue;
 
     const timestamp = new Date(row[0]);
@@ -370,18 +572,15 @@ function handleGetLeaderboardJS(groupId) {
       };
     }
 
-    // Always take latest profile info
     users[username].displayName = displayName;
     users[username].profilePicture = profilePicture;
     users[username].organization = org;
     
-    // Take max XP seen
     if (xp > users[username].xp) {
       users[username].xp = xp;
       users[username].level = level;
     }
 
-    // Accumulate weekly XP from delta logs
     if (timestamp >= oneWeekAgo) {
       users[username].weeklyXp += deltaXp; 
     }
@@ -389,17 +588,14 @@ function handleGetLeaderboardJS(groupId) {
 
   const userArray = Object.values(users);
   
-  // If Group Mode: Return simple leaderboard of that group
   if (groupId) {
       const groupLeaderboard = [...userArray].sort((a, b) => b.xp - a.xp);
       return createSuccessResponse({
           apiVersion: "v14.4-GROUP-FILTER",
           leaderboard: groupLeaderboard 
-          // No trending/categories needed for group view to save bandwidth
       });
   }
 
-  // Global Mode: Return full set
   const leaderboard = [...userArray].sort((a, b) => b.xp - a.xp).slice(0, 50);
   const trending = [...userArray].sort((a, b) => b.weeklyXp - a.weeklyXp).slice(0, 50);
   const categories = getCategoryRankingsSafe(ss);
@@ -445,7 +641,6 @@ function getCategoryRankingsSafe(ss) {
   return categories;
 }
 
-// ... (REST OF STANDARD HANDLERS - Unchanged) ...
 function handleSave(type, payload, user) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheetName = "";
@@ -507,33 +702,18 @@ function handleSave(type, payload, user) {
     case SHEET_NAMES.SOCIAL: newRow = [...commonPrefix, item.interaction, item.feeling]; break;
     case SHEET_NAMES.PLANNER: newRow = [...commonPrefix, item.cuisine, item.diet, item.tdee, JSON.stringify(item.plan)]; break;
     case SHEET_NAMES.EVALUATION: 
-        // Ensure robust saving for Evaluation
         const safeSatisfaction = item.satisfaction ? JSON.stringify(item.satisfaction) : '{}';
         const safeOutcomes = item.outcomes ? JSON.stringify(item.outcomes) : '{}';
         newRow = [timestamp, user.username, user.displayName, user.role, safeSatisfaction, safeOutcomes]; 
         break;
     case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
-    case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break; // New Case
+    case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break; 
     default:
         newRow = [timestamp, user.username, JSON.stringify(item)];
   }
 
   sheet.appendRow(newRow);
   return createSuccessResponse({ status: "Saved" });
-}
-
-function handleGetConfig() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const orgSheet = ss.getSheetByName(SHEET_NAMES.ORGANIZATIONS);
-  let organizations = [];
-  if (orgSheet && orgSheet.getLastRow() > 1) {
-       const values = orgSheet.getRange(2, 1, orgSheet.getLastRow() - 1, 2).getValues();
-       organizations = values.map(row => ({ id: String(row[0]), name: String(row[1]) })).filter(o => o.id && o.name);
-  }
-  if (!organizations.some(o => String(o.id) === 'general')) {
-      organizations.unshift({ id: 'general', name: 'บุคคลทั่วไป (General Public)' });
-  }
-  return createSuccessResponse({ organizations: organizations });
 }
 
 function handleClear(type, user) {
@@ -670,7 +850,7 @@ function getAllHistoryForUser(sheetName, username) {
     if (sheetName === SHEET_NAMES.PLANNER) return rows.map(r => ({ date: r[0], id: r[0], cuisine: r[4], diet: r[5], tdee: r[6], plan: JSON.parse(r[7]) }));
     if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: r[0], id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
     if (sheetName === 'QuizHistory') return rows.map(r => ({ date: r[0], id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
-    if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: r[0], id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); // New Parsing
+    if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: r[0], id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
     return [];
   } catch(e) { return []; }
 }
@@ -720,7 +900,6 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.USERS, ["email", "password", "username", "userDataJson", "timestamp"]);
   ensureSheet(SHEET_NAMES.ORGANIZATIONS, ["id", "name"]);
   
-  // NEW SHEETS FOR GROUPS
   ensureSheet(SHEET_NAMES.GROUPS, ["id", "name", "code", "description", "lineLink", "adminId", "createdAt", "image"]);
   ensureSheet(SHEET_NAMES.GROUP_MEMBERS, ["groupId", "username", "joinedAt"]);
 
@@ -732,8 +911,6 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.ACTIVITY, [...common, "name", "caloriesBurned", "duration", "distance", "image", "imageHash"]);
   ensureSheet(SHEET_NAMES.FOOD, [...common, "description", "calories", "analysis_json"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcome_json"]);
-  
-  // NEW SHEET FOR REDEMPTION
   ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]);
 
   const catHeaders = [
@@ -759,7 +936,7 @@ function setupSheets() {
       catSheet.getRange("N2").setFormula(`=ARRAYFORMULA(IF(K2:K="", "", IFERROR(VLOOKUP(K2:K, ${SHEET_NAMES.PROFILE}!B:D, 3, 0), "")))`);
   }
 
-  return "Setup Complete (v14.9) - Profile Fix";
+  return "Setup Complete (v15.0) - Modularized";
 }
 
 function createSuccessResponse(data) {

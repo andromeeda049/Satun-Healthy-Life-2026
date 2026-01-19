@@ -60,8 +60,9 @@ const Settings: React.FC = () => {
     };
 
     const isRemindersOn = !!userProfile.receiveDailyReminders;
-    // Allow all admins to see DB connection settings
     const isAdmin = currentUser?.role === 'admin';
+    // Specific check for Super Admin (organization === 'all')
+    const isSuperAdmin = isAdmin && currentUser?.organization === 'all';
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -89,8 +90,8 @@ const Settings: React.FC = () => {
                 </div>
             </div>
 
-            {/* Database Configuration Section - ADMIN ONLY */}
-            {isAdmin && (
+            {/* Database Configuration Section - SUPER ADMIN ONLY */}
+            {isSuperAdmin && (
                 <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full border-t-4 border-teal-500">
                     <div className="flex items-center gap-3 mb-4">
                         <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg">
@@ -98,7 +99,7 @@ const Settings: React.FC = () => {
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-800 dark:text-white">Database Connection</h2>
-                            <p className="text-xs text-slate-500 dark:text-gray-400">Google Apps Script Web App URL</p>
+                            <p className="text-xs text-slate-500 dark:text-gray-400">Google Apps Script Web App URL (Super Admin Only)</p>
                         </div>
                     </div>
                     
@@ -198,11 +199,12 @@ const Settings: React.FC = () => {
                 </>
             )}
 
-            {isAdmin && (
+            {/* AI System Persona - SUPER ADMIN ONLY */}
+            {isSuperAdmin && (
                 <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-purple-500">
                     <div className="flex items-center gap-3 mb-4">
                         <SparklesIcon className="w-6 h-6 text-purple-600" />
-                        <h2 className="text-base font-bold text-slate-800 dark:text-white uppercase tracking-tight">AI System Persona</h2>
+                        <h2 className="text-base font-bold text-slate-800 dark:text-white uppercase tracking-tight">AI System Persona (Super Admin)</h2>
                     </div>
                     <textarea 
                         value={aiInstruction}
