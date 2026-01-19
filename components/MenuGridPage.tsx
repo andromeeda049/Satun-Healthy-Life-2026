@@ -8,7 +8,8 @@ import {
     UserCircleIcon, CogIcon, InformationCircleIcon,
     ChartBarIcon, ClipboardCheckIcon, MedalIcon,
     SquaresIcon, UserGroupIcon, HeartIcon, LogoutIcon,
-    SearchIcon, ChevronDownIcon, CameraIcon, LockIcon
+    SearchIcon, ChevronDownIcon, CameraIcon, LockIcon,
+    XIcon, SparklesIcon
 } from './icons';
 
 interface MenuItem {
@@ -35,6 +36,7 @@ const MenuGridPage: React.FC = () => {
     const { setActiveView, currentUser, logout, userProfile, theme, setTheme } = useContext(AppContext);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [showChangelog, setShowChangelog] = useState(false);
 
     const navigate = (id: AppView) => {
         setActiveView(id);
@@ -179,8 +181,8 @@ const MenuGridPage: React.FC = () => {
                             <button onClick={() => navigate('about')} className="flex items-center gap-3 w-full text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500">
                                 <span>เกี่ยวกับแอปและคู่มือการใช้งาน</span>
                             </button>
-                            <button className="flex items-center gap-3 w-full text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500">
-                                <span>กล่องข้อความสนับสนุน</span>
+                            <button onClick={() => setShowChangelog(true)} className="flex items-center gap-3 w-full text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500">
+                                <span>บันทึกการเปลี่ยนแปลง (Changelog)</span>
                             </button>
                             <button onClick={() => navigate('gamificationRules')} className="flex items-center gap-3 w-full text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-500">
                                 <span>กติกาแต้มสุขภาพและเลเวล</span>
@@ -232,6 +234,62 @@ const MenuGridPage: React.FC = () => {
                     Satun Healthy Life v1.4.0 • แพลตฟอร์มสุขภาพดิจิทัล
                 </p>
             </div>
+
+            {/* Changelog Modal */}
+            {showChangelog && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowChangelog(false)}>
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl p-6 relative animate-bounce-in border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+                        <div className="absolute top-4 right-4">
+                            <button onClick={() => setShowChangelog(false)} className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors">
+                                <XIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="flex flex-col items-center text-center mb-6">
+                            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg mb-3">
+                                <SparklesIcon className="w-8 h-8 text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-white">What's New</h3>
+                            <p className="text-sm font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mt-1">Version 1.4.0</p>
+                        </div>
+                        
+                        <div className="space-y-3 mb-8">
+                            <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="text-green-500 mt-0.5"><i className="fa-solid fa-circle-check"></i></div>
+                                <div>
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">เพิ่มระบบกลุ่มสุขภาพ (Groups)</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">สร้างและเข้าร่วมกลุ่มเพื่อดูแลกัน</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="text-green-500 mt-0.5"><i className="fa-solid fa-circle-check"></i></div>
+                                <div>
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">ปรับปรุงตารางอันดับ (Leaderboard)</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">ดูอันดับแยกประเภทและกลุ่มได้</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="text-green-500 mt-0.5"><i className="fa-solid fa-circle-check"></i></div>
+                                <div>
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">เพิ่มเมนูแลกรางวัล (Redemption)</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">สะสมแต้มแลกของรางวัลพิเศษ</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div className="text-green-500 mt-0.5"><i className="fa-solid fa-circle-check"></i></div>
+                                <div className="text-left">
+                                    <p className="text-sm font-bold text-gray-700 dark:text-gray-200">ปรับปรุง UI/UX ให้ทันสมัย</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">ใช้งานง่ายและสวยงามยิ่งขึ้น</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onClick={() => setShowChangelog(false)} className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl active:scale-95 transition-all">
+                            รับทราบ (Got it!)
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

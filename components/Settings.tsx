@@ -1,9 +1,8 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
-import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon } from './icons';
-import { sendTestNotification, sendTelegramTestNotification } from '../services/googleSheetService';
-import { TELEGRAM_BOT_USERNAME } from '../constants';
+import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon } from './icons';
+import { sendTestNotification } from '../services/googleSheetService';
 import PDPAModal from './PDPAModal';
 
 const Settings: React.FC = () => {
@@ -11,8 +10,6 @@ const Settings: React.FC = () => {
     
     const [currentScriptUrl, setCurrentScriptUrl] = useState(scriptUrl);
     const [saved, setSaved] = useState<'none' | 'sheets' | 'notifications' | 'ai'>('none');
-    const [testingNotif, setTestingNotif] = useState(false);
-    const [testingTelegram, setTestingTelegram] = useState(false);
     const [showPDPA, setShowPDPA] = useState(false);
     
     const [aiInstruction, setAiInstruction] = useState(userProfile.aiSystemInstruction || '');
@@ -52,34 +49,6 @@ const Settings: React.FC = () => {
         setTimeout(() => setSaved('none'), 2000);
     };
 
-    const handleTestNotification = async () => {
-        if (!scriptUrl || !currentUser) return;
-        setTestingNotif(true);
-        try {
-            const result = await sendTestNotification(scriptUrl, currentUser);
-            if (result.success) alert("ส่งข้อความทดสอบ LINE สำเร็จ!");
-            else alert("ล้มเหลว: " + result.message);
-        } catch (e) {
-            alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
-        } finally {
-            setTestingNotif(false);
-        }
-    };
-
-    const handleTestTelegramNotification = async () => {
-        if (!scriptUrl || !currentUser) return;
-        setTestingTelegram(true);
-        try {
-            const result = await sendTelegramTestNotification(scriptUrl, currentUser);
-            if (result.success) alert("ส่งข้อความทดสอบ Telegram สำเร็จ!");
-            else alert("ล้มเหลว: " + result.message + "\n\n*โปรดตรวจสอบว่าคุณได้กด /start ที่บอทแล้วหรือยัง");
-        } catch (e) {
-            alert("เกิดข้อผิดพลาดในการเชื่อมต่อ");
-        } finally {
-            setTestingTelegram(false);
-        }
-    };
-
     const handleRevokePDPA = () => {
         if (window.confirm("คุณต้องการยกเลิกความยินยอมใช่หรือไม่? \n\nระบบจะลงชื่อออกอัตโนมัติ เพื่อคุ้มครองข้อมูลของคุณตามนโยบาย PDPA")) {
             if (!currentUser) return;
@@ -91,9 +60,8 @@ const Settings: React.FC = () => {
     };
 
     const isRemindersOn = !!userProfile.receiveDailyReminders;
-    const hasLineId = !!userProfile.lineUserId;
-    const hasTelegramId = !!userProfile.telegramUserId;
-    const isSuperAdmin = currentUser?.role === 'admin' && currentUser?.organization === 'all';
+    // Allow all admins to see DB connection settings
+    const isAdmin = currentUser?.role === 'admin';
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -121,101 +89,91 @@ const Settings: React.FC = () => {
                 </div>
             </div>
 
-            {/* Database Configuration Section */}
-            <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full border-t-4 border-teal-500">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg">
-                        <SquaresIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+            {/* Database Configuration Section - ADMIN ONLY */}
+            {isAdmin && (
+                <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full border-t-4 border-teal-500">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg">
+                            <SquaresIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Database Connection</h2>
+                            <p className="text-xs text-slate-500 dark:text-gray-400">Google Apps Script Web App URL</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800 dark:text-white">Database Connection</h2>
-                        <p className="text-xs text-slate-500 dark:text-gray-400">Google Apps Script Web App URL</p>
-                    </div>
+                    
+                    <form onSubmit={handleSheetsSave} className="space-y-3">
+                        <input 
+                            type="url" 
+                            value={currentScriptUrl} 
+                            onChange={(e) => setCurrentScriptUrl(e.target.value)}
+                            placeholder="https://script.google.com/macros/s/..."
+                            className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm font-mono text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                        />
+                        <div className="flex justify-end">
+                            <button 
+                                type="submit" 
+                                className={`px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 ${
+                                    saved === 'sheets' 
+                                    ? 'bg-green-500 text-white' 
+                                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-teal-500 hover:text-white'
+                                }`}
+                            >
+                                {saved === 'sheets' ? 'บันทึกเรียบร้อย' : 'บันทึก URL ใหม่'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                
-                <form onSubmit={handleSheetsSave} className="space-y-3">
-                    <input 
-                        type="url" 
-                        value={currentScriptUrl} 
-                        onChange={(e) => setCurrentScriptUrl(e.target.value)}
-                        placeholder="https://script.google.com/macros/s/..."
-                        className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 text-sm font-mono text-slate-600 dark:text-slate-300 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                    />
-                    <div className="flex justify-end">
-                        <button 
-                            type="submit" 
-                            className={`px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-sm active:scale-95 ${
-                                saved === 'sheets' 
-                                ? 'bg-green-500 text-white' 
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-teal-500 hover:text-white'
-                            }`}
-                        >
-                            {saved === 'sheets' ? 'บันทึกเรียบร้อย' : 'บันทึก URL ใหม่'}
-                        </button>
-                    </div>
-                </form>
-            </div>
+            )}
 
             {currentUser?.role !== 'guest' && (
                 <>
                     {/* Notification Management */}
-                    <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-teal-500">
+                    <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-[#06C755]">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
-                                <BellIcon className={`w-6 h-6 ${isRemindersOn ? 'text-teal-600' : 'text-slate-300'}`} />
-                                <h2 className="text-lg font-bold text-slate-800 dark:text-white">Daily Notifications</h2>
+                                <BellIcon className={`w-6 h-6 ${isRemindersOn ? 'text-[#06C755]' : 'text-slate-300'}`} />
+                                <h2 className="text-lg font-bold text-slate-800 dark:text-white">การแจ้งเตือน & กลุ่ม</h2>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={isRemindersOn} onChange={toggleNotifications} />
-                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06C755]"></div>
                             </label>
                         </div>
 
                         <div className="space-y-4">
-                            {/* LINE Section */}
-                            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <LineIcon className="w-5 h-5 text-[#06C755]" />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">LINE Notify</span>
-                                </div>
-                                {hasLineId ? (
-                                    <button onClick={handleTestNotification} disabled={testingNotif} className="text-[10px] font-black uppercase text-teal-600 hover:underline">
-                                        {testingNotif ? 'Sending...' : 'Test Send'}
-                                    </button>
-                                ) : (
-                                    <span className="text-[10px] font-bold text-rose-500 uppercase">Not Linked</span>
-                                )}
-                            </div>
-
-                            {/* Telegram Section */}
-                            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col gap-3">
-                                <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xl">✈️</span>
-                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Telegram Bot</span>
+                            {/* LINE Group Section */}
+                            <div className="p-5 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                                            <LineIcon className="w-6 h-6 text-[#06C755]" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-gray-800 dark:text-white">เข้าร่วมกลุ่ม LINE Group</h3>
+                                            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                                                เพื่อรับการแจ้งเตือนข่าวสาร และเข้าร่วมกลุ่มจัดอันดับคนรักสุขภาพ
+                                            </p>
+                                        </div>
                                     </div>
-                                    {hasTelegramId ? (
-                                        <button onClick={handleTestTelegramNotification} disabled={testingTelegram} className="text-[10px] font-black uppercase text-blue-500 hover:underline">
-                                            {testingTelegram ? 'Sending...' : 'Test Send'}
-                                        </button>
-                                    ) : (
-                                        <span className="text-[10px] font-bold text-rose-500 uppercase">Not Linked</span>
-                                    )}
+
+                                    <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-dashed border-green-300 dark:border-green-700 flex justify-between items-center">
+                                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">รหัสเข้าร่วมกลุ่ม (Access Code):</span>
+                                        <span className="font-mono font-black text-lg text-teal-600 tracking-wider">SHL2026</span>
+                                    </div>
+                                    
+                                    <a 
+                                        href="https://line.me/ti/g/rjw7XHyTFm" 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 w-full py-3 bg-[#06C755] hover:bg-[#05b54d] text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
+                                    >
+                                        <UserGroupIcon className="w-4 h-4" />
+                                        คลิกเพื่อเข้าร่วมกลุ่ม LINE
+                                    </a>
                                 </div>
-                                
-                                <a 
-                                    href={`https://t.me/${TELEGRAM_BOT_USERNAME}`} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 p-2 rounded-lg text-center font-bold hover:brightness-95 transition-all"
-                                >
-                                    คลิกเพื่อเปิดแชทกับ @{TELEGRAM_BOT_USERNAME} และกด START
-                                </a>
                             </div>
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-4 uppercase tracking-widest text-center font-bold">
-                            *Link your account by logging in with Social ID
-                        </p>
                     </div>
 
                     <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-indigo-500">
@@ -240,7 +198,7 @@ const Settings: React.FC = () => {
                 </>
             )}
 
-            {isSuperAdmin && (
+            {isAdmin && (
                 <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-purple-500">
                     <div className="flex items-center gap-3 mb-4">
                         <SparklesIcon className="w-6 h-6 text-purple-600" />

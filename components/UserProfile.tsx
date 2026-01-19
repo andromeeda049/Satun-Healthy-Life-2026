@@ -4,7 +4,7 @@ import { AppContext } from '../context/AppContext';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, ACHIEVEMENTS } from '../constants';
 import { UserProfile as UserProfileType } from '../types';
 import OrganizationModal from './OrganizationModal'; 
-import { SearchIcon, UserGroupIcon, ClipboardCheckIcon } from './icons';
+import { SearchIcon, UserGroupIcon, ClipboardCheckIcon, LineIcon } from './icons';
 
 const emojis = ['😊', '😎', '🎉', '🚀', '🌟', '💡', '🌱', '🍎', '💪', '🧠', '👍', '✨'];
 const getRandomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)];
@@ -135,6 +135,36 @@ const UserProfile: React.FC = () => {
                     <p className="font-bold">บันทึกข้อมูลสำเร็จ!</p>
                 </div>
             )}
+
+            {/* Public LINE Group Invitation (Moved to Top) */}
+            <div className="mb-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-xl border border-green-100 dark:border-green-800 shadow-sm relative overflow-hidden">
+                <div className="relative z-10 flex items-start gap-4">
+                    <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm text-[#06C755] flex-shrink-0">
+                        <LineIcon className="w-8 h-8" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-gray-800 dark:text-white text-base">กลุ่มสาธารณะ Satun Healthy Life</h3>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
+                            เข้าร่วมกลุ่ม LINE Group เพื่อรับการแจ้งเตือนข่าวสาร และร่วมจัดอันดับคนรักสุขภาพ (Public Ranking)
+                        </p>
+                        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                            <div className="bg-white dark:bg-gray-800 px-3 py-2 rounded-lg border border-dashed border-[#06C755] flex items-center justify-center gap-2">
+                                <span className="text-[10px] text-gray-500 font-medium">Code:</span>
+                                <span className="font-mono font-black text-[#06C755] text-lg tracking-wider">SHL2026</span>
+                            </div>
+                            <a 
+                                href="https://line.me/ti/g/rjw7XHyTFm"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex-1 bg-[#06C755] text-white text-xs font-bold py-2.5 px-4 rounded-lg shadow-sm hover:bg-[#05b54d] transition-all text-center flex items-center justify-center gap-2 active:scale-95"
+                            >
+                                <LineIcon className="w-4 h-4" />
+                                กดเข้าร่วมกลุ่มเลย
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* Join Group Section */}
             <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800 shadow-sm">
