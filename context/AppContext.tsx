@@ -1,7 +1,7 @@
 
 import React, { createContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry } from '../types';
+import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
 import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService } from '../services/googleSheetService';
 
@@ -47,7 +47,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [bmiHistory, _setBmiHistory] = useLocalStorage<BMIHistoryEntry[]>('bmiHistory', []);
   const [tdeeHistory, _setTdeeHistory] = useLocalStorage<TDEEHistoryEntry[]>('tdeeHistory', []);
   const [foodHistory, _setFoodHistory] = useLocalStorage<FoodHistoryEntry[]>('foodHistory', []);
-  const [plannerHistory, _setPlannerHistory] = useLocalStorage<any[]>('plannerHistory', []);
+  const [plannerHistory, _setPlannerHistory] = useLocalStorage<PlannerHistoryEntry[]>('plannerHistory', []);
   const [waterHistory, _setWaterHistory] = useLocalStorage<WaterHistoryEntry[]>('waterHistory', []);
   const [calorieHistory, _setCalorieHistory] = useLocalStorage<CalorieHistoryEntry[]>('calorieHistory', []);
   const [activityHistory, _setActivityHistory] = useLocalStorage<ActivityHistoryEntry[]>('activityHistory', []);
@@ -128,7 +128,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
   const setTdeeHistory = (val: any) => { _setTdeeHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'TDEE', val, currentUser); };
   const setFoodHistory = (val: any) => { _setFoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'FOOD', val, currentUser); };
-  const setPlannerHistory = (val: any) => { _setPlannerHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'PLANNER', val, currentUser); };
+  // Planner history setting wrapper - Not used directly for new items anymore, use savePlannerEntry
+  const setPlannerHistory = (val: any) => { _setPlannerHistory(val); }; 
   const setWaterHistory = (val: any) => { _setWaterHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'WATER', val, currentUser); };
   const setCalorieHistory = (val: any) => { _setCalorieHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'CALORIE', val, currentUser); };
   const setActivityHistory = (val: any) => { _setActivityHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'ACTIVITY', val, currentUser); };
@@ -158,6 +159,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const entry: QuizEntry = { id: Date.now().toString(), date: new Date().toISOString(), score, totalQuestions, correctAnswers, type, weekNumber };
       _setQuizHistory(prev => [entry, ...prev]);
       if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'QuizHistory', entry, currentUser);
+  };
+
+  const savePlannerEntry = (entry: PlannerHistoryEntry) => {
+      _setPlannerHistory(prev => [entry, ...prev].slice(0, 10));
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, 'PLANNER', entry, currentUser);
+      }
   };
 
   const closeNotification = () => setNotification(prev => ({ ...prev, show: false }));
@@ -353,7 +361,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider value={{
       activeView, setActiveView, currentUser, login, logout, theme, setTheme,
       bmiHistory, setBmiHistory, tdeeHistory, setTdeeHistory, foodHistory, setFoodHistory,
-      plannerHistory, setPlannerHistory, waterHistory, setWaterHistory, calorieHistory, setCalorieHistory,
+      plannerHistory, setPlannerHistory, savePlannerEntry, waterHistory, setWaterHistory, calorieHistory, setCalorieHistory,
       activityHistory, setActivityHistory, sleepHistory, setSleepHistory, moodHistory, setMoodHistory,
       habitHistory, setHabitHistory, socialHistory, setSocialHistory, evaluationHistory, saveEvaluation,
       quizHistory, saveQuizResult, waterGoal, setWaterGoal, latestFoodAnalysis, setLatestFoodAnalysis,

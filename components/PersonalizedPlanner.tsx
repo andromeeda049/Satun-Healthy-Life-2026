@@ -3,11 +3,11 @@ import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { PLANNER_ACTIVITY_LEVELS, CARB_PERCENTAGES, CUISINE_TYPES, DIETARY_PREFERENCES, HEALTH_CONDITIONS, LIFESTYLE_GOALS, XP_VALUES } from '../constants';
 import { generateMealPlan } from '../services/geminiService';
 import { PlannerResults, MealPlan, PlannerHistoryEntry } from '../types';
-import { ArrowLeftIcon, SparklesIcon, UserCircleIcon, ScaleIcon, FireIcon, HeartIcon, ChartBarIcon, TrophyIcon, ExclamationTriangleIcon, ClipboardListIcon } from './icons';
+import { ArrowLeftIcon, SparklesIcon, UserCircleIcon, ScaleIcon, FireIcon, HeartIcon, ChartBarIcon, TrophyIcon, ExclamationTriangleIcon, ClipboardListIcon, TrashIcon, BookOpenIcon } from './icons';
 import { AppContext } from '../context/AppContext';
 
 const PersonalizedPlanner: React.FC = () => {
-    const { userProfile, setPlannerHistory, currentUser, foodHistory, gainXP, plannerHistory } = useContext(AppContext);
+    const { userProfile, setPlannerHistory, savePlannerEntry, currentUser, foodHistory, gainXP, plannerHistory } = useContext(AppContext);
     
     // Auto-populate from profile
     const [formData, setFormData] = useState({
@@ -24,6 +24,8 @@ const PersonalizedPlanner: React.FC = () => {
         healthCondition: HEALTH_CONDITIONS[0],
         lifestyleGoal: LIFESTYLE_GOALS[0]
     });
+
+    const [activeTab, setActiveTab] = useState<'create' | 'history'>('create');
 
     useEffect(() => {
         if (userProfile) {
@@ -46,24 +48,26 @@ const PersonalizedPlanner: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showResults, setShowResults] = useState(false);
+    const [viewingHistoryDate, setViewingHistoryDate] = useState<string | null>(null);
 
-    // --- CHECK WEEKLY LIMIT ---
+    // Super Admin Check
+    const isSuperAdmin = currentUser?.organization === 'all';
+
+    // --- CHECK DAILY LIMIT (Revised from Weekly) ---
     const canCreatePlan = useMemo(() => {
+        if (isSuperAdmin) return true; // Super Admin has no limit
         if (plannerHistory.length === 0) return true;
-        const lastPlanDate = new Date(plannerHistory[0].date).getTime();
-        const now = new Date().getTime();
-        const diffDays = (now - lastPlanDate) / (1000 * 3600 * 24);
-        return diffDays >= 7;
-    }, [plannerHistory]);
-
-    const daysUntilNextPlan = useMemo(() => {
-        if (plannerHistory.length === 0) return 0;
-        const lastPlanDate = new Date(plannerHistory[0].date).getTime();
-        const nextPlanDate = lastPlanDate + (7 * 24 * 3600 * 1000);
-        const now = new Date().getTime();
-        const diff = Math.ceil((nextPlanDate - now) / (1000 * 3600 * 24));
-        return Math.max(0, diff);
-    }, [plannerHistory]);
+        
+        const lastPlanDate = new Date(plannerHistory[0].date);
+        const today = new Date();
+        
+        // Check if same calendar day
+        const isSameDay = lastPlanDate.getDate() === today.getDate() &&
+                          lastPlanDate.getMonth() === today.getMonth() &&
+                          lastPlanDate.getFullYear() === today.getFullYear();
+        
+        return !isSameDay;
+    }, [plannerHistory, isSuperAdmin]);
 
     // Calculate Preview Stats on the fly
     const previewStats = useMemo(() => {
@@ -94,11 +98,11 @@ const PersonalizedPlanner: React.FC = () => {
     const handleCalculateAndPlan = async () => {
         if (currentUser?.role === 'guest') return;
         if (!canCreatePlan) {
-            alert(`คุณเพิ่งสร้างแผนไป กรุณารออีก ${daysUntilNextPlan} วัน เพื่อประเมินผลลัพธ์ก่อนสร้างแผนใหม่`);
+            alert(`คุณสร้างแผนสำหรับวันนี้ไปแล้ว กรุณารอวันพรุ่งนี้เพื่อสร้างแผนใหม่`);
             return;
         }
 
-        setShowResults(true); setLoading(true); setError(null);
+        setShowResults(true); setLoading(true); setError(null); setViewingHistoryDate(null);
         
         const weightN = parseFloat(formData.weight);
         const heightN = parseFloat(formData.height);
@@ -116,7 +120,8 @@ const PersonalizedPlanner: React.FC = () => {
             const plan = await generateMealPlan(calculated, formData.cuisine, formData.diet, formData.healthCondition, formData.lifestyleGoal, foodHistory, userProfile.aiSystemInstruction);
             setMealPlan(plan);
             const entry: PlannerHistoryEntry = { id: new Date().toISOString(), date: new Date().toISOString(), cuisine: formData.cuisine, diet: formData.diet, tdee, plan };
-            setPlannerHistory(prev => [entry, ...prev].slice(0, 10));
+            // Use savePlannerEntry to persist to backend
+            savePlannerEntry(entry);
             // Grant XP for generating plan
             gainXP(XP_VALUES.PLANNER, 'PLANNER');
         } catch (e: any) {
@@ -127,99 +132,188 @@ const PersonalizedPlanner: React.FC = () => {
         }
     };
 
+    const handleViewHistory = (entry: PlannerHistoryEntry) => {
+        setResults({ tdee: entry.tdee } as PlannerResults); // Mock minimal results needed for display
+        setMealPlan(entry.plan);
+        setViewingHistoryDate(entry.date);
+        setShowResults(true);
+    };
+
+    const handleDeleteHistory = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (window.confirm("คุณต้องการลบแผนนี้ออกจากประวัติใช่หรือไม่?")) {
+            setPlannerHistory(prev => prev.filter(item => item.id !== id));
+        }
+    };
+
+    const formatDate = (dateStr: string) => {
+        return new Date(dateStr).toLocaleDateString('th-TH', {
+            year: '2-digit', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+    };
+
     return (
-        <div className="w-full">
+        <div className="w-full pb-10">
             {!showResults ? (
-                <div className="max-w-lg mx-auto bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg space-y-6">
-                    <div className="text-center">
-                        <SparklesIcon className="w-12 h-12 text-teal-500 mx-auto mb-2" />
-                        <h2 className="text-2xl font-bold dark:text-white">Personalized Lifestyle Planner</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                            AI จะดึงข้อมูลสุขภาพของคุณเพื่อสร้างแผนโภชนาการและกิจกรรมที่ "เหมาะสมกับคุณที่สุด"
-                        </p>
-                    </div>
-
-                    <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-xl border border-teal-100 dark:border-teal-800 flex items-center gap-4">
-                        <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm">
-                            <UserCircleIcon className="w-8 h-8 text-teal-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-gray-500 uppercase">ออกแบบสำหรับ</p>
-                            <p className="font-bold text-gray-800 dark:text-white text-lg truncate">{currentUser?.displayName}</p>
-                        </div>
-                    </div>
-
-                    {/* Health Data Snapshot */}
-                    {previewStats && (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                    <ScaleIcon className="w-5 h-5 text-blue-500 mb-1" />
-                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">BMI</span>
-                                    <span className="font-bold text-gray-800 dark:text-white">{previewStats.bmi}</span>
-                                </div>
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                    <FireIcon className="w-5 h-5 text-orange-500 mb-1" />
-                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">TDEE</span>
-                                    <span className="font-bold text-gray-800 dark:text-white">{previewStats.tdee}</span>
-                                </div>
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                    <HeartIcon className="w-5 h-5 text-rose-500 mb-1" />
-                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Condition</span>
-                                    <span className="font-bold text-gray-800 dark:text-white text-xs leading-tight line-clamp-2">{previewStats.condition}</span>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                    <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
-                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบเอว</span>
-                                    <span className="font-bold text-gray-800 dark:text-white">{previewStats.waist}</span>
-                                </div>
-                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                    <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
-                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบสะโพก</span>
-                                    <span className="font-bold text-gray-800 dark:text-white">{previewStats.hip}</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Goal Selection */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                            <TrophyIcon className="w-4 h-4 text-yellow-500" />
-                            เป้าหมายของแผน (Plan Goal)
-                        </label>
-                        <select
-                            name="lifestyleGoal"
-                            value={formData.lifestyleGoal}
-                            onChange={(e) => setFormData({...formData, lifestyleGoal: e.target.value})}
-                            className="w-full p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all text-gray-700 dark:text-white font-medium"
+                <div className="space-y-6">
+                    {/* Tabs */}
+                    <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                        <button 
+                            onClick={() => setActiveTab('create')}
+                            className={`flex-1 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                                activeTab === 'create' 
+                                ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm' 
+                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                            }`}
                         >
-                            {LIFESTYLE_GOALS.map(g => (
-                                <option key={g} value={g}>{g}</option>
-                            ))}
-                        </select>
+                            <SparklesIcon className="w-4 h-4" /> สร้างแผนใหม่
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('history')}
+                            className={`flex-1 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                                activeTab === 'history' 
+                                ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm' 
+                                : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                            }`}
+                        >
+                            <ClipboardListIcon className="w-4 h-4" /> ประวัติ ({plannerHistory.length})
+                        </button>
                     </div>
 
-                    <button 
-                        onClick={handleCalculateAndPlan} 
-                        disabled={!canCreatePlan}
-                        className={`w-full font-bold py-4 rounded-xl shadow-lg transform transition-transform active:scale-95 flex flex-col items-center justify-center gap-1 ${
-                            canCreatePlan 
-                            ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-white hover:from-teal-600 hover:to-emerald-700'
-                            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                        }`}
-                    >
-                        <span>สร้างแผนสุขภาพส่วนตัว</span>
-                        <span className="text-[10px] font-normal opacity-90">
-                            {canCreatePlan ? '(Generate Personalized Plan)' : `(รออีก ${daysUntilNextPlan} วัน)`}
-                        </span>
-                    </button>
-                    
-                    {!canCreatePlan && (
-                        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs rounded-lg text-center border border-yellow-200 dark:border-yellow-800">
-                            <strong>Note:</strong> สามารถสร้างแผนได้สัปดาห์ละ 1 ครั้ง เพื่อให้คุณมีเวลาปฏิบัติตามแผนอย่างเต็มที่
+                    {activeTab === 'create' ? (
+                        <div className="max-w-lg mx-auto bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg space-y-6 animate-fade-in">
+                            <div className="text-center">
+                                <SparklesIcon className="w-12 h-12 text-teal-500 mx-auto mb-2" />
+                                <h2 className="text-2xl font-bold dark:text-white">Personalized Lifestyle Planner</h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                                    AI จะดึงข้อมูลสุขภาพของคุณเพื่อสร้างแผนโภชนาการและกิจกรรมที่ "เหมาะสมกับคุณที่สุด"
+                                </p>
+                            </div>
+
+                            <div className="bg-teal-50 dark:bg-teal-900/20 p-4 rounded-xl border border-teal-100 dark:border-teal-800 flex items-center gap-4">
+                                <div className="bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm">
+                                    <UserCircleIcon className="w-8 h-8 text-teal-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-gray-500 uppercase">ออกแบบสำหรับ</p>
+                                    <p className="font-bold text-gray-800 dark:text-white text-lg truncate">{currentUser?.displayName}</p>
+                                </div>
+                            </div>
+
+                            {/* Health Data Snapshot */}
+                            {previewStats && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
+                                            <ScaleIcon className="w-5 h-5 text-blue-500 mb-1" />
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">BMI</span>
+                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.bmi}</span>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
+                                            <FireIcon className="w-5 h-5 text-orange-500 mb-1" />
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">TDEE</span>
+                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.tdee}</span>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
+                                            <HeartIcon className="w-5 h-5 text-rose-500 mb-1" />
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Condition</span>
+                                            <span className="font-bold text-gray-800 dark:text-white text-xs leading-tight line-clamp-2">{previewStats.condition}</span>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
+                                            <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบเอว</span>
+                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.waist}</span>
+                                        </div>
+                                        <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
+                                            <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบสะโพก</span>
+                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.hip}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Goal Selection */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                    <TrophyIcon className="w-4 h-4 text-yellow-500" />
+                                    เป้าหมายของแผน (Plan Goal)
+                                </label>
+                                <select
+                                    name="lifestyleGoal"
+                                    value={formData.lifestyleGoal}
+                                    onChange={(e) => setFormData({...formData, lifestyleGoal: e.target.value})}
+                                    className="w-full p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all text-gray-700 dark:text-white font-medium"
+                                >
+                                    {LIFESTYLE_GOALS.map(g => (
+                                        <option key={g} value={g}>{g}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button 
+                                onClick={handleCalculateAndPlan} 
+                                disabled={!canCreatePlan}
+                                className={`w-full font-bold py-4 rounded-xl shadow-lg transform transition-transform active:scale-95 flex flex-col items-center justify-center gap-1 ${
+                                    canCreatePlan 
+                                    ? 'bg-gradient-to-r from-teal-500 to-emerald-600 text-white hover:from-teal-600 hover:to-emerald-700'
+                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                                }`}
+                            >
+                                <span>สร้างแผนสุขภาพส่วนตัว</span>
+                                <span className="text-[10px] font-normal opacity-90">
+                                    {canCreatePlan 
+                                        ? '(Generate Personalized Plan)' 
+                                        : '(ครบโควตาวันนี้แล้ว - รอพรุ่งนี้)'}
+                                </span>
+                            </button>
+                            
+                            {!canCreatePlan && (
+                                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs rounded-lg text-center border border-yellow-200 dark:border-yellow-800">
+                                    <strong>Note:</strong> สามารถสร้างแผนได้วันละ 1 ครั้ง เพื่อให้คุณมีเวลาปฏิบัติตามแผนอย่างเต็มที่
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        // History Tab
+                        <div className="space-y-4 animate-fade-in">
+                            {plannerHistory.length === 0 ? (
+                                <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                                    <BookOpenIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                                    <p className="text-gray-500 dark:text-gray-400 font-bold">ยังไม่มีประวัติแผนสุขภาพ</p>
+                                    <button onClick={() => setActiveTab('create')} className="text-teal-500 text-sm font-bold mt-2 hover:underline">สร้างแผนแรกของคุณ</button>
+                                </div>
+                            ) : (
+                                plannerHistory.map(entry => (
+                                    <div 
+                                        key={entry.id} 
+                                        onClick={() => handleViewHistory(entry)}
+                                        className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all cursor-pointer flex justify-between items-center group"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-teal-50 dark:bg-teal-900/20 rounded-lg flex items-center justify-center text-teal-600 font-bold text-xs flex-col">
+                                                <span className="text-lg">📅</span>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">{formatDate(entry.date)}</p>
+                                                <h4 className="font-bold text-gray-800 dark:text-white text-sm">เป้าหมาย: {Math.round(entry.tdee)} kcal</h4>
+                                                <div className="flex gap-2 mt-1">
+                                                    <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">{entry.cuisine}</span>
+                                                    <span className="text-[10px] bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">{entry.diet}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={(e) => handleDeleteHistory(e, entry.id)}
+                                            className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     )}
                 </div>
@@ -229,6 +323,11 @@ const PersonalizedPlanner: React.FC = () => {
                         <button onClick={() => setShowResults(false)} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-gray-100 dark:bg-gray-700 px-4 py-2 rounded-lg transition-colors">
                             <ArrowLeftIcon className="w-5 h-5"/> ย้อนกลับ
                         </button>
+                        {viewingHistoryDate && (
+                            <span className="text-xs font-bold text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                                แผนเมื่อ: {formatDate(viewingHistoryDate)}
+                            </span>
+                        )}
                     </div>
                     
                     {error && (

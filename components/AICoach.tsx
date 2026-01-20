@@ -11,11 +11,14 @@ const AICoach: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistId>('general');
-  const [canConsult, setCanConsult] = useState(true);
+  const [consultCount, setConsultCount] = useState(0);
+  
   const { bmiHistory, tdeeHistory, latestFoodAnalysis, currentUser, waterHistory, userProfile, openSOS } = useContext(AppContext);
 
   const isGuest = currentUser?.role === 'guest';
-  const isAdmin = currentUser?.role === 'admin';
+  // Super Admin (Organization = 'all') gets unlimited access
+  const isSuperAdmin = currentUser?.organization === 'all';
+  const DAILY_LIMIT = 3;
 
   const waterIntakeToday = useMemo(() => {
     const today = new Date().toLocaleDateString('en-CA');
@@ -24,19 +27,21 @@ const AICoach: React.FC = () => {
         .reduce((sum, entry) => sum + entry.amount, 0);
   }, [waterHistory]);
 
+  // Load usage count on mount
   useEffect(() => {
-      if (currentUser && !isGuest && !isAdmin) {
+      if (currentUser && !isGuest) {
           const todayStr = new Date().toDateString();
-          const lastConsult = localStorage.getItem(`last_coach_consult_${currentUser.username}`);
-          if (lastConsult === todayStr) {
-              setCanConsult(false);
-          }
+          const key = `coach_usage_${currentUser.username}_${todayStr}`;
+          const currentUsage = parseInt(localStorage.getItem(key) || '0');
+          setConsultCount(currentUsage);
       }
-  }, [currentUser, isGuest, isAdmin]);
+  }, [currentUser, isGuest]);
 
   const handleGetTip = async () => {
     if (isGuest) return;
-    if (!canConsult && !isAdmin) return;
+    
+    // Check Limits
+    if (!isSuperAdmin && consultCount >= DAILY_LIMIT) return;
 
     setLoading(true);
     setError(null);
@@ -51,9 +56,14 @@ const AICoach: React.FC = () => {
         specialistId: selectedSpecialist
       });
       setTip(tipResult);
-      if (!isAdmin) {
-        localStorage.setItem(`last_coach_consult_${currentUser?.username}`, new Date().toDateString());
-        setCanConsult(false);
+      
+      // Increment Usage
+      if (!isSuperAdmin) {
+        const todayStr = new Date().toDateString();
+        const key = `coach_usage_${currentUser?.username}_${todayStr}`;
+        const newCount = consultCount + 1;
+        localStorage.setItem(key, newCount.toString());
+        setConsultCount(newCount);
       }
     } catch (err: any) {
       setError(err.message || 'เกิดข้อผิดพลาด');
@@ -73,6 +83,8 @@ const AICoach: React.FC = () => {
     };
     return colorMap[color] || (isSelected ? 'text-teal-600 bg-teal-50 border-teal-500' : 'text-gray-400 border-gray-100');
   };
+
+  const isLimitReached = !isSuperAdmin && consultCount >= DAILY_LIMIT;
 
   return (
     <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full relative">
@@ -107,8 +119,17 @@ const AICoach: React.FC = () => {
           </div>
       </div>
 
-      <button onClick={handleGetTip} disabled={loading || isGuest || (!canConsult && !isAdmin)} className={`w-full font-black py-4 rounded-xl transition-all shadow-lg active:scale-[0.98] ${ (canConsult || isAdmin) ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed border' }`}>
-        {loading ? 'กำลังวิเคราะห์...' : (!canConsult && !isAdmin) ? 'ครบโควตาปรึกษาวันนี้แล้ว' : `ปรึกษา ${SPECIALIST_TEAM.find(s => s.id === selectedSpecialist)?.name}`}
+      <button 
+        onClick={handleGetTip} 
+        disabled={loading || isGuest || isLimitReached} 
+        className={`w-full font-black py-4 rounded-xl transition-all shadow-lg active:scale-[0.98] ${ (!isLimitReached) ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed border' }`}
+      >
+        {loading 
+            ? 'กำลังวิเคราะห์...' 
+            : isLimitReached 
+                ? 'ครบโควตา 3 ครั้ง/วัน แล้ว' 
+                : `ปรึกษา ${SPECIALIST_TEAM.find(s => s.id === selectedSpecialist)?.name} ${!isSuperAdmin ? `(${consultCount}/${DAILY_LIMIT})` : '(Unlimited)'}`
+        }
       </button>
 
       {tip && (

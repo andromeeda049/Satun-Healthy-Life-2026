@@ -304,8 +304,9 @@ export interface AppContextType {
   setTdeeHistory: React.Dispatch<React.SetStateAction<TDEEHistoryEntry[]>>;
   foodHistory: FoodHistoryEntry[];
   setFoodHistory: React.Dispatch<React.SetStateAction<FoodHistoryEntry[]>>;
-  plannerHistory: any[];
-  setPlannerHistory: React.Dispatch<React.SetStateAction<any[]>>;
+  plannerHistory: PlannerHistoryEntry[];
+  setPlannerHistory: React.Dispatch<React.SetStateAction<PlannerHistoryEntry[]>>;
+  savePlannerEntry: (entry: PlannerHistoryEntry) => void;
   waterHistory: WaterHistoryEntry[];
   setWaterHistory: React.Dispatch<React.SetStateAction<WaterHistoryEntry[]>>;
   calorieHistory: CalorieHistoryEntry[];
