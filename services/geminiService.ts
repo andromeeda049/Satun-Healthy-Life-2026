@@ -3,6 +3,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { NutrientInfo, LocalFoodSuggestion, UserProfile, SpecialistId, FoodHistoryEntry, MealPlan, PlannerResults } from '../types';
 import { SPECIALIST_TEAM } from "../constants";
 
+const API_ERROR_MESSAGE = "ฟีเจอร์ AI ใช้งานแบบจำกัด กรุณารอสักครู่";
+
 /**
  * Utility to ensure the image is in a supported format for Gemini API.
  */
@@ -16,6 +18,9 @@ const foodAnalysisSchema = {
   type: Type.OBJECT,
   properties: {
     calories: { type: Type.NUMBER, description: "แคลอรี่รวมของอาหาร (เฉพาะตัวเลข)" },
+    protein: { type: Type.NUMBER, description: "โปรตีน (กรัม) โดยประมาณ" },
+    carbohydrates: { type: Type.NUMBER, description: "คาร์โบไฮเดรต (กรัม) โดยประมาณ" },
+    fat: { type: Type.NUMBER, description: "ไขมัน (กรัม) โดยประมาณ" },
     description: { type: Type.STRING, description: "ชื่อเมนูอาหารภาษาไทยสั้นๆ" },
     healthImpact: { type: Type.STRING, description: "สรุปผลต่อสุขภาพสั้นๆ" },
     isHealthyChoice: { type: Type.BOOLEAN, description: "มื้อนี้เป็นอาหารเพื่อสุขภาพ (เน้นผัก/ผลไม้/โปรตีนไขมันต่ำ) หรือไม่" },
@@ -40,7 +45,7 @@ const foodAnalysisSchema = {
         }
     }
   },
-  required: ['calories', 'description', 'isHealthyChoice', 'verification']
+  required: ['calories', 'protein', 'carbohydrates', 'fat', 'description', 'isHealthyChoice', 'verification']
 };
 
 const CLEAN_FORMAT_INSTRUCTION = "คำสั่งจัดรูปแบบ: ให้ตอบเป็นข้อๆ โดยใช้ตัวเลขนำหน้า (1., 2., 3., ...) เท่านั้น ห้ามใช้เครื่องหมาย Markdown เช่น ### หรือ ** โดยเด็ดขาด ให้ใช้เพียงข้อความธรรมดาและการขึ้นบรรทัดใหม่เพื่อให้จัดระเบียบง่ายและกระชับ";
@@ -61,7 +66,7 @@ export const analyzeFoodFromImage = async (base64Image: string, mimeType: string
       contents: [{
         parts: [
           { inlineData: { data: base64Image, mimeType: safeMimeType } },
-          { text: "วิเคราะห์ภาพอาหารนี้ ให้ชื่อเมนู (description) และแคลอรี่ (calories) เสมอ ตรวจสอบว่าเป็นอาหารเพื่อสุขภาพหรือไม่ (isHealthyChoice). Return JSON." }
+          { text: "วิเคราะห์ภาพอาหารนี้ ให้ชื่อเมนู (description), แคลอรี่ (calories), โปรตีน (protein), คาร์โบไฮเดรต (carbohydrates), ไขมัน (fat) และตรวจสอบว่าเป็นอาหารเพื่อสุขภาพหรือไม่ (isHealthyChoice). Return JSON." }
         ]
       }],
       config: config
@@ -71,7 +76,7 @@ export const analyzeFoodFromImage = async (base64Image: string, mimeType: string
     return JSON.parse(response.text);
   } catch (error: any) {
     console.error("AI Service Error:", error);
-    throw error;
+    throw new Error(API_ERROR_MESSAGE);
   }
 };
 
@@ -86,25 +91,50 @@ export const analyzeFoodFromText = async (text: string, systemInstruction?: stri
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `วิเคราะห์สารอาหารจากชื่อเมนู: "${text}". ให้ชื่อเมนูและแคลอรี่ Return JSON.`,
+      contents: `วิเคราะห์สารอาหารจากชื่อเมนู: "${text}". ให้ชื่อเมนู, แคลอรี่, โปรตีน, คาร์บ, ไขมัน Return JSON.`,
       config: config
     });
     return JSON.parse(response.text);
   } catch (error) {
-    throw new Error('ไม่สามารถวิเคราะห์ข้อความได้');
+    throw new Error(API_ERROR_MESSAGE);
   }
 };
 
 export const getHealthCoachingTip = async (data: any): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // Find Specialist Data
+  const specialist = SPECIALIST_TEAM.find(s => s.id === data.specialistId);
+  const specialistName = specialist?.name || "AI Coach";
+  const role = specialist?.role || "General Wellness";
+  const personality = (specialist as any)?.personality || "Friendly and helpful";
+  
+  const userContext = `
+    User Profile: Age ${data.userProfile?.age}, Gender ${data.userProfile?.gender}, BMI ${data.bmi?.value?.toFixed(1) || '-'}, TDEE ${data.tdee?.value?.toFixed(0) || '-'}.
+    Health Condition: ${data.userProfile?.healthCondition || 'None'}.
+    Recent Water Intake: ${data.waterIntake} ml.
+    Recent Food: ${data.food?.description || 'No recent log'}.
+  `;
+
+  let prompt = `
+    Act as ${specialistName} (${role}).
+    Personality: ${personality}.
+    ${data.focusTopic ? `Focus STRICTLY on this topic: "${data.focusTopic}".` : `Provide general advice based on the user's data.`}
+    
+    Context: ${userContext}
+    
+    Task: Give a short, actionable advice (max 3 sentences) in Thai.
+    ${CLEAN_FORMAT_INSTRUCTION}
+  `;
+
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `ให้คำแนะนำสุขภาพเป็นภาษาไทยจากข้อมูลนี้: ${JSON.stringify(data)}. ${CLEAN_FORMAT_INSTRUCTION}`,
+      contents: prompt,
     });
-    return response.text;
+    return response.text || API_ERROR_MESSAGE;
   } catch (error) {
-    return "ขออภัย ระบบไม่พร้อมใช้งานในขณะนี้";
+    return API_ERROR_MESSAGE;
   }
 };
 
@@ -129,7 +159,7 @@ export const generateProactiveInsight = async (data: any, systemInstruction?: st
         });
         return JSON.parse(response.text);
     } catch (error) {
-        return { title: "สวัสดี", message: "บันทึกข้อมูลเพื่อรับคำแนะนำ", type: "info" };
+        return { title: "แจ้งเตือน", message: API_ERROR_MESSAGE, type: "info" };
     }
 };
 
@@ -144,7 +174,10 @@ export const estimateExerciseCalories = async (activityName: string, durationMin
     });
     const result = JSON.parse(response.text);
     return result.calories || 0;
-  } catch (error) { return 0; }
+  } catch (error) { 
+      console.error(error);
+      throw new Error(API_ERROR_MESSAGE);
+  }
 };
 
 // Fix: Added missing export extractHealthDataFromImage used in ActivityTracker.tsx
@@ -180,7 +213,7 @@ export const extractHealthDataFromImage = async (base64Image: string, mimeType: 
     return JSON.parse(response.text);
   } catch (error) {
     console.error("AI Extraction Error:", error);
-    return {};
+    throw new Error(API_ERROR_MESSAGE);
   }
 };
 
@@ -211,7 +244,7 @@ export const getLocalFoodSuggestions = async (lat: number, lng: number): Promise
     return JSON.parse(response.text);
   } catch (error) {
     console.error("Local Suggestions Error:", error);
-    return [];
+    throw new Error(API_ERROR_MESSAGE);
   }
 };
 
@@ -301,6 +334,6 @@ export const generateMealPlan = async (results: any, cuisine: string, diet: stri
     return JSON.parse(response.text || '[]');
   } catch (error) { 
     console.error("Generate Meal Plan Error:", error);
-    throw new Error('ล้มเหลวในการสร้างแผนอาหาร'); 
+    throw new Error(API_ERROR_MESSAGE); 
   }
 };

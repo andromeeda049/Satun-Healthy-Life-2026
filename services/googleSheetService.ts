@@ -1,14 +1,12 @@
 
-import { UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, RedemptionHistoryEntry } from '../types';
+import { User, UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, RedemptionHistoryEntry, HealthGroup } from '../types';
 
 export interface AllAdminData {
     profiles: any[];
+    loginLogs: any[];
     bmiHistory: any[];
     tdeeHistory: any[];
     foodHistory: any[];
-    plannerHistory: any[];
-    waterHistory: any[];
-    calorieHistory: any[];
     activityHistory: any[];
     sleepHistory: any[];
     moodHistory: any[];
@@ -16,255 +14,115 @@ export interface AllAdminData {
     socialHistory: any[];
     evaluationHistory: any[];
     quizHistory: any[];
-    loginLogs: any[];
+    groups?: any[];
+    redemptionHistory?: any[];
+    [key: string]: any[];
 }
 
-export interface AllData {
-    profile: UserProfile | null;
-    bmiHistory: BMIHistoryEntry[];
-    tdeeHistory: TDEEHistoryEntry[];
-    foodHistory: FoodHistoryEntry[];
-    plannerHistory: PlannerHistoryEntry[];
-    waterHistory: WaterHistoryEntry[];
-    calorieHistory: CalorieHistoryEntry[];
-    activityHistory: ActivityHistoryEntry[];
-    sleepHistory: SleepEntry[];
-    moodHistory: MoodEntry[];
-    habitHistory: HabitEntry[];
-    socialHistory: SocialEntry[];
-    evaluationHistory: EvaluationEntry[];
-    quizHistory: QuizEntry[];
-    redemptionHistory: RedemptionHistoryEntry[];
-}
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const fetchWithRetry = async (url: string, options: RequestInit, retries = 2, timeout = 20000): Promise<Response> => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    const config = { ...options, signal: controller.signal };
-
+const fetchWithRetry = async (url: string, options: any, retries = 3, timeout = 30000): Promise<Response> => {
     try {
-        const response = await fetch(url, config);
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), timeout);
+        const response = await fetch(url, { ...options, signal: controller.signal });
         clearTimeout(id);
         if (!response.ok) {
-             throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         return response;
     } catch (err: any) {
-        clearTimeout(id);
         if (retries > 0) {
-            console.warn(`Fetch failed, retrying... (${retries} left). Error: ${err.message}`);
-            await delay(1000); // 1s wait
+            console.log(`Retrying... attempts left: ${retries}`);
+            await new Promise(res => setTimeout(res, 1000));
             return fetchWithRetry(url, options, retries - 1, timeout);
         }
-        throw new Error(err.name === 'AbortError' ? 'Connection Timeout' : err.message);
+        throw err;
     }
 };
 
-const appendParams = (url: string, params: string) => {
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}${params}`;
+export const socialAuth = async (scriptUrl: string, payload: any) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'socialLogin', payload }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        return await response.json();
+    } catch (error: any) {
+        return { status: 'error', message: error.message };
+    }
 };
 
-export const fetchOrganizations = async (scriptUrl: string): Promise<any[]> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return [];
+export const adminLogin = async (scriptUrl: string, password: string): Promise<any> => {
+    if (!scriptUrl || !scriptUrl.startsWith('http')) return { status: 'error', message: 'Invalid URL' };
     try {
-        const urlWithParams = appendParams(scriptUrl, `action=getConfig&t=${Date.now()}`);
-        const response = await fetchWithRetry(urlWithParams, { 
-            method: 'GET', 
-            redirect: 'follow', 
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'adminLogin', password }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
         });
-        
-        const text = await response.text();
-        let result;
-        try {
-            result = JSON.parse(text);
-        } catch (e) {
-            return [];
-        }
-        
-        return result.status === 'success' && result.data && result.data.organizations ? result.data.organizations : [];
+        return await response.json();
+    } catch (error: any) {
+        return { status: 'error', message: error.message };
+    }
+};
+
+export const fetchAllDataFromSheet = async (scriptUrl: string, user: User) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'fetchUserData', username: user.username }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : null;
     } catch (error) {
-        console.warn("Fetch Config Warning:", error);
-        return [];
-    }
-}
-
-export const fetchAllDataFromSheet = async (scriptUrl: string, user: User): Promise<AllData | null> => {
-    if (!scriptUrl || !user || !scriptUrl.startsWith('http')) {
-        throw new Error("Configuration Error: Invalid URL or User");
-    }
-    
-    if (!user.username) {
-        throw new Error("User information is missing (username)");
-    }
-    
-    try {
-        const urlWithParams = appendParams(scriptUrl, `username=${encodeURIComponent(user.username)}&t=${Date.now()}`);
-        const response = await fetchWithRetry(urlWithParams, { 
-            method: 'GET', 
-            redirect: 'follow'
-        });
-        
-        const text = await response.text();
-        
-        // Check for HTML response (Google Script Error Page)
-        if (text.trim().startsWith('<')) {
-            throw new Error("Server Error: Received HTML instead of JSON. Please check Script Deployment.");
-        }
-
-        let result;
-        try {
-            result = JSON.parse(text);
-        } catch (e) {
-            throw new Error("Invalid JSON Response from Server");
-        }
-
-        if (result.status === 'success') {
-             const data = result.data;
-             return parseUserData(data);
-        } else {
-             throw new Error(result.message || "Server Application Error");
-        }
-    } catch (error: any) {
         console.error("Fetch Data Error:", error);
-        throw error; // Propagate error to allow UI to display it
+        return null;
     }
 };
 
-const parseUserData = (data: any): AllData => {
-    let parsedBadges = [];
+export const saveDataToSheet = async (scriptUrl: string, type: string, data: any, user: User) => {
     try {
-       parsedBadges = data.profile && data.profile.badges ? (typeof data.profile.badges === 'string' ? JSON.parse(data.profile.badges) : data.profile.badges) : ['novice'];
-    } catch (e) {
-       parsedBadges = ['novice'];
-    }
-
-    const sanitizedProfile = data.profile ? {
-       ...data.profile,
-       age: String(data.profile.age || ''),
-       weight: String(data.profile.weight || ''),
-       height: String(data.profile.height || ''),
-       waist: String(data.profile.waist || ''),
-       hip: String(data.profile.hip || ''),
-       activityLevel: Number(data.profile.activityLevel || 1.2),
-       healthCondition: String(data.profile.healthCondition || 'ไม่มีโรคประจำตัว'),
-       xp: Number(data.profile.xp || 0),
-       level: Number(data.profile.level || 1),
-       badges: parsedBadges,
-       organization: String(data.profile.organization || 'general'),
-       pdpaAccepted: String(data.profile.pdpaAccepted).toLowerCase() === 'true',
-   } : null;
-
-   const sortByDateDesc = (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime();
-
-   return {
-       profile: sanitizedProfile,
-       bmiHistory: (data.bmiHistory || []).sort(sortByDateDesc),
-       tdeeHistory: (data.tdeeHistory || []).sort(sortByDateDesc),
-       foodHistory: (data.foodHistory || []).sort(sortByDateDesc),
-       plannerHistory: (data.plannerHistory || []).sort(sortByDateDesc),
-       waterHistory: (data.waterHistory || []).sort(sortByDateDesc),
-       calorieHistory: (data.calorieHistory || []).sort(sortByDateDesc),
-       activityHistory: (data.activityHistory || []).sort(sortByDateDesc),
-       sleepHistory: (data.sleepHistory || []).sort(sortByDateDesc),
-       moodHistory: (data.moodHistory || []).sort(sortByDateDesc),
-       habitHistory: (data.habitHistory || []).sort(sortByDateDesc),
-       socialHistory: (data.socialHistory || []).sort(sortByDateDesc),
-       evaluationHistory: (data.evaluationHistory || []).sort(sortByDateDesc),
-       quizHistory: (data.quizHistory || []).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()),
-       redemptionHistory: (data.redemptionHistory || []).sort(sortByDateDesc),
-   };
-};
-
-export const saveDataToSheet = async (scriptUrl: string, type: string, payload: any, user: User): Promise<boolean> => {
-    if (!scriptUrl || !user || !scriptUrl.startsWith('http')) return false;
-    if (!user.username) {
-        console.error("Save Data Error: Username missing");
-        return false;
-    }
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
+        const payload = {
+            action: 'save', // CORRECTED ACTION NAME
+            type: type,
+            payload: data, // CORRECTED KEY: 'payload' instead of 'data'
+            user: user     // CORRECTED KEY: 'user' instead of 'userProfile'
+        };
+        await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'save', type, payload, user }),
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        }, 1, 10000);
+    } catch (error) {
+        console.error(`Save ${type} Error:`, error);
+    }
+};
+
+export const clearHistoryInSheet = async (scriptUrl: string, type: string, user: User) => {
+    try {
+        await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'clear', 
+                type, 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
-        const result = await response.json();
-        return result.status === 'success';
-    } catch (error: any) {
-        console.error("Save Data Error:", error);
-        return false;
-    }
-};
-
-export const clearHistoryInSheet = async (scriptUrl: string, type: string, user: User): Promise<boolean> => {
-    if (!scriptUrl || !user || !scriptUrl.startsWith('http')) return false;
-    if (!user.username) return false;
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'clear', type, user }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        const result = await response.json();
-        return result.status === 'success';
-    } catch (error: any) {
-        return false;
-    }
-};
-
-export const socialAuth = async (scriptUrl: string, profile: any): Promise<any> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'socialAuth', profile }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        return await response.json();
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
-};
-
-export const sendTestNotification = async (scriptUrl: string, user: User): Promise<any> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'sendTestLine', user }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        return await response.json();
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
-};
-
-export const sendTelegramTestNotification = async (scriptUrl: string, user: User): Promise<any> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return { success: false, message: 'Invalid URL' };
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'sendTestTelegram', user }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        return await response.json();
-    } catch (error: any) {
-        return { success: false, message: error.message };
+    } catch (error) {
+        console.error("Clear History Error:", error);
     }
 };
 
 export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: string): Promise<AllAdminData | null> => {
     if (!scriptUrl || !scriptUrl.startsWith('http')) return null;
     try {
-        // Increase timeout to 60s for heavy admin data load
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
             body: JSON.stringify({ action: 'getAllAdminData', adminKey }),
@@ -279,40 +137,33 @@ export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: st
     }
 };
 
-export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?: string): Promise<any> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) {
-        throw new Error("Invalid Web App URL");
-    }
-    
+export const getUserGroups = async (scriptUrl: string, user: User): Promise<HealthGroup[]> => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getLeaderboard', user: user || { username: 'guest' }, groupId }),
+            body: JSON.stringify({ 
+                action: 'getUserGroups', 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
-        
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            return result.data;
-        } else {
-            throw new Error(result.message || "API returned error status");
-        }
-    } catch (e: any) {
-        console.error("Fetch Leaderboard Error:", e);
-        throw e; 
+        const res = await response.json();
+        return res.status === 'success' ? res.data : [];
+    } catch (error) {
+        return [];
     }
 };
 
-// --- GROUP MANAGEMENT SERVICES ---
-
-export const createGroup = async (scriptUrl: string, user: User, groupData: any): Promise<any> => {
-    if (!scriptUrl || !user) return { success: false, message: 'Invalid config' };
+export const joinGroup = async (scriptUrl: string, user: User, code: string) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'createGroup', user, groupData }),
+            body: JSON.stringify({ 
+                action: 'joinGroup', 
+                code: code, 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
@@ -322,12 +173,15 @@ export const createGroup = async (scriptUrl: string, user: User, groupData: any)
     }
 };
 
-export const joinGroup = async (scriptUrl: string, user: User, code: string): Promise<any> => {
-    if (!scriptUrl || !user) return { success: false, message: 'Invalid config' };
+export const leaveGroup = async (scriptUrl: string, user: User, groupId: string) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'joinGroup', user, code }),
+            body: JSON.stringify({ 
+                action: 'leaveGroup', 
+                groupId,
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
@@ -337,74 +191,114 @@ export const joinGroup = async (scriptUrl: string, user: User, code: string): Pr
     }
 };
 
-export const getUserGroups = async (scriptUrl: string, user: User): Promise<any> => {
-    if (!scriptUrl || !user) return [];
+export const createGroup = async (scriptUrl: string, user: User, groupData: any) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getUserGroups', user }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        const res = await response.json();
-        return res.status === 'success' ? res.data : [];
-    } catch (error) { return []; }
-};
-
-export const getAdminGroups = async (scriptUrl: string, user: User): Promise<any> => {
-    if (!scriptUrl || !user) return [];
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'getAdminGroups', user }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        const res = await response.json();
-        return res.status === 'success' ? res.data : [];
-    } catch (error) { return []; }
-};
-
-export const leaveGroup = async (scriptUrl: string, user: User, groupId: string): Promise<any> => {
-    if (!scriptUrl || !user) return { status: 'error' };
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'leaveGroup', user, groupId }),
+            body: JSON.stringify({ 
+                action: 'createGroup', 
+                groupData, 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
         return await response.json();
-    } catch (error) { return { status: 'error' }; }
+    } catch (error: any) {
+        return { status: 'error', message: error.message };
+    }
 };
 
-export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: string): Promise<any[]> => {
-    if (!scriptUrl || !user) return [];
+export const getAdminGroups = async (scriptUrl: string, user: User) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getGroupMembers', user, groupId }),
+            body: JSON.stringify({ 
+                action: 'getAdminGroups', 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
         const res = await response.json();
         return res.status === 'success' ? res.data : [];
-    } catch (error) { return []; }
+    } catch (error) {
+        return [];
+    }
 };
 
-export const fetchUserDataByAdmin = async (scriptUrl: string, adminUser: User, targetUsername: string): Promise<AllData | null> => {
-    if (!scriptUrl || !adminUser) return null;
+export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: string) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getUserData', user: adminUser, targetUsername }),
+            body: JSON.stringify({ 
+                action: 'getGroupMembers', 
+                groupId, 
+                user: user 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
         const res = await response.json();
-        if(res.status === 'success') {
-            return parseUserData(res.data);
-        }
+        return res.status === 'success' ? res.data : [];
+    } catch (error) {
+        return [];
+    }
+};
+
+export const fetchUserDataByAdmin = async (scriptUrl: string, user: User, targetUsername: string) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'getUserData', 
+                targetUsername, 
+                user: user 
+            }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : null;
+    } catch (error) {
         return null;
-    } catch (error) { return null; }
+    }
+};
+
+export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?: string) => {
+    try {
+        const payload: any = { action: 'getLeaderboard' };
+        if (user) {
+            payload.user = user; 
+            payload.username = user.username;
+        }
+        if (groupId) payload.groupId = groupId;
+
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : null;
+    } catch (error) {
+        return null;
+    }
+};
+
+export const sendTestNotification = async (scriptUrl: string, user: User) => {
+    try {
+        await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'testNotification', 
+                user: user 
+            }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            redirect: 'follow'
+        });
+    } catch (error) {
+        console.error(error);
+    }
 };

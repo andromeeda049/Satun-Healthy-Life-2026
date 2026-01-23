@@ -30,40 +30,6 @@ export const DEFAULT_ORGANIZATIONS = [
 // ใช้ DEFAULT_ORGANIZATIONS เสมอ (Hardcoded mode)
 export const ORGANIZATIONS = DEFAULT_ORGANIZATIONS;
 
-// Access Tokens for Admin Login
-export const ADMIN_CREDENTIALS: { [key: string]: string } = {
-    // Super Admin (View All)
-    "ADMIN1234!": "all",
-    "ADMIN@SUPER": "all",
-
-    // Provincial Health Office
-    "PHO@SATUN": "pho_satun",
-    "ADMIN@PHO": "pho_satun",
-
-    // Hospitals (รพ.)
-    "HOSP@SATUN": "hosp_satun",
-    "ADMIN@HOSP_SATUN": "hosp_satun",
-    "ADMIN@HOSP_KHUANDON": "hosp_khuandon",
-    "ADMIN@HOSP_LANGU": "hosp_la-ngu",
-    "ADMIN@HOSP_THUNGWA": "hosp_thungwa",
-    "ADMIN@HOSP_MANANG": "hosp_manang",
-    "ADMIN@HOSP_KK": "hosp_khuan-kalong",
-    "ADMIN@HOSP_TP": "hosp_tha-phae",
-
-    // District Health Offices (สสอ.)
-    "DHO@MUANG": "dho_muang",
-    "ADMIN@DHO_MUANG": "dho_muang",
-    "ADMIN@DHO_KHUANDON": "dho_khuandon",
-    "ADMIN@DHO_LANGU": "dho_la-ngu",
-    "ADMIN@DHO_THUNGWA": "dho_thungwa",
-    "ADMIN@DHO_MANANG": "dho_manang",
-    "ADMIN@DHO_KK": "dho_khuan-kalong",
-    "ADMIN@DHO_TP": "dho_tha-phae",
-
-    // General
-    "ADMIN@GENERAL": "general"
-};
-
 export const ACTIVITY_LEVELS = [
   { label: 'ไม่ออกกำลังกายเลย', value: 1.2 },
   { label: 'ออกกำลังกายเบาๆ (1-3 วัน/สัปดาห์)', value: 1.375 },
@@ -122,12 +88,72 @@ export const LIFESTYLE_GOALS = [
 ];
 
 export const SPECIALIST_TEAM = [
-    { id: 'general', name: 'โค้ชสุขภาพ AI', role: 'General Wellness', color: 'amber', icon: React.createElement(SparklesIcon, {}) },
-    { id: 'nutritionist', name: 'นักโภชนาการ', role: 'Diet & Nutrition', color: 'emerald', icon: React.createElement(BeakerIcon, {}) },
-    { id: 'trainer', name: 'เทรนเนอร์', role: 'Physical Activity', color: 'orange', icon: React.createElement(BoltIcon, {}) },
-    { id: 'psychologist', name: 'นักจิตวิทยา', role: 'Stress & Mind', color: 'purple', icon: React.createElement(BrainIcon, {}) },
-    { id: 'sleep_expert', name: 'ผู้เชี่ยวชาญการนอน', role: 'Sleep Quality', color: 'indigo', icon: React.createElement(MoonIcon, {}) },
-    { id: 'ncd_doctor', name: 'ผู้เชี่ยวชาญ NCDs', role: 'Disease Management', color: 'rose', icon: React.createElement(StethoscopeIcon, {}) },
+    { 
+        id: 'general', 
+        name: 'โค้ชสุขภาพ AI', 
+        role: 'General Wellness', 
+        color: 'amber', 
+        icon: React.createElement(SparklesIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/4712/4712027.png',
+        description: 'ผู้ช่วยดูแลภาพรวมสุขภาพ ให้กำลังใจ และแนะนำการเริ่มต้นปรับพฤติกรรมง่ายๆ',
+        personality: 'เป็นกันเอง, ให้กำลังใจ, เข้าใจง่าย, เน้นภาพรวม',
+        topics: ['เริ่มต้นดูแลตัวเอง', 'ขาดแรงบันดาลใจ', 'ปรับพฤติกรรมพื้นฐาน', 'สรุปภาพรวมสุขภาพ']
+    },
+    { 
+        id: 'nutritionist', 
+        name: 'นักโภชนาการ', 
+        role: 'Diet & Nutrition', 
+        color: 'emerald', 
+        icon: React.createElement(BeakerIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/2921/2921855.png',
+        description: 'ผู้เชี่ยวชาญด้านอาหาร วิเคราะห์แคลอรี่ สารอาหาร และแนะนำเมนูที่เหมาะสมกับโรค',
+        personality: 'ละเอียด, อ้างอิงหลักการ, เน้นโภชนาการ, ให้สูตรอาหารได้',
+        topics: ['ลดน้ำหนัก', 'คุมน้ำตาล/เบาหวาน', 'เมนูอาหารคลีน', 'คำนวณแคลอรี่', 'แพ้อาหาร']
+    },
+    { 
+        id: 'trainer', 
+        name: 'เทรนเนอร์', 
+        role: 'Physical Activity', 
+        color: 'orange', 
+        icon: React.createElement(BoltIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/3048/3048122.png',
+        description: 'โค้ชออกกำลังกาย แนะนำท่าบริหาร ตารางฝึกซ้อม และการเผาผลาญไขมัน',
+        personality: 'กระตือรือร้น, พลังงานสูง, เน้นปฏิบัติ, ตรงไปตรงมา',
+        topics: ['สร้างกล้ามเนื้อ', 'ลดพุง/ลดไขมัน', 'ออกกำลังกายที่บ้าน', 'แก้ปวดเมื่อย/ออฟฟิศซินโดรม']
+    },
+    { 
+        id: 'psychologist', 
+        name: 'นักจิตวิทยา', 
+        role: 'Stress & Mind', 
+        color: 'purple', 
+        icon: React.createElement(BrainIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/4042/4042356.png',
+        description: 'ที่ปรึกษาด้านจิตใจ ช่วยจัดการความเครียด ฝึกสติ และสร้างพลังบวก',
+        personality: 'อบอุ่น, รับฟัง, นุ่มนวล, เน้นความเข้าใจอารมณ์',
+        topics: ['เครียดจากการงาน', 'หมดไฟ (Burnout)', 'ฝึกสมาธิ/Mindfulness', 'จัดการอารมณ์ลบ']
+    },
+    { 
+        id: 'sleep_expert', 
+        name: 'ผู้เชี่ยวชาญการนอน', 
+        role: 'Sleep Quality', 
+        color: 'indigo', 
+        icon: React.createElement(MoonIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/2382/2382461.png',
+        description: 'ผู้เชี่ยวชาญด้านเวชศาสตร์การนอนหลับ แนะนำสุขลักษณะการนอน (Sleep Hygiene)',
+        personality: 'สุขุม, ผ่อนคลาย, วิเคราะห์เชิงลึก, เน้นการพักผ่อน',
+        topics: ['นอนไม่หลับ', 'ตื่นกลางดึก', 'ง่วงนอนระหว่างวัน', 'จัดห้องนอน', 'ปรับนาฬิกาชีวิต']
+    },
+    { 
+        id: 'ncd_doctor', 
+        name: 'ผู้เชี่ยวชาญ NCDs', 
+        role: 'Disease Management', 
+        color: 'rose', 
+        icon: React.createElement(StethoscopeIcon, {}),
+        image: 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png',
+        description: 'แพทย์ผู้ดูแลโรคไม่ติดต่อเรื้อรัง ให้คำแนะนำการปฏิบัติตัวควบคู่การรักษา',
+        personality: 'เป็นทางการ, น่าเชื่อถือ, ห่วงใย, เน้นข้อมูลทางการแพทย์',
+        topics: ['คุมความดันโลหิต', 'ค่าเลือด/ไขมัน', 'การทานยา', 'ลดความเสี่ยงโรคหัวใจ']
+    },
 ];
 
 export const PILLAR_LABELS = {

@@ -3,9 +3,9 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { User } from '../types';
 import { LineIcon, LockIcon, ArrowLeftIcon, ExclamationTriangleIcon } from './icons';
-import { socialAuth } from '../services/googleSheetService';
+import { socialAuth, adminLogin } from '../services/googleSheetService';
 import liff from '@line/liff';
-import { APP_LOGO_URL, ADMIN_CREDENTIALS } from '../constants';
+import { APP_LOGO_URL } from '../constants';
 
 const LINE_LIFF_ID = "2008705690-V5wrjpTX";
 
@@ -101,18 +101,34 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
         }
     };
 
-    const handleAdminLogin = (e: React.FormEvent) => {
+    const handleAdminLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-        setStatusText('กำลังตรวจสอบสิทธิ์...');
-        setTimeout(() => {
-            const targetOrgId = ADMIN_CREDENTIALS[password];
-            if (targetOrgId) {
-                const orgName = (organizations || []).find(o => o.id === targetOrgId)?.name || 'Admin';
-                onLogin({ username: `admin_${targetOrgId}`, displayName: `Admin: ${orgName}`, profilePicture: '🛡️', role: 'admin', organization: targetOrgId, authProvider: 'email' });
-            } else { setError('รหัสผ่านไม่ถูกต้อง'); setLoading(false); }
-        }, 800);
+        setStatusText('กำลังตรวจสอบสิทธิ์กับ Server...');
+        
+        try {
+            if (!scriptUrl) throw new Error("ไม่พบ URL ของระบบ");
+            
+            const res = await adminLogin(scriptUrl, password);
+            
+            if (res.status === 'success' && res.data) {
+                const adminUser = res.data;
+                // Store password temporarily in user session for data fetching
+                onLogin({ 
+                    ...adminUser, 
+                    authProvider: 'email',
+                    adminSecret: password 
+                });
+            } else {
+                setError(res.message || 'รหัสผ่านไม่ถูกต้อง');
+            }
+        } catch (err: any) {
+            console.error(err);
+            setError('การเชื่อมต่อล้มเหลว: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading) return <div className="py-12 flex flex-col items-center gap-4"><div className="w-10 h-10 border-2 border-teal-500 border-t-transparent rounded-full animate-spin"></div><p className="text-gray-500 text-sm font-medium animate-pulse">{statusText}</p></div>;
@@ -169,7 +185,9 @@ const UserAuth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
                             <label className="text-xs font-semibold text-gray-500 uppercase tracking-widest ml-1">Admin Access Token</label>
                             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl font-semibold focus:ring-2 focus:ring-teal-500 outline-none" placeholder="Enter password..." required />
                         </div>
-                        <button type="submit" className="w-full py-4 bg-teal-600 text-white font-semibold rounded-2xl shadow-lg active:scale-[0.98] transition-all">ยืนยันสิทธิ์เข้าใช้งาน</button>
+                        <button type="submit" disabled={loading} className="w-full py-4 bg-teal-600 text-white font-semibold rounded-2xl shadow-lg active:scale-[0.98] transition-all disabled:opacity-50">
+                            {loading ? 'กำลังตรวจสอบ...' : 'ยืนยันสิทธิ์เข้าใช้งาน'}
+                        </button>
                     </form>
                     {error && <p className="text-xs text-red-500 font-semibold text-center">{error}</p>}
                 </div>

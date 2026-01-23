@@ -1,6 +1,6 @@
 
 import React, { useState, useContext, useMemo, useEffect } from 'react';
-import { UserGroupIcon, SearchIcon, XIcon, BoltIcon, CogIcon } from './icons';
+import { UserGroupIcon, SearchIcon, XIcon, BoltIcon, CogIcon, ArrowLeftIcon } from './icons';
 import { AppContext } from '../context/AppContext';
 
 interface OrganizationModalProps {
@@ -37,95 +37,95 @@ const OrganizationModal: React.FC<OrganizationModalProps> = ({ onSelect, onClose
     const handleSaveUrl = () => {
         setScriptUrl(tempUrl);
         setShowConfig(false);
-        // Just save local state, no validation ping to avoid errors
         alert("URL ถูกบันทึกเรียบร้อย");
     };
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col relative animate-bounce-in max-h-[85vh]">
+        <div className="fixed inset-0 z-[200] bg-white dark:bg-gray-900 overflow-y-auto animate-fade-in flex flex-col">
+            <div className="w-full max-w-2xl mx-auto flex-1 flex flex-col bg-white dark:bg-gray-900 shadow-none md:shadow-xl min-h-screen">
                 
-                {onClose && (
-                    <button 
-                        onClick={onClose}
-                        className="absolute top-4 right-4 z-10 p-1 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors"
-                    >
-                        <XIcon className="w-5 h-5" />
-                    </button>
-                )}
-
-                {!onClose && (
-                    <button 
-                        onClick={() => setShowConfig(!showConfig)}
-                        className="absolute top-4 right-4 z-10 p-1 bg-white/20 hover:bg-white/30 rounded-full text-white transition-colors"
-                        title="ตั้งค่า URL ฐานข้อมูล"
-                    >
-                        <CogIcon className="w-5 h-5" />
-                    </button>
-                )}
-
-                {/* Header */}
-                <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 text-white text-center flex-shrink-0 transition-all">
-                    <div className="flex justify-center mb-3">
-                        <div className="bg-white/20 p-3 rounded-full">
-                            <UserGroupIcon className="w-8 h-8" />
+                {/* Navigation Bar (Sticky Top) */}
+                <div className="sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-3 flex justify-between items-center shadow-sm">
+                    {onClose ? (
+                        <button 
+                            onClick={onClose}
+                            className="flex items-center gap-2 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors"
+                        >
+                            <ArrowLeftIcon className="w-5 h-5" />
+                            <span className="font-bold text-sm">ย้อนกลับ</span>
+                        </button>
+                    ) : (
+                        <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-bold">
+                            <UserGroupIcon className="w-5 h-5" />
+                            <span className="text-sm">Satun Healthy Life</span>
                         </div>
-                    </div>
-                    <h2 className="text-xl font-bold">ระบุหน่วยงานของคุณ</h2>
-                    <p className="text-teal-100 text-sm mt-1">เพื่อให้เราดูแลคุณได้อย่างทั่วถึง</p>
+                    )}
+
+                    {!onClose && (
+                        <button 
+                            onClick={() => setShowConfig(!showConfig)}
+                            className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500 hover:text-gray-800 dark:text-gray-400 transition-colors"
+                            title="ตั้งค่า URL"
+                        >
+                            <CogIcon className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
 
-                {/* Config Mode Overlay */}
+                {/* Hero / Header Section */}
+                <div className="bg-gradient-to-br from-teal-600 to-emerald-600 p-8 text-white text-center shrink-0">
+                    <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm shadow-lg">
+                        <UserGroupIcon className="w-8 h-8 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-bold mb-2 tracking-tight">ระบุหน่วยงานของคุณ</h2>
+                    <p className="text-teal-100 text-sm font-medium">เลือกโรงพยาบาลหรือหน่วยงานที่ท่านสังกัด <br/>เพื่อให้เราดูแลข้อมูลสุขภาพได้อย่างถูกต้อง</p>
+                </div>
+
+                {/* Config Section (Hidden by default) */}
                 {showConfig && (
-                    <div className="p-6 bg-slate-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 animate-slide-up">
-                        <label className="block text-xs font-bold text-gray-500 mb-2">Google Apps Script Web App URL (สำหรับการบันทึกข้อมูล)</label>
+                    <div className="p-6 bg-slate-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 animate-slide-up">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Google Apps Script Web App URL</label>
                         <input 
                             type="text" 
                             value={tempUrl}
                             onChange={(e) => setTempUrl(e.target.value)}
-                            className="w-full p-2 border border-blue-300 rounded-lg text-xs font-mono mb-2 focus:ring-2 focus:ring-blue-500 outline-none text-gray-700"
-                            placeholder="https://script.google.com/macros/s/..."
+                            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-xl text-sm font-mono mb-3 focus:ring-2 focus:ring-teal-500 outline-none text-gray-700 dark:text-white dark:bg-gray-700"
+                            placeholder="https://script.google.com/..."
                         />
-                        <button onClick={handleSaveUrl} className="w-full py-2 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-blue-700">
-                            บันทึก URL
+                        <button onClick={handleSaveUrl} className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md hover:bg-blue-700 transition-colors">
+                            บันทึกการตั้งค่า
                         </button>
                     </div>
                 )}
 
-                {/* Search & Content */}
-                <div className="p-6 space-y-4 flex-1 flex flex-col min-h-0">
-                    <p className="text-gray-600 dark:text-gray-300 text-sm text-center">
-                        ค้นหาและเลือกหน่วยงาน/โรงพยาบาลที่คุณสังกัด <br/>เพื่อการรวบรวมข้อมูลสุขภาพที่แม่นยำ
-                    </p>
-
-                    {/* Search Box */}
-                    <div className="relative">
+                {/* Search & List Section */}
+                <div className="p-4 flex-1 flex flex-col">
+                    <div className="relative mb-4 sticky top-[60px] z-10">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <SearchIcon className="h-5 w-5 text-gray-400" />
                         </div>
                         <input
                             type="text"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-white dark:bg-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 sm:text-sm text-gray-900 dark:text-white"
+                            className="block w-full pl-10 pr-4 py-3 border-2 border-gray-100 dark:border-gray-700 rounded-xl leading-5 bg-white dark:bg-gray-800 placeholder-gray-400 focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-500/20 sm:text-sm text-gray-900 dark:text-white shadow-sm transition-all"
                             placeholder="พิมพ์ชื่อโรงพยาบาล / หน่วยงาน..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            autoFocus={!showConfig}
                         />
                     </div>
 
-                    <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar flex-1 border rounded-xl p-2 dark:border-gray-700 min-h-[100px]">
+                    <div className="space-y-3 pb-24">
                         {filteredOrgs.length > 0 ? (
                             filteredOrgs.map((org) => (
                                 <label 
                                     key={org.id} 
-                                    className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                                    className={`flex items-center p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-[0.98] ${
                                         selectedOrg === org.id 
-                                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 shadow-md' 
-                                        : 'border-gray-200 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-700'
+                                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20 shadow-md ring-2 ring-teal-500/20' 
+                                        : 'border-gray-100 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-700 bg-white dark:bg-gray-800'
                                     }`}
                                 >
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mr-3 flex-shrink-0 ${selectedOrg === org.id ? 'border-teal-500' : 'border-gray-400'}`}>
-                                        {selectedOrg === org.id && <div className="w-2.5 h-2.5 rounded-full bg-teal-500" />}
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center mr-4 flex-shrink-0 transition-colors ${selectedOrg === org.id ? 'border-teal-500' : 'border-gray-300 dark:border-gray-500'}`}>
+                                        {selectedOrg === org.id && <div className="w-3 h-3 rounded-full bg-teal-500" />}
                                     </div>
                                     <input 
                                         type="radio" 
@@ -135,28 +135,35 @@ const OrganizationModal: React.FC<OrganizationModalProps> = ({ onSelect, onClose
                                         onChange={(e) => setSelectedOrg(e.target.value)}
                                         className="hidden"
                                     />
-                                    <span className={`text-sm font-bold ${selectedOrg === org.id ? 'text-teal-700 dark:text-teal-300' : 'text-gray-700 dark:text-gray-200'}`}>
+                                    <span className={`text-base font-bold ${selectedOrg === org.id ? 'text-teal-700 dark:text-teal-300' : 'text-gray-700 dark:text-gray-200'}`}>
                                         {org.name}
                                     </span>
                                 </label>
                             ))
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-full py-4 space-y-2">
-                                <p className="text-gray-500 text-sm">ไม่พบหน่วยงานที่ค้นหา</p>
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-3">
+                                    <SearchIcon className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <p className="text-gray-500 font-medium">ไม่พบหน่วยงานที่ค้นหา</p>
+                                <p className="text-xs text-gray-400 mt-1">ลองใช้คำค้นหาอื่น หรือเลือก "บุคคลทั่วไป"</p>
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex-shrink-0 flex items-center gap-3">
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!selectedOrg}
-                        className="flex-1 py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all transform active:scale-95"
-                    >
-                        ยืนยันการเลือก
-                    </button>
+                {/* Footer Action Bar (Sticky Bottom) */}
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 z-30 safe-area-bottom">
+                    <div className="max-w-2xl mx-auto">
+                        <button
+                            onClick={handleSubmit}
+                            disabled={!selectedOrg}
+                            className="w-full py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all transform active:scale-95 text-lg flex items-center justify-center gap-2"
+                        >
+                            <span>ยืนยันการเลือก</span>
+                            {selectedOrg && <span className="bg-white/20 px-2 py-0.5 rounded text-sm font-normal">({filteredOrgs.find(o => o.id === selectedOrg)?.name?.substring(0, 10)}...)</span>}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

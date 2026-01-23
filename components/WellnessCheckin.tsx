@@ -35,12 +35,22 @@ const WellnessCheckin: React.FC = () => {
     const isHabitDone = useMemo(() => habitHistory.some(h => isToday(h.date)), [habitHistory]);
     const isSocialDone = useMemo(() => socialHistory.some(h => isToday(h.date)), [socialHistory]);
 
+    // Check Weekly Limit for Summary (1 time/7 days)
     useEffect(() => {
         if (currentUser) {
-            const todayStr = new Date().toDateString();
-            const lastAnalyze = localStorage.getItem(`last_wellness_summary_${currentUser.username}`);
-            if (lastAnalyze === todayStr) {
-                setCanAnalyze(false);
+            const lastAnalyzeStr = localStorage.getItem(`last_wellness_summary_${currentUser.username}`);
+            if (lastAnalyzeStr) {
+                const lastDate = new Date(lastAnalyzeStr);
+                const today = new Date();
+                
+                // Calculate difference in days
+                const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                
+                // If less than 7 days, disable
+                if (diffDays < 7) {
+                    setCanAnalyze(false);
+                }
             }
         }
     }, [currentUser]);
@@ -166,11 +176,14 @@ const WellnessCheckin: React.FC = () => {
               config: config
             });
             setAiAnalysis(response.text || "ไม่สามารถสรุปข้อมูลได้");
-            const todayStr = new Date().toDateString();
-            localStorage.setItem(`last_wellness_summary_${currentUser?.username}`, todayStr);
+            const now = new Date();
+            localStorage.setItem(`last_wellness_summary_${currentUser?.username}`, now.toISOString());
             setCanAnalyze(false);
             
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error(e); 
+            setAiAnalysis("ฟีเจอร์ AI ใช้งานแบบจำกัด กรุณารอสักครู่");
+        }
         finally { setAnalyzing(false); }
     };
 
@@ -466,13 +479,16 @@ const WellnessCheckin: React.FC = () => {
                             canAnalyze ? 'bg-white/20 hover:bg-white/30' : 'bg-gray-400/50 cursor-not-allowed'
                         }`}
                     >
-                        {analyzing ? 'กำลังวิเคราะห์...' : !canAnalyze ? 'สรุปผลแล้ววันนี้' : 'สรุปภาพรวมวันนี้'}
+                        {analyzing ? 'กำลังวิเคราะห์...' : !canAnalyze ? 'สรุปผลแล้ววันนี้' : 'สรุปภาพรวมสุขภาพ'}
                     </button>
                 </div>
                 {aiAnalysis && (
                     <div className="bg-white/10 p-4 rounded-xl border border-white/20 animate-fade-in whitespace-pre-line">
                         <p className="text-sm leading-relaxed font-medium">{aiAnalysis}</p>
                     </div>
+                )}
+                {!canAnalyze && !aiAnalysis && (
+                    <p className="text-xs text-white/70 italic text-center">สามารถขอสรุปผลได้สัปดาห์ละ 1 ครั้ง</p>
                 )}
             </div>
         </div>

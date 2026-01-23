@@ -1,11 +1,10 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { fetchAllAdminDataFromSheet, AllAdminData, createGroup, getAdminGroups, fetchGroupMembers, fetchUserDataByAdmin } from '../services/googleSheetService';
 import { ChartBarIcon, UserGroupIcon, FireIcon, ClipboardCheckIcon, UserCircleIcon, PrinterIcon, BeakerIcon, WaterDropIcon, BoltIcon, HeartIcon, LineIcon, ArrowLeftIcon, XIcon, ScaleIcon, StarIcon, TrophyIcon, BookOpenIcon, SquaresIcon, CameraIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon } from './icons';
 import { SATISFACTION_QUESTIONS, OUTCOME_QUESTIONS } from '../constants';
-
-const ADMIN_KEY = "ADMIN1234!"; 
 
 const Spinner: React.FC = () => (
     <div className="flex flex-col items-center justify-center gap-4 py-16">
@@ -14,18 +13,18 @@ const Spinner: React.FC = () => (
     </div>
 );
 
+// ... UserDetailModal, GroupDetailView, convertToCSV, DataTable, GroupManagementTab ...
+// (Keeping existing helper components exactly as they were, skipping for brevity in this XML block but they must be preserved in final file)
+
+// ... Re-insert helper components ...
 const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ userData, onClose }) => {
     if(!userData) return null;
-    
-    // Calculate simple stats from history
     const bmi = userData.bmiHistory.length > 0 ? userData.bmiHistory[0].value.toFixed(1) : '-';
     const tdee = userData.tdeeHistory.length > 0 ? Math.round(userData.tdeeHistory[0].value) : '-';
-
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
             <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col relative animate-bounce-in max-h-[90vh]">
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200"><XIcon className="w-5 h-5 text-gray-600" /></button>
-                
                 <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 text-white">
                     <div className="flex items-center gap-4">
                         {userData.profile?.profilePicture ? (
@@ -43,9 +42,7 @@ const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ use
                         </div>
                     </div>
                 </div>
-
                 <div className="p-6 overflow-y-auto space-y-6">
-                    {/* Basic Stats Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
                             <ScaleIcon className="w-5 h-5 text-blue-500 mx-auto mb-1" />
@@ -68,8 +65,6 @@ const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ use
                             <p className="font-bold text-xs dark:text-white truncate">{userData.profile?.healthCondition || '-'}</p>
                         </div>
                     </div>
-
-                    {/* Detailed Lists */}
                     <div>
                         <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2 border-b pb-1">ประวัติการบันทึกล่าสุด</h3>
                         <div className="space-y-2 text-sm">
@@ -97,7 +92,6 @@ const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ use
 };
 
 const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, onBack }) => {
-    // ... existing implementation ...
     const { scriptUrl, currentUser } = useContext(AppContext);
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -142,7 +136,6 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
             <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-gray-800 font-bold mb-4">
                 <ArrowLeftIcon className="w-5 h-5" /> กลับไปหน้ารวมกลุ่ม
             </button>
-
             <div className="bg-white dark:bg-gray-700 p-6 rounded-xl shadow-md border-l-4 border-teal-500 relative overflow-hidden">
                 <div className="relative z-10 flex items-start gap-4">
                     {group.image && (
@@ -157,10 +150,7 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
                     </div>
                 </div>
             </div>
-
-            {loading ? (
-                <Spinner />
-            ) : (
+            {loading ? <Spinner /> : (
                 <div className="bg-white dark:bg-gray-700 rounded-xl shadow-md overflow-hidden">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200 uppercase text-xs">
@@ -186,12 +176,7 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
                                     <td className="px-6 py-4 font-bold text-teal-600">{m.xp.toLocaleString()}</td>
                                     <td className="px-6 py-4 text-xs">{m.healthCondition}</td>
                                     <td className="px-6 py-4">
-                                        <button 
-                                            onClick={() => handleViewUser(m.username)}
-                                            className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100"
-                                        >
-                                            ดูรายงาน
-                                        </button>
+                                        <button onClick={() => handleViewUser(m.username)} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100">ดูรายงาน</button>
                                     </td>
                                 </tr>
                             ))}
@@ -200,7 +185,6 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
                     </table>
                 </div>
             )}
-
             {loadingUser && <div className="fixed inset-0 bg-black/50 z-[190] flex items-center justify-center"><Spinner /></div>}
             {selectedUser && <UserDetailModal userData={selectedUser} onClose={() => setSelectedUser(null)} />}
         </div>
@@ -208,7 +192,6 @@ const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, 
 };
 
 const convertToCSV = (objArray: any[]) => {
-    // ... existing implementation ...
     const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
     let str = '';
     let headers = Object.keys(array[0] || {}).join(',') + '\r\n';
@@ -233,13 +216,10 @@ const convertToCSV = (objArray: any[]) => {
 };
 
 const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }> = ({ data, title, allowExport }) => {
-    // ... existing implementation ...
     if (!data || data.length === 0) {
         return <p className="text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">ไม่มีข้อมูลในส่วน {title}</p>;
     }
-
     const headers = Object.keys(data[0]);
-
     const handleExport = () => {
         const csv = convertToCSV(data);
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -252,25 +232,19 @@ const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }>
         link.click();
         document.body.removeChild(link);
     };
-
     const renderCellContent = (header: string, value: any) => {
         if (header === 'profilePicture') {
-            if (String(value).startsWith('data:image/')) {
-                return <img src={String(value)} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-gray-200" />;
-            }
+            if (String(value).startsWith('data:image/')) return <img src={String(value)} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-gray-200" />;
             return <span className="text-2xl">{String(value)}</span>;
         }
         if (header === 'timestamp' || header === 'lastSeen' || header === 'date') {
             const date = new Date(value);
-             if (!isNaN(date.getTime())) {
-                return date.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-            }
+             if (!isNaN(date.getTime())) return date.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
         if (typeof value === 'object' && value !== null) return JSON.stringify(value).substring(0, 30) + '...';
         const stringValue = String(value);
         return stringValue.length > 50 ? stringValue.substring(0, 50) + '...' : stringValue;
     };
-
     return (
         <div>
             {allowExport && (
@@ -297,7 +271,6 @@ const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }>
 };
 
 const GroupManagementTab: React.FC = () => {
-    // ... existing implementation ...
     const { scriptUrl, currentUser } = useContext(AppContext);
     const [groups, setGroups] = useState<any[]>([]);
     const [newGroup, setNewGroup] = useState({ name: '', code: '', description: '', lineLink: '', image: '' });
@@ -346,22 +319,11 @@ const GroupManagementTab: React.FC = () => {
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><UserGroupIcon className="w-6 h-6 text-teal-600" /> สร้างกลุ่มสุขภาพใหม่ (Create Group)</h3>
                 <form onSubmit={handleCreate} className="space-y-4">
                     <div className="flex flex-col items-center mb-4">
-                        <div 
-                            onClick={() => imageInputRef.current?.click()}
-                            className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-500 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 overflow-hidden"
-                        >
-                            {newGroup.image ? (
-                                <img src={newGroup.image} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <>
-                                    <CameraIcon className="w-8 h-8 text-gray-400" />
-                                    <span className="text-[10px] text-gray-400 mt-1">รูปกลุ่ม</span>
-                                </>
-                            )}
+                        <div onClick={() => imageInputRef.current?.click()} className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-500 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 overflow-hidden">
+                            {newGroup.image ? <img src={newGroup.image} alt="Preview" className="w-full h-full object-cover" /> : <><CameraIcon className="w-8 h-8 text-gray-400" /><span className="text-[10px] text-gray-400 mt-1">รูปกลุ่ม</span></>}
                         </div>
                         <input type="file" ref={imageInputRef} onChange={handleImageChange} className="hidden" accept="image/*" />
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">ชื่อกลุ่ม *</label><input type="text" required value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="เช่น คลินิกเบาหวาน รุ่น 1" /></div>
                         <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">รหัสเข้ากลุ่ม (Access Code) *</label><input type="text" required value={newGroup.code} onChange={e => setNewGroup({...newGroup, code: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="เช่น DM001 (ต้องไม่ซ้ำ)" /></div>
@@ -423,7 +385,6 @@ const BarChart: React.FC<{ data: { label: string; value: number; color: string }
     </div>
 );
 
-// New Component for Mini Stats Grid (Min/Max/Avg)
 const StatGrid: React.FC<{ title: string; stats: { label: string; value: string }[], icon: React.ReactNode, color: string }> = ({ title, stats, icon, color }) => (
     <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
         <h4 className={`font-bold ${color} mb-4 text-sm uppercase flex items-center gap-2`}>
@@ -442,14 +403,11 @@ const StatGrid: React.FC<{ title: string; stats: { label: string; value: string 
 
 const AdminDashboard: React.FC = () => {
     const { scriptUrl, currentUser, organizations } = useContext(AppContext);
-    // ... existing states ...
     const [allData, setAllData] = useState<AllAdminData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'groups' | 'allUsers' | 'profiles' | 'evaluation'>('overview');
     const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>('all'); 
-    
-    // Date Range Filter States
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
     const [tempStartDate, setTempStartDate] = useState<string>('');
@@ -467,7 +425,7 @@ const AdminDashboard: React.FC = () => {
 
     useEffect(() => {
         if (activeTab === 'groups') {
-            setLoading(false); // Groups load their own data
+            setLoading(false);
             return; 
         }
         
@@ -477,14 +435,21 @@ const AdminDashboard: React.FC = () => {
                 setLoading(false);
                 return;
             }
+            if (!currentUser?.adminSecret) {
+                setError("กรุณาเข้าสู่ระบบใหม่เพื่อยืนยันสิทธิ์ Admin");
+                setLoading(false);
+                return;
+            }
+
             setLoading(true);
             setError(null);
             try {
-                const data = await fetchAllAdminDataFromSheet(scriptUrl, ADMIN_KEY);
+                // Use session admin key from currentUser
+                const data = await fetchAllAdminDataFromSheet(scriptUrl, currentUser.adminSecret);
                 if (data) {
                     setAllData(data);
                 } else {
-                    setError("ไม่สามารถดึงข้อมูลได้");
+                    setError("ไม่สามารถดึงข้อมูลได้ หรือรหัส Admin ไม่ถูกต้อง");
                 }
             } catch (err: any) {
                 setError(err.message || "เกิดข้อผิดพลาด");
@@ -493,18 +458,17 @@ const AdminDashboard: React.FC = () => {
             }
         };
         fetchData();
-    }, [scriptUrl, activeTab]);
+    }, [scriptUrl, activeTab, currentUser]);
     
-    // Helper function to filter data by date range
+    // ... rest of the component logic (filterByDate, useMemo hooks, renderContent, etc.) remains exactly the same ...
+    // Just re-copying the core logic structure to ensure valid file
+    
     const filterByDate = useCallback((data: any[], dateKey: string = 'timestamp') => {
         if (!startDate && !endDate) return data;
-        
         const start = startDate ? new Date(startDate) : new Date('2000-01-01');
         start.setHours(0, 0, 0, 0);
-        
         const end = endDate ? new Date(endDate) : new Date();
         end.setHours(23, 59, 59, 999);
-
         return data.filter(item => {
             if(!item) return false;
             const val = item[dateKey] || item.date; 
@@ -514,7 +478,6 @@ const AdminDashboard: React.FC = () => {
         });
     }, [startDate, endDate]);
 
-    // Apply Filter Handlers
     const applyDateFilter = () => {
         setIsFiltering(true);
         setTimeout(() => {
@@ -531,16 +494,12 @@ const AdminDashboard: React.FC = () => {
         setEndDate('');
     };
 
-    // --- Data Calculation Logic ---
     const userProfilesWithOrg = useMemo(() => {
         if (!allData?.profiles) return [];
         const uniqueProfilesMap = new Map();
         allData.profiles.forEach(p => {
             if (p.username) {
-                uniqueProfilesMap.set(p.username, {
-                    ...p,
-                    organization: p.organization || 'general'
-                });
+                uniqueProfilesMap.set(p.username, { ...p, organization: p.organization || 'general' });
             }
         });
         return Array.from(uniqueProfilesMap.values());
@@ -567,177 +526,82 @@ const AdminDashboard: React.FC = () => {
         return new Set(filteredUsers.map(u => u.username));
     }, [filteredUsers]);
 
-    // --- NEW: Detailed Statistics Calculation ---
     const detailedStats = useMemo(() => {
         if (!allData) return null;
+        const filterHistory = (data: any[], dateField = 'timestamp') => filterByDate(data.filter(item => filteredUsernames.has(item.username)), dateField);
 
-        // Helper to filter historical data by user filter (Org) AND date filter
-        const filterHistory = (data: any[], dateField = 'timestamp') => {
-            return filterByDate(
-                data.filter(item => filteredUsernames.has(item.username)), 
-                dateField
-            );
-        };
-
-        // 1. BMI Analysis (Pass/Fail) - Use LATEST BMI for each filtered user
-        // Pass: 18.5 - 22.9 (Asian Standard for Normal)
         const bmiRecords = filterHistory(allData.bmiHistory || []);
-        // Group by user to get latest
         const userLatestBMI = new Map<string, number>();
-        bmiRecords.forEach((r: any) => {
-            // Assuming data is chronological or we rely on last entry being latest
-            // Better: Check timestamps if available, but here assume append order
-            userLatestBMI.set(r.username, Number(r.bmi));
-        });
-        
+        bmiRecords.forEach((r: any) => userLatestBMI.set(r.username, Number(r.bmi)));
         let bmiPass = 0, bmiFail = 0, totalBMIUsers = 0;
-        userLatestBMI.forEach((bmi) => {
-            totalBMIUsers++;
-            if (bmi >= 18.5 && bmi <= 22.9) bmiPass++;
-            else bmiFail++;
-        });
+        userLatestBMI.forEach((bmi) => { totalBMIUsers++; if (bmi >= 18.5 && bmi <= 22.9) bmiPass++; else bmiFail++; });
         
-        // 2. Sleep Stats (Min/Max/Avg)
         const sleepRecords = filterHistory(allData.sleepHistory || []);
         let totalSleep = 0, minSleep = 24, maxSleep = 0, totalQuality = 0;
         const sleepCount = sleepRecords.length;
-        
         sleepRecords.forEach((s: any) => {
             const duration = Number(s.duration || 0);
-            const quality = Number(s.quality || 0);
             totalSleep += duration;
-            totalQuality += quality;
+            totalQuality += Number(s.quality || 0);
             if (duration < minSleep) minSleep = duration;
             if (duration > maxSleep) maxSleep = duration;
         });
 
-        // 3. Activity Steps (Min/Max/Avg)
         const activityRecords = filterHistory(allData.activityHistory || []);
-        const stepRecords = activityRecords
-            .map((a: any) => {
+        const stepRecords = activityRecords.map((a: any) => {
                 const match = String(a.name).match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
                 return match ? parseInt(match[1].replace(/,/g, ''), 10) : 0;
-            })
-            .filter((s: number) => s > 0);
-            
+            }).filter((s: number) => s > 0);
         let totalSteps = 0, minSteps = 100000, maxSteps = 0;
         const stepsCount = stepRecords.length;
-        stepRecords.forEach((s: number) => {
-            totalSteps += s;
-            if (s < minSteps) minSteps = s;
-            if (s > maxSteps) maxSteps = s;
-        });
+        stepRecords.forEach((s: number) => { totalSteps += s; if (s < minSteps) minSteps = s; if (s > maxSteps) maxSteps = s; });
 
-        // 4. Mood Distribution
         const moodRecords = filterHistory(allData.moodHistory || []);
         const moodCounts: Record<string, number> = {};
-        moodRecords.forEach((m: any) => {
-            const emoji = m.emoji || m.moodEmoji; // handle field name variation
-            if(emoji) moodCounts[emoji] = (moodCounts[emoji] || 0) + 1;
-        });
-        // Map emojis to labels
-        const moodMapping: Record<string, string> = {
-            '😊': 'มีความสุข', '🥰': 'เปี่ยมรัก', '😐': 'เฉยๆ', 
-            '😫': 'เหนื่อย', '😰': 'กังวล', '😡': 'โกรธ', '😢': 'เศร้า'
-        };
-        const moodStats = Object.keys(moodMapping).map(emoji => ({
-            label: moodMapping[emoji],
-            value: moodCounts[emoji] ? Math.round((moodCounts[emoji] / moodRecords.length) * 100) : 0,
-            color: 'bg-rose-400'
-        })).sort((a,b) => b.value - a.value);
+        moodRecords.forEach((m: any) => { const emoji = m.emoji || m.moodEmoji; if(emoji) moodCounts[emoji] = (moodCounts[emoji] || 0) + 1; });
+        const moodMapping: Record<string, string> = { '😊': 'มีความสุข', '🥰': 'เปี่ยมรัก', '😐': 'เฉยๆ', '😫': 'เหนื่อย', '😰': 'กังวล', '😡': 'โกรธ', '😢': 'เศร้า' };
+        const moodStats = Object.keys(moodMapping).map(emoji => ({ label: moodMapping[emoji], value: moodCounts[emoji] ? Math.round((moodCounts[emoji] / moodRecords.length) * 100) : 0, color: 'bg-rose-400' })).sort((a,b) => b.value - a.value);
 
-        // 5. Habits (Clean vs User)
         const habitRecords = filterHistory(allData.habitHistory || []);
         const cleanCount = habitRecords.filter((h: any) => String(h.isClean) === 'true').length;
         const userCount = habitRecords.length - cleanCount;
-        const habitStats = [
-            { label: 'ไม่ดื่ม/ไม่สูบ (Clean)', value: habitRecords.length ? Math.round((cleanCount/habitRecords.length)*100) : 0, color: 'bg-green-500' },
-            { label: 'ดื่ม/สูบ (User)', value: habitRecords.length ? Math.round((userCount/habitRecords.length)*100) : 0, color: 'bg-orange-500' }
-        ];
+        const habitStats = [ { label: 'ไม่ดื่ม/ไม่สูบ (Clean)', value: habitRecords.length ? Math.round((cleanCount/habitRecords.length)*100) : 0, color: 'bg-green-500' }, { label: 'ดื่ม/สูบ (User)', value: habitRecords.length ? Math.round((userCount/habitRecords.length)*100) : 0, color: 'bg-orange-500' } ];
 
-        // 6. Social Feeling
         const socialRecords = filterHistory(allData.socialHistory || []);
         const socialCounts: Record<string, number> = { 'energized': 0, 'neutral': 0, 'drained': 0 };
-        socialRecords.forEach((s: any) => {
-            const feel = s.feeling;
-            if(socialCounts[feel] !== undefined) socialCounts[feel]++;
-        });
-        const socialStats = [
-            { label: 'มีพลัง (Energized)', value: socialRecords.length ? Math.round((socialCounts['energized']/socialRecords.length)*100) : 0, color: 'bg-teal-500' },
-            { label: 'เฉยๆ (Neutral)', value: socialRecords.length ? Math.round((socialCounts['neutral']/socialRecords.length)*100) : 0, color: 'bg-gray-400' },
-            { label: 'เหนื่อย (Drained)', value: socialRecords.length ? Math.round((socialCounts['drained']/socialRecords.length)*100) : 0, color: 'bg-red-400' }
-        ];
+        socialRecords.forEach((s: any) => { if(socialCounts[s.feeling] !== undefined) socialCounts[s.feeling]++; });
+        const socialStats = [ { label: 'มีพลัง (Energized)', value: socialRecords.length ? Math.round((socialCounts['energized']/socialRecords.length)*100) : 0, color: 'bg-teal-500' }, { label: 'เฉยๆ (Neutral)', value: socialRecords.length ? Math.round((socialCounts['neutral']/socialRecords.length)*100) : 0, color: 'bg-gray-400' }, { label: 'เหนื่อย (Drained)', value: socialRecords.length ? Math.round((socialCounts['drained']/socialRecords.length)*100) : 0, color: 'bg-red-400' } ];
 
-        return {
-            bmi: { pass: totalBMIUsers ? Math.round((bmiPass/totalBMIUsers)*100) : 0, fail: totalBMIUsers ? Math.round((bmiFail/totalBMIUsers)*100) : 0 },
-            sleep: { min: sleepCount ? minSleep.toFixed(1) : '-', max: sleepCount ? maxSleep.toFixed(1) : '-', avg: sleepCount ? (totalSleep/sleepCount).toFixed(1) : '-', quality: sleepCount ? (totalQuality/sleepCount).toFixed(1) : '-' },
-            steps: { min: stepsCount ? minSteps.toLocaleString() : '-', max: stepsCount ? maxSteps.toLocaleString() : '-', avg: stepsCount ? Math.round(totalSteps/stepsCount).toLocaleString() : '-' },
-            moodStats,
-            habitStats,
-            socialStats
-        };
-
+        return { bmi: { pass: totalBMIUsers ? Math.round((bmiPass/totalBMIUsers)*100) : 0, fail: totalBMIUsers ? Math.round((bmiFail/totalBMIUsers)*100) : 0 }, sleep: { min: sleepCount ? minSleep.toFixed(1) : '-', max: sleepCount ? maxSleep.toFixed(1) : '-', avg: sleepCount ? (totalSleep/sleepCount).toFixed(1) : '-', quality: sleepCount ? (totalQuality/sleepCount).toFixed(1) : '-' }, steps: { min: stepsCount ? minSteps.toLocaleString() : '-', max: stepsCount ? maxSteps.toLocaleString() : '-', avg: stepsCount ? Math.round(totalSteps/stepsCount).toLocaleString() : '-' }, moodStats, habitStats, socialStats };
     }, [allData, filteredUsernames, filterByDate]);
 
-    // ... (Existing stats calculation) ...
     const stats = useMemo(() => {
         const totalUsers = filteredUsers.length;
         const maleCount = filteredUsers.filter(u => u.gender === 'male').length;
         const femaleCount = filteredUsers.filter(u => u.gender === 'female').length;
-        
         let totalAge = 0, ageCount = 0;
         let totalBMI = 0, bmiCount = 0;
         const userLatestBMI: Record<string, number> = {};
-
         if (allData?.bmiHistory) {
-            // Apply filteredUsernames check implicitly by iterating filteredUsers? No, logic is separated
-            // Re-filtering bmi history for this stat block to be safe
             const filteredBMI = (allData.bmiHistory || []).filter(r => filteredUsernames.has(r.username));
-            // Sort ascending to get latest last
             const sortedBMI = [...filteredBMI].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             sortedBMI.forEach(b => { userLatestBMI[b.username] = b.bmi; });
         }
-
-        filteredUsers.forEach(u => {
-            if (u.age && !isNaN(Number(u.age))) { totalAge += Number(u.age); ageCount++; }
-            if (userLatestBMI[u.username]) { totalBMI += userLatestBMI[u.username]; bmiCount++; }
-        });
-
+        filteredUsers.forEach(u => { if (u.age && !isNaN(Number(u.age))) { totalAge += Number(u.age); ageCount++; } if (userLatestBMI[u.username]) { totalBMI += userLatestBMI[u.username]; bmiCount++; } });
         const avgAge = ageCount > 0 ? (totalAge / ageCount).toFixed(1) : '-';
         const avgBMI = bmiCount > 0 ? (totalBMI / bmiCount).toFixed(1) : '-';
-
         const conditionCounts: Record<string, number> = {};
-        filteredUsers.forEach(u => {
-            const cond = u.healthCondition || 'ไม่ระบุ';
-            conditionCounts[cond] = (conditionCounts[cond] || 0) + 1;
-        });
-        const conditionStats = Object.entries(conditionCounts)
-            .map(([label, count]) => ({ label, value: Math.round((count / totalUsers) * 100) || 0, color: 'bg-rose-500' }))
-            .sort((a, b) => b.value - a.value).slice(0, 5); 
-
+        filteredUsers.forEach(u => { const cond = u.healthCondition || 'ไม่ระบุ'; conditionCounts[cond] = (conditionCounts[cond] || 0) + 1; });
+        const conditionStats = Object.entries(conditionCounts).map(([label, count]) => ({ label, value: Math.round((count / totalUsers) * 100) || 0, color: 'bg-rose-500' })).sort((a, b) => b.value - a.value).slice(0, 5); 
         const levelCounts: Record<string, number> = {};
-        filteredUsers.forEach(u => {
-            const lvl = u.level || 1;
-            const group = lvl >= 10 ? 'Lv.10+' : lvl >= 5 ? 'Lv.5-9' : 'Lv.1-4';
-            levelCounts[group] = (levelCounts[group] || 0) + 1;
-        });
-        const levelStats = [
-            { label: 'Lv.1-4 (Beginner)', value: Math.round((levelCounts['Lv.1-4'] || 0) / totalUsers * 100) || 0, color: 'bg-gray-400' },
-            { label: 'Lv.5-9 (Intermediate)', value: Math.round((levelCounts['Lv.5-9'] || 0) / totalUsers * 100) || 0, color: 'bg-yellow-400' },
-            { label: 'Lv.10+ (Expert)', value: Math.round((levelCounts['Lv.10+'] || 0) / totalUsers * 100) || 0, color: 'bg-purple-500' },
-        ];
-
+        filteredUsers.forEach(u => { const lvl = u.level || 1; const group = lvl >= 10 ? 'Lv.10+' : lvl >= 5 ? 'Lv.5-9' : 'Lv.1-4'; levelCounts[group] = (levelCounts[group] || 0) + 1; });
+        const levelStats = [ { label: 'Lv.1-4 (Beginner)', value: Math.round((levelCounts['Lv.1-4'] || 0) / totalUsers * 100) || 0, color: 'bg-gray-400' }, { label: 'Lv.5-9 (Intermediate)', value: Math.round((levelCounts['Lv.5-9'] || 0) / totalUsers * 100) || 0, color: 'bg-yellow-400' }, { label: 'Lv.10+ (Expert)', value: Math.round((levelCounts['Lv.10+'] || 0) / totalUsers * 100) || 0, color: 'bg-purple-500' }, ];
         const totalAdmins = allData?.profiles ? allData.profiles.filter(p => String(p.role).toLowerCase() === 'admin').length : 0;
         const totalOrgs = organizations?.length || 0;
         const totalGroups = allData?.['Groups']?.length || 0; 
-
-        return { 
-            totalUsers, malePercent: Math.round((maleCount/totalUsers)*100)||0, femalePercent: Math.round((femaleCount/totalUsers)*100)||0,
-            avgAge, avgBMI, conditionStats, levelStats, totalAdmins, totalOrgs, totalGroups
-        };
+        return { totalUsers, malePercent: Math.round((maleCount/totalUsers)*100)||0, femalePercent: Math.round((femaleCount/totalUsers)*100)||0, avgAge, avgBMI, conditionStats, levelStats, totalAdmins, totalOrgs, totalGroups };
     }, [filteredUsers, allData, organizations, filteredUsernames]);
 
-    // ... (evalStats, quizStats existing code) ...
     const evalStats = useMemo(() => {
         if (!allData?.evaluationHistory) return { satisfaction: [], outcomes: [] };
         let filteredEvals = allData.evaluationHistory.filter(e => filteredUsernames.has(e.username));
@@ -769,7 +633,6 @@ const AdminDashboard: React.FC = () => {
         return { prePass: calcPass(preTests), postPass: calcPass(postTests) };
     }, [allData, filteredUsernames, filterByDate]);
 
-    // --- Tab Render Logic ---
     const renderContent = () => {
         if (activeTab === 'groups') return <GroupManagementTab />;
         if (loading) return <Spinner />;
@@ -779,15 +642,12 @@ const AdminDashboard: React.FC = () => {
         if (activeTab === 'overview') {
              return (
                  <div className="space-y-6 animate-fade-in">
-                     {/* Row 1: Key Metrics */}
                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                          <OverviewStatCard title="ผู้ใช้งาน (ตามช่วงเวลา)" value={stats.totalUsers.toLocaleString()} subValue="Registered in Period" icon={<UserGroupIcon className="w-6 h-6 text-blue-500"/>} colorClass="bg-blue-500 text-blue-500"/>
                          <OverviewStatCard title="อายุเฉลี่ย" value={stats.avgAge} subValue="ปี (Years)" icon={<UserCircleIcon className="w-6 h-6 text-teal-500"/>} colorClass="bg-teal-500 text-teal-500"/>
                          <OverviewStatCard title="BMI เฉลี่ย" value={stats.avgBMI} subValue="kg/m²" icon={<ScaleIcon className="w-6 h-6 text-orange-500"/>} colorClass="bg-orange-500 text-orange-500"/>
                          {isSuperAdmin && <OverviewStatCard title="องค์กร/กลุ่ม" value={`${stats.totalOrgs} / ${stats.totalGroups}`} subValue="Org / Groups" icon={<SquaresIcon className="w-6 h-6 text-purple-500"/>} colorClass="bg-purple-500 text-purple-500"/>}
                      </div>
-
-                     {/* Section: BMI & Physical Health */}
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                          <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
                              <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><ScaleIcon className="w-4 h-4"/> สัดส่วน BMI (Pass Criteria)</h4>
@@ -808,41 +668,17 @@ const AdminDashboard: React.FC = () => {
                          </div>
                          <BarChart title="โรคประจำตัว / ความเสี่ยง (Top 5)" data={stats.conditionStats} />
                      </div>
-
-                     {/* Section: Sleep & Activity Metrics */}
                      {detailedStats && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <StatGrid 
-                                title="การนอนหลับ (Sleep)" 
-                                icon={<MoonIcon className="w-4 h-4" />}
-                                color="text-indigo-600 dark:text-indigo-400"
-                                stats={[
-                                    { label: 'สูงสุด (ชม.)', value: detailedStats.sleep.max },
-                                    { label: 'เฉลี่ย (ชม.)', value: detailedStats.sleep.avg },
-                                    { label: 'คุณภาพเฉลี่ย (เต็ม 5)', value: detailedStats.sleep.quality },
-                                ]}
-                            />
-                            <StatGrid 
-                                title="ก้าวเดิน (Steps)" 
-                                icon={<BoltIcon className="w-4 h-4" />}
-                                color="text-yellow-600 dark:text-yellow-400"
-                                stats={[
-                                    { label: 'สูงสุด (ก้าว)', value: detailedStats.steps.max },
-                                    { label: 'น้อยสุด (ก้าว)', value: detailedStats.steps.min },
-                                    { label: 'เฉลี่ย (ก้าว)', value: detailedStats.steps.avg },
-                                ]}
-                            />
+                            <StatGrid title="การนอนหลับ (Sleep)" icon={<MoonIcon className="w-4 h-4" />} color="text-indigo-600 dark:text-indigo-400" stats={[{ label: 'สูงสุด (ชม.)', value: detailedStats.sleep.max }, { label: 'เฉลี่ย (ชม.)', value: detailedStats.sleep.avg }, { label: 'คุณภาพเฉลี่ย (เต็ม 5)', value: detailedStats.sleep.quality }]} />
+                            <StatGrid title="ก้าวเดิน (Steps)" icon={<BoltIcon className="w-4 h-4" />} color="text-yellow-600 dark:text-yellow-400" stats={[{ label: 'สูงสุด (ก้าว)', value: detailedStats.steps.max }, { label: 'น้อยสุด (ก้าว)', value: detailedStats.steps.min }, { label: 'เฉลี่ย (ก้าว)', value: detailedStats.steps.avg }]} />
                         </div>
                      )}
-
-                     {/* Section: Mental & Social */}
                      {detailedStats && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <BarChart title="ความรู้สึก (Mood)" data={detailedStats.moodStats} />
                             <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                                <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2">
-                                    <NoSymbolIcon className="w-4 h-4" /> พฤติกรรมเสี่ยง
-                                </h4>
+                                <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><NoSymbolIcon className="w-4 h-4" /> พฤติกรรมเสี่ยง</h4>
                                 <div className="space-y-4 pt-2">
                                     {detailedStats.habitStats.map((item, idx) => (
                                         <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
@@ -855,19 +691,11 @@ const AdminDashboard: React.FC = () => {
                             <BarChart title="ความรู้สึกทางสังคม" data={detailedStats.socialStats} />
                         </div>
                      )}
-
-                     {/* Section: Quiz Results */}
                      <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
                          <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><BookOpenIcon className="w-4 h-4"/> ผลการทดสอบความรู้ (Health Literacy)</h4>
                          <div className="grid grid-cols-2 gap-4 mt-4">
-                             <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center">
-                                 <p className="text-xs text-orange-600 dark:text-orange-300 font-bold mb-1">Pre-Test Pass Rate</p>
-                                 <p className="text-3xl font-black text-orange-600 dark:text-orange-400">{quizStats.prePass}%</p>
-                             </div>
-                             <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl text-center">
-                                 <p className="text-xs text-green-600 dark:text-green-300 font-bold mb-1">Post-Test Pass Rate</p>
-                                 <p className="text-3xl font-black text-green-600 dark:text-green-400">{quizStats.postPass}%</p>
-                             </div>
+                             <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center"><p className="text-xs text-orange-600 dark:text-orange-300 font-bold mb-1">Pre-Test Pass Rate</p><p className="text-3xl font-black text-orange-600 dark:text-orange-400">{quizStats.prePass}%</p></div>
+                             <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl text-center"><p className="text-xs text-green-600 dark:text-green-300 font-bold mb-1">Post-Test Pass Rate</p><p className="text-3xl font-black text-green-600 dark:text-green-400">{quizStats.postPass}%</p></div>
                          </div>
                          <p className="text-[10px] text-gray-400 text-center mt-3">*เกณฑ์ผ่าน 60%</p>
                      </div>
@@ -875,7 +703,6 @@ const AdminDashboard: React.FC = () => {
              );
         }
 
-        // ... existing return blocks for other tabs ...
         if (activeTab === 'evaluation') {
             return (
                 <div className="space-y-6 animate-fade-in">
@@ -883,43 +710,16 @@ const AdminDashboard: React.FC = () => {
                         <h3 className="text-xl font-bold flex items-center gap-2"><ClipboardCheckIcon className="w-6 h-6"/> รายงานผลการประเมินแอปพลิเคชัน</h3>
                         <p className="text-indigo-100 text-sm mt-1">สรุปความพึงพอใจและผลลัพธ์การปรับเปลี่ยนพฤติกรรม</p>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm">
                             <h4 className="font-bold text-gray-800 dark:text-white mb-4 text-sm border-b pb-2 dark:border-gray-600">คะแนนความพึงพอใจเฉลี่ย (เต็ม 5)</h4>
-                            <div className="space-y-4">
-                                {evalStats.satisfaction.map((item, idx) => (
-                                    <div key={idx}>
-                                        <div className="flex justify-between text-xs mb-1">
-                                            <span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span>
-                                            <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.value}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                            <div className="bg-indigo-500 h-2 rounded-full" style={{width: `${(Number(item.value)/5)*100}%`}}></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <div className="space-y-4">{evalStats.satisfaction.map((item, idx) => (<div key={idx}><div className="flex justify-between text-xs mb-1"><span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span><span className="font-bold text-indigo-600 dark:text-indigo-400">{item.value}</span></div><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className="bg-indigo-500 h-2 rounded-full" style={{width: `${(Number(item.value)/5)*100}%`}}></div></div></div>))}</div>
                         </div>
-
                         <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm">
                             <h4 className="font-bold text-gray-800 dark:text-white mb-4 text-sm border-b pb-2 dark:border-gray-600">ผลลัพธ์สุขภาพ (% ผู้ตอบว่า "ดีขึ้น")</h4>
-                            <div className="space-y-4">
-                                {evalStats.outcomes.map((item, idx) => (
-                                    <div key={idx}>
-                                        <div className="flex justify-between text-xs mb-1">
-                                            <span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span>
-                                            <span className="font-bold text-green-600 dark:text-green-400">{item.value}%</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                            <div className="bg-green-500 h-2 rounded-full" style={{width: `${item.value}%`}}></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <div className="space-y-4">{evalStats.outcomes.map((item, idx) => (<div key={idx}><div className="flex justify-between text-xs mb-1"><span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span><span className="font-bold text-green-600 dark:text-green-400">{item.value}%</span></div><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className="bg-green-500 h-2 rounded-full" style={{width: `${item.value}%`}}></div></div></div>))}</div>
                         </div>
                     </div>
-                    
                     <DataTable data={allData.evaluationHistory || []} title="ข้อมูลดิบแบบประเมิน (Raw Data)" allowExport={true} />
                 </div>
             );
@@ -933,7 +733,6 @@ const AdminDashboard: React.FC = () => {
         return <DataTable data={activeTabData?.data || []} title={activeTabData?.label || ''} allowExport={true} />;
     };
 
-    // ... existing return ...
     const tabs = [
         { id: 'overview', label: 'ภาพรวม (Overview)' },
         { id: 'groups', label: 'จัดการกลุ่ม (Groups)' },
@@ -954,89 +753,33 @@ const AdminDashboard: React.FC = () => {
                         </h2>
                         <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผล</p>
                     </div>
-                    
                     {isSuperAdmin && activeTab !== 'groups' && (
-                        <select 
-                            value={selectedOrgFilter} 
-                            onChange={(e) => setSelectedOrgFilter(e.target.value)}
-                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-500 text-sm"
-                        >
+                        <select value={selectedOrgFilter} onChange={(e) => setSelectedOrgFilter(e.target.value)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-500 text-sm">
                             <option value="all">-- แสดงข้อมูลทุกพื้นที่ --</option>
-                            {(organizations || []).map(org => (
-                                <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
+                            {(organizations || []).map(org => (<option key={org.id} value={org.id}>{org.name}</option>))}
                         </select>
                     )}
                 </div>
-
-                {/* Date Filter Section */}
                 {activeTab !== 'groups' && (
                     <div className="flex flex-col md:flex-row gap-4 items-end md:items-center bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                        <div className="flex-1 w-full md:w-auto">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ตั้งแต่วันที่ (Start Date)</label>
-                            <input 
-                                type="date" 
-                                value={tempStartDate} 
-                                onChange={e => setTempStartDate(e.target.value)} 
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                            />
-                        </div>
-                        <div className="flex-1 w-full md:w-auto">
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ถึงวันที่ (End Date)</label>
-                            <input 
-                                type="date" 
-                                value={tempEndDate} 
-                                onChange={e => setTempEndDate(e.target.value)} 
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
-                            />
-                        </div>
+                        <div className="flex-1 w-full md:w-auto"><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ตั้งแต่วันที่ (Start Date)</label><input type="date" value={tempStartDate} onChange={e => setTempStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"/></div>
+                        <div className="flex-1 w-full md:w-auto"><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ถึงวันที่ (End Date)</label><input type="date" value={tempEndDate} onChange={e => setTempEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"/></div>
                         <div className="flex gap-2 w-full md:w-auto">
-                            <button 
-                                onClick={applyDateFilter}
-                                disabled={isFiltering}
-                                className={`flex-1 md:flex-none px-4 py-2 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${isFiltering ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}
-                            >
-                                {isFiltering ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'ตกลง'}
-                            </button>
-                            <button 
-                                onClick={clearDateFilter} 
-                                className="flex-1 md:flex-none px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
-                            >
-                                ล้าง
-                            </button>
+                            <button onClick={applyDateFilter} disabled={isFiltering} className={`flex-1 md:flex-none px-4 py-2 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${isFiltering ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}>{isFiltering ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'ตกลง'}</button>
+                            <button onClick={clearDateFilter} className="flex-1 md:flex-none px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">ล้าง</button>
                         </div>
                     </div>
                 )}
-                {startDate && endDate && (
-                    <div className="px-1">
-                        <span className="text-xs bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200 px-2 py-1 rounded-full font-bold">
-                            🔍 กำลังกรองข้อมูล: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
-                        </span>
-                    </div>
-                )}
+                {startDate && endDate && <div className="px-1"><span className="text-xs bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200 px-2 py-1 rounded-full font-bold">🔍 กำลังกรองข้อมูล: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</span></div>}
             </div>
-
             <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                 <nav className="-mb-px flex space-x-6 overflow-x-auto pb-2" aria-label="Tabs">
                     {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`${
-                                activeTab === tab.id
-                                    ? 'border-red-500 text-red-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'
-                            } whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}
-                        >
-                            {tab.label}
-                        </button>
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`${activeTab === tab.id ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}>{tab.label}</button>
                     ))}
                 </nav>
             </div>
-
-            <div className="mt-4">
-                {renderContent()}
-            </div>
+            <div className="mt-4">{renderContent()}</div>
         </div>
     );
 };

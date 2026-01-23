@@ -42,6 +42,7 @@ export interface User {
   email?: string;
   authProvider?: 'email' | 'google' | 'line' | 'telegram';
   organization?: string;
+  adminSecret?: string; // Storing admin session key
 }
 
 export interface Organization {
@@ -145,6 +146,9 @@ export interface CalorieHistoryEntry {
     date: string;
     name: string;
     calories: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
     image?: string;
     imageHash?: string;
     isHealthyChoice?: boolean;

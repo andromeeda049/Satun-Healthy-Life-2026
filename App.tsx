@@ -142,11 +142,21 @@ const AppContent: React.FC = () => {
       if (viewParam) setActiveView(viewParam as AppView);
   }, [setActiveView]);
 
+  // Combined Check for PDPA and Organization
   useEffect(() => {
       if (isDataSynced && currentUser && currentUser.role === 'user') {
-          if (userProfile && !userProfile.pdpaAccepted) { setShowPDPA(true); setShowOrgModal(false); } 
-          else if (userProfile && (!userProfile.organization || userProfile.organization === '')) { setShowOrgModal(true); } 
-          else { setShowOrgModal(false); }
+          // Priority 1: PDPA
+          if (userProfile && !userProfile.pdpaAccepted) { 
+              setShowPDPA(true); 
+              setShowOrgModal(false); 
+          } 
+          // Priority 2: Organization (Only if PDPA accepted)
+          else if (userProfile && (!userProfile.organization || userProfile.organization === '')) { 
+              setShowOrgModal(true); 
+          } 
+          else { 
+              setShowOrgModal(false); 
+          }
       }
   }, [currentUser, userProfile, isDataSynced]);
 
@@ -166,6 +176,11 @@ const AppContent: React.FC = () => {
       const updatedProfile = { ...userProfile, pdpaAccepted: true, pdpaAcceptedDate: new Date().toISOString() };
       setUserProfile(updatedProfile, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
       setShowPDPA(false);
+      
+      // Chain Flow: Immediately prompt for Organization if missing
+      if (!updatedProfile.organization) {
+          setShowOrgModal(true);
+      }
   };
 
   const handleOrgSelect = (orgId: string) => {
@@ -173,6 +188,11 @@ const AppContent: React.FC = () => {
       const updatedProfile = { ...userProfile, organization: orgId };
       setUserProfile(updatedProfile, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
       setShowOrgModal(false);
+
+      // Chain Flow: If basic profile info is missing, redirect to Profile page
+      if (!updatedProfile.age || !updatedProfile.weight || !updatedProfile.height) {
+          setActiveView('profile');
+      }
   };
 
   const navigate = (view: AppView) => {
@@ -352,7 +372,8 @@ const AppContent: React.FC = () => {
              </div>
           </header>
           <div className="h-20"></div>
-          <main className="p-4 max-w-3xl mx-auto w-full pb-24">{renderContent()}</main>
+          {/* UPDATED: Dynamic width for Admin Dashboard */}
+          <main className={`p-4 mx-auto w-full pb-24 transition-all duration-300 ${activeView === 'adminDashboard' ? 'max-w-7xl' : 'max-w-3xl'}`}>{renderContent()}</main>
           <BottomNavigation />
           <ToastNotification />
           <QuickActionModal />

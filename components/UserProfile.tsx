@@ -1,16 +1,16 @@
 
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
-import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, ACHIEVEMENTS } from '../constants';
+import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS } from '../constants';
 import { UserProfile as UserProfileType } from '../types';
 import OrganizationModal from './OrganizationModal'; 
-import { SearchIcon, UserGroupIcon, ClipboardCheckIcon, LineIcon } from './icons';
+import { SearchIcon, UserGroupIcon, LineIcon, LockIcon } from './icons';
 
 const emojis = ['😊', '😎', '🎉', '🚀', '🌟', '💡', '🌱', '🍎', '💪', '🧠', '👍', '✨'];
 const getRandomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)];
 
 const UserProfile: React.FC = () => {
-    const { userProfile, setUserProfile, currentUser, organizations, joinGroup, refreshGroups } = useContext(AppContext);
+    const { userProfile, setUserProfile, currentUser, organizations, joinGroup } = useContext(AppContext);
     
     // Safety check for userProfile
     const safeUserProfile = userProfile || {
@@ -101,7 +101,6 @@ const UserProfile: React.FC = () => {
         if (!groupCode) return alert('กรุณากรอกรหัสกลุ่ม');
         if (!consentGiven) return alert('กรุณายอมรับเงื่อนไขการเปิดเผยข้อมูล');
         
-        // FIX: Ensure user info is present
         if (!currentUser || !currentUser.username) {
             alert("ไม่พบข้อมูลผู้ใช้งาน กรุณาออกจากระบบแล้วเข้าใหม่");
             return;
@@ -122,8 +121,6 @@ const UserProfile: React.FC = () => {
     if (!currentUser) return null;
 
     const isImage = profilePicture.startsWith('data:image/') || profilePicture.startsWith('http');
-    // Ensure badges is an array to prevent crash
-    const badges = Array.isArray(userProfile?.badges) ? userProfile.badges : [];
     const currentOrgName = (organizations || []).find(o => o.id === healthData.organization)?.name || 'เลือกหน่วยงาน...';
 
     return (
@@ -136,92 +133,82 @@ const UserProfile: React.FC = () => {
                 </div>
             )}
 
-            {/* Public LINE Group Invitation (Moved to Top) */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/10 rounded-xl border border-green-100 dark:border-green-800 shadow-sm relative overflow-hidden">
-                <div className="relative z-10 flex items-start gap-4">
-                    <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm text-[#06C755] flex-shrink-0">
-                        <LineIcon className="w-8 h-8" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-800 dark:text-white text-base">กลุ่มสาธารณะ Satun Healthy Life</h3>
-                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">
-                            เข้าร่วมกลุ่ม LINE Group เพื่อรับการแจ้งเตือนข่าวสาร และร่วมจัดอันดับคนรักสุขภาพ (Public Ranking)
-                        </p>
-                        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                            <div className="bg-white dark:bg-gray-800 px-3 py-2 rounded-lg border border-dashed border-[#06C755] flex items-center justify-center gap-2">
-                                <span className="text-[10px] text-gray-500 font-medium">Code:</span>
-                                <span className="font-mono font-black text-[#06C755] text-lg tracking-wider">SHL2026</span>
+            {/* Combined Community & Group Management Card */}
+            <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-4 text-white flex items-center gap-3">
+                    <UserGroupIcon className="w-6 h-6" />
+                    <h3 className="font-bold text-lg">ชุมชนและการเชื่อมต่อ (Community)</h3>
+                </div>
+
+                <div className="p-5 space-y-6">
+                    {/* Public Group Section */}
+                    <div className="flex flex-col sm:flex-row gap-4 items-start">
+                        <div className="p-3 bg-[#06C755]/10 rounded-xl text-[#06C755] flex-shrink-0">
+                            <LineIcon className="w-8 h-8" />
+                        </div>
+                        <div className="flex-1 w-full">
+                            <h4 className="font-bold text-gray-800 dark:text-white text-sm">กลุ่มสาธารณะ Satun Healthy Life</h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                รับข่าวสารและร่วมจัดอันดับ (Public Ranking)
+                            </p>
+                            <div className="mt-3 flex gap-2">
+                                <div className="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg text-xs font-mono font-bold text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                    CODE: SHL2026
+                                </div>
+                                <a 
+                                    href="https://line.me/ti/g/rjw7XHyTFm"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex-1 bg-[#06C755] text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm hover:bg-[#05b54d] transition-all text-center flex items-center justify-center gap-1 active:scale-95"
+                                >
+                                    กดเข้าร่วมกลุ่มไลน์
+                                </a>
                             </div>
-                            <a 
-                                href="https://line.me/ti/g/rjw7XHyTFm"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex-1 bg-[#06C755] text-white text-xs font-bold py-2.5 px-4 rounded-lg shadow-sm hover:bg-[#05b54d] transition-all text-center flex items-center justify-center gap-2 active:scale-95"
-                            >
-                                <LineIcon className="w-4 h-4" />
-                                กดเข้าร่วมกลุ่มเลย
-                            </a>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 dark:border-gray-700"></div>
+
+                    {/* Join Private Group Section */}
+                    <div>
+                        <h4 className="font-bold text-gray-800 dark:text-white text-sm mb-3 flex items-center gap-2">
+                            <LockIcon className="w-4 h-4 text-indigo-500" />
+                            เข้าร่วมกลุ่มเฉพาะ / คลินิก (Private Group)
+                        </h4>
+                        <div className="space-y-3">
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={groupCode}
+                                    onChange={(e) => setGroupCode(e.target.value.toUpperCase())}
+                                    placeholder="ใส่รหัสกลุ่ม (Access Code)"
+                                    className="flex-1 p-2.5 text-sm border border-indigo-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-mono bg-indigo-50/50 dark:bg-gray-900"
+                                />
+                                <button 
+                                    onClick={handleJoinGroup}
+                                    disabled={joining || !groupCode || !consentGiven}
+                                    className="bg-indigo-600 text-white text-xs font-bold px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                                >
+                                    {joining ? 'รอสักครู่...' : 'ยืนยัน'}
+                                </button>
+                            </div>
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={consentGiven} 
+                                    onChange={(e) => setConsentGiven(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
+                                />
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight">
+                                    ยินยอมให้ผู้ดูแลกลุ่มเข้าถึงข้อมูลสุขภาพเพื่อการติดตามผล
+                                </span>
+                            </label>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Join Group Section */}
-            <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-100 dark:border-blue-800 shadow-sm">
-                <h3 className="text-lg font-bold text-blue-800 dark:text-blue-200 mb-4 flex items-center gap-2">
-                    <UserGroupIcon className="w-6 h-6" /> เข้าร่วมกลุ่มสุขภาพ / คลินิก (Join Group)
-                </h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-600 dark:text-gray-300 mb-1">รหัสเข้ากลุ่ม (Access Code)</label>
-                        <input 
-                            type="text" 
-                            value={groupCode}
-                            onChange={(e) => setGroupCode(e.target.value.toUpperCase())}
-                            placeholder="เช่น DM001, FIT2024"
-                            className="w-full p-3 border border-blue-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase font-mono"
-                        />
-                    </div>
-                    <label className="flex items-start gap-3 cursor-pointer p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <input 
-                            type="checkbox" 
-                            checked={consentGiven} 
-                            onChange={(e) => setConsentGiven(e.target.checked)}
-                            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-xs text-gray-600 dark:text-gray-300">
-                            ข้าพเจ้ายินยอมให้ผู้ดูแลกลุ่ม (Admin) เข้าถึงข้อมูลสุขภาพของข้าพเจ้า เพื่อการติดตามผลและให้คำแนะนำสุขภาพ
-                        </span>
-                    </label>
-                    <button 
-                        onClick={handleJoinGroup}
-                        disabled={joining || !groupCode || !consentGiven}
-                        className="w-full py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                        {joining ? 'กำลังตรวจสอบ...' : 'เข้าร่วมกลุ่ม'}
-                    </button>
-                </div>
-            </div>
-            
-             <div className="p-4 border dark:border-gray-700 rounded-lg mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-gray-700 dark:to-gray-700">
-                <h3 className="text-lg font-bold text-indigo-800 dark:text-indigo-200 mb-4">เหรียญรางวัลที่ได้รับ ({badges.length})</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                    {ACHIEVEMENTS.map(achievement => {
-                        const isUnlocked = badges.includes(achievement.id);
-                        return (
-                            <div key={achievement.id} className={`flex flex-col items-center text-center p-2 rounded-lg transition-all ${isUnlocked ? 'opacity-100 scale-105' : 'opacity-40 grayscale'}`}>
-                                <div className="text-3xl mb-1 bg-white dark:bg-gray-600 rounded-full w-12 h-12 flex items-center justify-center shadow-sm">
-                                    {achievement.icon}
-                                </div>
-                                <p className="text-xs font-bold text-gray-700 dark:text-gray-200">{achievement.name}</p>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
             <form onSubmit={handleSave} className="space-y-8">
-                {/* ... (Existing Profile Form Fields) ... */}
                 <div className="p-4 border dark:border-gray-700 rounded-lg">
                     <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">จัดการบัญชี</h3>
                     <div className="space-y-4">

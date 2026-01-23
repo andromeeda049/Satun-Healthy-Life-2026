@@ -15,6 +15,7 @@ interface LeaderboardUser {
     organization: string;
     role?: string;
     weeklyXp?: number;
+    groupXp?: number; // Added groupXp
     score?: number;
 }
 
@@ -80,7 +81,13 @@ const Community: React.FC = () => {
                         const username = String(u.username || '').toLowerCase();
                         const name = String(u.displayName || '').toLowerCase();
                         const org = String(u.organization || '').toLowerCase();
-                        return role !== 'admin' && !username.startsWith('admin') && !name.includes('admin') && org !== 'all';
+                        
+                        // กรอง Admin และ User เฉพาะที่ระบุ
+                        return role !== 'admin' && 
+                               !username.startsWith('admin') && 
+                               !name.includes('admin') && 
+                               org !== 'all' &&
+                               username !== 'line_1765868496729';
                     });
                 };
 
@@ -122,12 +129,17 @@ const Community: React.FC = () => {
                     if (!Array.isArray(list)) return [];
                     return list.filter((u: any) => {
                         const role = String(u.role || '').toLowerCase();
-                        return role !== 'admin'; 
+                        const username = String(u.username || '').toLowerCase();
+                        // กรอง Admin และ User เฉพาะที่ระบุ
+                        return role !== 'admin' && 
+                               !username.startsWith('admin') &&
+                               username !== 'line_1765868496729'; 
                     });
                 };
 
                 if (data && Array.isArray(data.leaderboard)) {
-                    setGroupData(filterAdmins(data.leaderboard).sort((a: any, b: any) => b.xp - a.xp));
+                    // Backend calculates groupXp and sorts by it
+                    setGroupData(filterAdmins(data.leaderboard));
                 } else {
                     setGroupData([]);
                 }
@@ -194,7 +206,8 @@ const Community: React.FC = () => {
         } else if (activeTab === 'myGroup') {
             rank = groupData.findIndex(u => u.username === currentUser.username);
             const user = groupData[rank];
-            if (user) { value = user.xp.toLocaleString(); unit = 'HP'; label = 'ในกลุ่มนี้'; }
+            // Use groupXp if available, fallback to 0
+            if (user) { value = (user.groupXp || 0).toLocaleString(); unit = 'Group HP'; label = 'คะแนนกลุ่ม'; }
         } else if (activeTab === 'trending') {
             rank = globalData.trending.findIndex(u => u.username === currentUser.username);
             const user = globalData.trending[rank];
@@ -258,7 +271,7 @@ const Community: React.FC = () => {
             title = "กลุ่มของฉัน";
             icon = <UserGroupIcon className="text-5xl" />;
             gradient = "from-teal-500 to-blue-500";
-            subtitle = "จัดอันดับภายในกลุ่มเฉพาะ";
+            subtitle = "จัดอันดับคะแนนที่ได้หลังจากเข้ากลุ่ม";
         } else if (activeTab === 'trending') { 
             title = "มาแรง"; icon = <FireIcon className="text-5xl" />; gradient = "from-rose-500 to-pink-500"; 
         } else if (activeTab === 'orgs') { 
@@ -476,7 +489,8 @@ const Community: React.FC = () => {
 
                         {activeTab === 'trending' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.weeklyXp || 0).toLocaleString(), 'Weekly HP', 'text-rose-600 dark:text-rose-400'))}
                         
-                        {activeTab === 'myGroup' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.xp || 0).toLocaleString(), 'HP', 'text-indigo-600 dark:text-indigo-400'))}
+                        {/* Display Group XP in My Group Tab */}
+                        {activeTab === 'myGroup' && currentList.map((user, idx) => renderRankingItem(user, idx, (user.groupXp || 0).toLocaleString(), 'Group HP', 'text-indigo-600 dark:text-indigo-400'))}
 
                         {activeTab === 'water' && currentList.map((user, idx) => renderRankingItem(user, idx, ((user.score || 0) / 1000).toFixed(1) + ' L', 'ปริมาณรวม', 'text-blue-600 dark:text-blue-400'))}
                         

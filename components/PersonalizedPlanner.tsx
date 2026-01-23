@@ -53,20 +53,18 @@ const PersonalizedPlanner: React.FC = () => {
     // Super Admin Check
     const isSuperAdmin = currentUser?.organization === 'all';
 
-    // --- CHECK DAILY LIMIT (Revised from Weekly) ---
+    // --- CHECK WEEKLY LIMIT (1 time per 7 days) ---
     const canCreatePlan = useMemo(() => {
-        if (isSuperAdmin) return true; // Super Admin has no limit
+        if (isSuperAdmin) return true;
         if (plannerHistory.length === 0) return true;
         
         const lastPlanDate = new Date(plannerHistory[0].date);
         const today = new Date();
         
-        // Check if same calendar day
-        const isSameDay = lastPlanDate.getDate() === today.getDate() &&
-                          lastPlanDate.getMonth() === today.getMonth() &&
-                          lastPlanDate.getFullYear() === today.getFullYear();
+        const diffTime = Math.abs(today.getTime() - lastPlanDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
         
-        return !isSameDay;
+        return diffDays >= 7;
     }, [plannerHistory, isSuperAdmin]);
 
     // Calculate Preview Stats on the fly
@@ -98,7 +96,7 @@ const PersonalizedPlanner: React.FC = () => {
     const handleCalculateAndPlan = async () => {
         if (currentUser?.role === 'guest') return;
         if (!canCreatePlan) {
-            alert(`คุณสร้างแผนสำหรับวันนี้ไปแล้ว กรุณารอวันพรุ่งนี้เพื่อสร้างแผนใหม่`);
+            alert(`สามารถสร้างแผนได้สัปดาห์ละ 1 ครั้ง กรุณาลองใหม่ในภายหลัง`);
             return;
         }
 
@@ -266,13 +264,13 @@ const PersonalizedPlanner: React.FC = () => {
                                 <span className="text-[10px] font-normal opacity-90">
                                     {canCreatePlan 
                                         ? '(Generate Personalized Plan)' 
-                                        : '(ครบโควตาวันนี้แล้ว - รอพรุ่งนี้)'}
+                                        : '(จำกัด 1 ครั้ง/สัปดาห์ - รอสัปดาห์ถัดไป)'}
                                 </span>
                             </button>
                             
                             {!canCreatePlan && (
                                 <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 text-xs rounded-lg text-center border border-yellow-200 dark:border-yellow-800">
-                                    <strong>Note:</strong> สามารถสร้างแผนได้วันละ 1 ครั้ง เพื่อให้คุณมีเวลาปฏิบัติตามแผนอย่างเต็มที่
+                                    <strong>Note:</strong> สามารถสร้างแผนได้สัปดาห์ละ 1 ครั้ง เพื่อให้คุณมีเวลาปฏิบัติตามแผนอย่างเต็มที่
                                 </div>
                             )}
                         </div>

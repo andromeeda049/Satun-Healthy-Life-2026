@@ -2,7 +2,7 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { AppView, PillarScore } from '../types';
-import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon } from './icons';
+import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon } from './icons';
 import { PILLAR_LABELS, LEVEL_THRESHOLDS } from '../constants';
 import GamificationCard from './GamificationCard';
 
@@ -20,6 +20,15 @@ const getBmiCategory = (bmi: number): string => {
     if (bmi < 25) return 'น้ำหนักเกิน';
     if (bmi < 30) return 'โรคอ้วนระดับที่ 1';
     return 'โรคอ้วนระดับที่ 2';
+};
+
+// Helper to extract steps from string
+const extractSteps = (name: string): number => {
+    const match = name.match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
+    if (match) {
+        return parseInt(match[1].replace(/,/g, ''), 10);
+    }
+    return 0;
 };
 
 const calculateMetrics = (profile: any) => {
@@ -49,6 +58,140 @@ const calculateMetrics = (profile: any) => {
 
     return { bmi, bmiCategory, bmr, tdee };
 };
+
+// --- CHART COMPONENTS ---
+
+type TimeFrame = 'daily' | 'weekly' | 'monthly';
+
+interface ChartDataPoint {
+    label: string;
+    value: number;
+    subValue?: number; // Optional secondary value (e.g., steps)
+}
+
+const HealthTrendChart: React.FC<{
+    data: any[];
+    dataKey: string; // Key to sum up (e.g., 'calories', 'amount')
+    dateKey: string;
+    timeFrame: TimeFrame;
+    color: string;
+    unit: string;
+    secondaryDataKey?: string; // Optional key for secondary extraction (e.g. Steps from name)
+    secondaryExtractor?: (item: any) => number;
+}> = ({ data, dataKey, dateKey, timeFrame, color, unit, secondaryDataKey, secondaryExtractor }) => {
+    
+    const chartData: ChartDataPoint[] = useMemo(() => {
+        const points: ChartDataPoint[] = [];
+        const now = new Date();
+        const grouped: Record<string, { value: number, subValue: number }> = {};
+
+        // Helper to format keys
+        const getGroupKey = (date: Date): string => {
+            if (timeFrame === 'daily') return date.toLocaleDateString('th-TH', { weekday: 'short' });
+            if (timeFrame === 'weekly') {
+                // Simple week grouping (Week -1, Week -2)
+                const diffTime = Math.abs(now.getTime() - date.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                const weekNum = Math.ceil(diffDays / 7);
+                return weekNum === 1 ? 'สัปดาห์นี้' : `-${weekNum-1} สัปดาห์`;
+            }
+            if (timeFrame === 'monthly') return date.toLocaleDateString('th-TH', { month: 'short' });
+            return '';
+        };
+
+        // Filter range
+        let daysLimit = 7;
+        if (timeFrame === 'weekly') daysLimit = 28; // 4 weeks
+        if (timeFrame === 'monthly') daysLimit = 180; // 6 months
+
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysLimit);
+
+        // Init Data Points Structure based on Timeframe to ensure order
+        if (timeFrame === 'daily') {
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const key = d.toLocaleDateString('th-TH', { weekday: 'short' });
+                grouped[key] = { value: 0, subValue: 0 };
+                points.push({ label: key, value: 0 }); // Placeholder order
+            }
+        }
+
+        // Aggregate Data
+        data.forEach(item => {
+            const itemDate = new Date(item[dateKey]);
+            if (itemDate >= cutoffDate) {
+                const key = getGroupKey(itemDate);
+                if (!grouped[key]) grouped[key] = { value: 0, subValue: 0 };
+                
+                // Sum Primary Value
+                grouped[key].value += (Number(item[dataKey]) || 0);
+                
+                // Sum Secondary Value (e.g. Steps)
+                if (secondaryExtractor) {
+                    grouped[key].subValue += secondaryExtractor(item);
+                }
+            }
+        });
+
+        // Finalize Data Array
+        if (timeFrame === 'daily') {
+            return points.map(p => ({
+                label: p.label,
+                value: grouped[p.label]?.value || 0,
+                subValue: grouped[p.label]?.subValue || 0
+            }));
+        } else {
+            // For weekly/monthly, sorting might be needed or just Object.entries
+            // Let's keep it simple: reverse chrono for keys that exist
+            return Object.entries(grouped).map(([label, val]) => ({
+                label,
+                value: val.value,
+                subValue: val.subValue
+            })).reverse(); // Show recent first usually, but for chart left-to-right needs chronological
+        }
+    }, [data, dataKey, dateKey, timeFrame, secondaryDataKey]);
+
+    // Normalize for Chart Height
+    const maxValue = Math.max(1, ...chartData.map(d => d.value));
+
+    return (
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
+            <div className="flex items-end justify-between h-32 gap-2 mt-2">
+                {chartData.map((d, i) => {
+                    const heightPercent = (d.value / maxValue) * 100;
+                    return (
+                        <div key={i} className="flex-1 flex flex-col items-center group relative">
+                            {/* Value Label on Hover/Top */}
+                            <div className="text-[9px] text-gray-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full">
+                                {d.value.toLocaleString()}
+                            </div>
+                            
+                            {/* Bar */}
+                            <div 
+                                className={`w-full max-w-[20px] sm:max-w-[30px] rounded-t-md transition-all duration-500 hover:opacity-80 ${color}`}
+                                style={{ height: `${Math.max(5, heightPercent)}%` }}
+                            ></div>
+                            
+                            {/* Axis Label */}
+                            <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-2 truncate w-full text-center">
+                                {d.label}
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+            <div className="text-center mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                    แนวโน้ม {unit} ({timeFrame === 'daily' ? 'รายวัน' : timeFrame === 'weekly' ? 'รายสัปดาห์' : 'รายเดือน'})
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// --- MAIN DASHBOARD COMPONENT ---
 
 const PersonalHealthGrid: React.FC<{
     userProfile: any;
@@ -243,13 +386,20 @@ const HistoryList: React.FC<{
     data: any[], 
     renderItem: (item: any) => React.ReactNode, 
     icon: React.ReactNode,
-    emptyMessage?: string
-}> = ({ title, data, renderItem, icon, emptyMessage = "ยังไม่มีประวัติการบันทึก" }) => (
+    emptyMessage?: string,
+    extraContent?: React.ReactNode // Slot for charts
+}> = ({ title, data, renderItem, icon, emptyMessage = "ยังไม่มีประวัติการบันทึก", extraContent }) => (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 overflow-hidden">
-        <div className="p-3 bg-slate-50 dark:bg-gray-700/50 border-b border-slate-100 dark:border-gray-700 flex items-center gap-2">
-            <span className="text-gray-500 dark:text-gray-400">{icon}</span>
-            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
+        <div className="p-3 bg-slate-50 dark:bg-gray-700/50 border-b border-slate-100 dark:border-gray-700 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <span className="text-gray-500 dark:text-gray-400">{icon}</span>
+                <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
+            </div>
         </div>
+        
+        {/* Render Chart or Extra Content if available */}
+        {extraContent}
+
         <div className="p-2">
             {data.length > 0 ? (
                 <div className="space-y-2">
@@ -277,12 +427,16 @@ const Dashboard: React.FC = () => {
       activityHistory, 
       sleepHistory, 
       moodHistory, 
+      habitHistory,
+      socialHistory,
       waterGoal, 
       userProfile, 
       currentUser 
   } = useContext(AppContext);
 
-  const [activeTab, setActiveTab] = useState<'body' | 'food' | 'activity' | 'rest'>('body');
+  // Expanded Tab State to include all requested categories
+  const [activeTab, setActiveTab] = useState<'body' | 'food' | 'water' | 'activity' | 'sleep' | 'mood' | 'habit' | 'social'>('body');
+  const [chartTimeFrame, setChartTimeFrame] = useState<TimeFrame>('daily');
 
   const isToday = (d: Date) => { const t = new Date(); return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear(); };
   
@@ -291,17 +445,9 @@ const Dashboard: React.FC = () => {
   
   const activityToday = useMemo(() => activityHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.caloriesBurned, 0), [activityHistory]);
   
-  // Parse Steps from Activity Name (Regex look for digits followed by "ก้าว" or "steps")
+  // Parse Steps from Activity Name
   const stepsToday = useMemo(() => {
-      return activityHistory.filter(e => isToday(new Date(e.date))).reduce((sum, e) => {
-          // Look for numbers before "ก้าว" or "Steps" e.g., "เดิน 5,000 ก้าว"
-          const match = e.name.match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
-          if (match) {
-              const numStr = match[1].replace(/,/g, ''); // Remove commas
-              return sum + parseInt(numStr, 10);
-          }
-          return sum;
-      }, 0);
+      return activityHistory.filter(e => isToday(new Date(e.date))).reduce((sum, e) => sum + extractSteps(e.name), 0);
   }, [activityHistory]);
 
   const caloriesConsumedToday = useMemo(() => calorieHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.calories, 0), [calorieHistory]);
@@ -331,6 +477,37 @@ const Dashboard: React.FC = () => {
           day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
       });
   };
+
+  const TabButton: React.FC<{ id: typeof activeTab, label: string, colorClass: string }> = ({ id, label, colorClass }) => (
+      <button 
+        onClick={() => { setActiveTab(id); setChartTimeFrame('daily'); }} // Reset chart on tab change
+        className={`flex-shrink-0 py-2 px-4 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+            activeTab === id 
+            ? `${colorClass} text-white shadow-sm` 
+            : 'bg-white dark:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400'
+        }`}
+      >
+          {label}
+      </button>
+  );
+
+  const TimeFrameSelector = () => (
+      <div className="flex justify-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg mx-2 my-2 border border-gray-100 dark:border-gray-600">
+          {(['daily', 'weekly', 'monthly'] as const).map(tf => (
+              <button 
+                key={tf}
+                onClick={() => setChartTimeFrame(tf)}
+                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                    chartTimeFrame === tf 
+                    ? 'bg-white dark:bg-gray-600 shadow-sm text-indigo-600 dark:text-white' 
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                }`}
+              >
+                  {tf === 'daily' ? 'รายวัน' : tf === 'weekly' ? 'รายสัปดาห์' : 'รายเดือน'}
+              </button>
+          ))}
+      </div>
+  );
 
   return (
     <div className="space-y-6 animate-fade-in relative pb-10">
@@ -371,20 +548,16 @@ const Dashboard: React.FC = () => {
                 </h3>
             </div>
 
-            {/* Tabs */}
-            <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl mb-4 overflow-x-auto no-scrollbar">
-                <button onClick={() => setActiveTab('body')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'body' ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    ร่างกาย (Body)
-                </button>
-                <button onClick={() => setActiveTab('food')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'food' ? 'bg-white dark:bg-gray-700 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    โภชนาการ (Food)
-                </button>
-                <button onClick={() => setActiveTab('activity')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'activity' ? 'bg-white dark:bg-gray-700 text-yellow-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    กิจกรรม (Active)
-                </button>
-                <button onClick={() => setActiveTab('rest')} className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === 'rest' ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    พักผ่อน (Rest)
-                </button>
+            {/* Scrollable Tabs */}
+            <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar mb-2">
+                <TabButton id="body" label="ร่างกาย" colorClass="bg-blue-500" />
+                <TabButton id="food" label="โภชนาการ" colorClass="bg-orange-500" />
+                <TabButton id="water" label="น้ำดื่ม" colorClass="bg-sky-500" />
+                <TabButton id="activity" label="กิจกรรม" colorClass="bg-yellow-500" />
+                <TabButton id="sleep" label="การนอน" colorClass="bg-indigo-600" />
+                <TabButton id="mood" label="อารมณ์" colorClass="bg-rose-500" />
+                <TabButton id="habit" label="ความเสี่ยง" colorClass="bg-red-500" />
+                <TabButton id="social" label="สังคม" colorClass="bg-teal-600" />
             </div>
 
             {/* Content Area */}
@@ -427,6 +600,19 @@ const Dashboard: React.FC = () => {
                         title="รายการอาหารล่าสุด" 
                         icon={<BeakerIcon className="w-4 h-4 text-orange-500" />}
                         data={combinedFoodLog}
+                        extraContent={
+                            <div>
+                                <TimeFrameSelector />
+                                <HealthTrendChart 
+                                    data={combinedFoodLog} 
+                                    dataKey="calories" 
+                                    dateKey="date"
+                                    timeFrame={chartTimeFrame} 
+                                    color="bg-orange-400"
+                                    unit="Kcal"
+                                />
+                            </div>
+                        }
                         renderItem={(item) => (
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
@@ -442,61 +628,164 @@ const Dashboard: React.FC = () => {
                     />
                 )}
 
-                {activeTab === 'activity' && (
+                {activeTab === 'water' && (
                     <HistoryList 
-                        title="กิจกรรมการเคลื่อนไหว" 
-                        icon={<BoltIcon className="w-4 h-4 text-yellow-500" />}
-                        data={activityHistory}
+                        title="ประวัติการดื่มน้ำ" 
+                        icon={<WaterDropIcon className="w-4 h-4 text-sky-500" />}
+                        data={waterHistory}
+                        extraContent={
+                            <div>
+                                <TimeFrameSelector />
+                                <HealthTrendChart 
+                                    data={waterHistory} 
+                                    dataKey="amount" 
+                                    dateKey="date"
+                                    timeFrame={chartTimeFrame} 
+                                    color="bg-sky-400"
+                                    unit="ml"
+                                />
+                            </div>
+                        }
                         renderItem={(item) => (
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-lg">🏃</div>
+                                    <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-lg">💧</div>
                                     <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.amount} มล.</p>
                                         <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
                                     </div>
                                 </div>
-                                <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{item.caloriesBurned} kcal</span>
                             </div>
                         )}
                     />
                 )}
 
-                {activeTab === 'rest' && (
-                    <div className="space-y-4">
-                        <HistoryList 
-                            title="บันทึกการนอนหลับ" 
-                            icon={<MoonIcon className="w-4 h-4 text-indigo-500" />}
-                            data={sleepHistory}
-                            renderItem={(item) => (
+                {activeTab === 'activity' && (
+                    <HistoryList 
+                        title="กิจกรรมการเคลื่อนไหว" 
+                        icon={<BoltIcon className="w-4 h-4 text-yellow-500" />}
+                        data={activityHistory}
+                        extraContent={
+                            <div>
+                                <TimeFrameSelector />
+                                <HealthTrendChart 
+                                    data={activityHistory} 
+                                    dataKey="caloriesBurned" 
+                                    dateKey="date"
+                                    timeFrame={chartTimeFrame} 
+                                    color="bg-yellow-400"
+                                    unit="Kcal"
+                                    secondaryDataKey="name"
+                                    secondaryExtractor={(item) => extractSteps(item.name)}
+                                />
+                            </div>
+                        }
+                        renderItem={(item) => {
+                            const steps = extractSteps(item.name);
+                            return (
                                 <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-lg">🏃</div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                                {steps > 0 && <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">{steps.toLocaleString()} ก้าว</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{item.caloriesBurned} kcal</span>
+                                </div>
+                            );
+                        }}
+                    />
+                )}
+
+                {activeTab === 'sleep' && (
+                    <HistoryList 
+                        title="บันทึกการนอนหลับ" 
+                        icon={<MoonIcon className="w-4 h-4 text-indigo-500" />}
+                        data={sleepHistory}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-lg">😴</div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.duration.toFixed(1)} ชั่วโมง</p>
                                         <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
                                     </div>
-                                    <div className="flex gap-1">
-                                        {[...Array(item.quality)].map((_, i) => <span key={i} className="text-xs text-yellow-400">★</span>)}
+                                </div>
+                                <div className="flex gap-1">
+                                    {[...Array(item.quality)].map((_, i) => <span key={i} className="text-xs text-yellow-400">★</span>)}
+                                </div>
+                            </div>
+                        )}
+                    />
+                )}
+
+                {activeTab === 'mood' && (
+                    <HistoryList 
+                        title="บันทึกอารมณ์" 
+                        icon={<FaceSmileIcon className="w-4 h-4 text-rose-500" />}
+                        data={moodHistory}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">{item.moodEmoji}</span>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">ความเครียด {item.stressLevel}/10</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
                                     </div>
                                 </div>
-                            )}
-                        />
-                        <HistoryList 
-                            title="บันทึกอารมณ์" 
-                            icon={<FaceSmileIcon className="w-4 h-4 text-rose-500" />}
-                            data={moodHistory}
-                            renderItem={(item) => (
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-2xl">{item.moodEmoji}</span>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">ความเครียด {item.stressLevel}/10</p>
-                                            <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                        </div>
+                            </div>
+                        )}
+                    />
+                )}
+
+                {activeTab === 'habit' && (
+                    <HistoryList 
+                        title="พฤติกรรมเสี่ยง" 
+                        icon={<NoSymbolIcon className="w-4 h-4 text-red-500" />}
+                        data={habitHistory}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${item.isClean ? 'bg-green-100' : 'bg-red-100'}`}>
+                                        {item.isClean ? '🌿' : '🚬'}
+                                    </div>
+                                    <div>
+                                        <p className={`text-sm font-bold ${item.isClean ? 'text-green-600' : 'text-red-600'}`}>
+                                            {item.isClean ? 'Clean Day (ลดละเลิก)' : `มีความเสี่ยง (${item.type})`}
+                                        </p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
                                     </div>
                                 </div>
-                            )}
-                        />
-                    </div>
+                                {!item.isClean && <span className="text-xs font-bold text-red-500">{item.amount} ครั้ง/หน่วย</span>}
+                            </div>
+                        )}
+                    />
+                )}
+
+                {activeTab === 'social' && (
+                    <HistoryList 
+                        title="กิจกรรมทางสังคม" 
+                        icon={<UserGroupIcon className="w-4 h-4 text-teal-500" />}
+                        data={socialHistory}
+                        renderItem={(item) => (
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-lg">🤝</div>
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.interaction}</p>
+                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                    </div>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full ${item.feeling === 'energized' ? 'bg-green-100 text-green-700' : item.feeling === 'drained' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                                    {item.feeling}
+                                </span>
+                            </div>
+                        )}
+                    />
                 )}
             </div>
         </div>

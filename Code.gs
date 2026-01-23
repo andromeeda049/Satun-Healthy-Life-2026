@@ -5,8 +5,44 @@
  */
 
 // --- CONFIGURATION ---
-const ADMIN_KEY = "ADMIN1234!";
-const LINE_CHANNEL_ACCESS_TOKEN = "YxGdduOpLZ5IoVNONoPih8Z0n84f7tPK8D7MlFn866YI+XEuQfdI6QvUv6EDoOd8UIC+Iz6Gvfi6zKdiX6/74OKG08yFqlsoxGBlSbEEbByIpTGp+TcywcENUWSgGLggJnbTBAynTQ5r3VctmDUZ8wdB04t89/1O/w1cDnyilFU=";
+
+// อ่านค่า ADMIN_KEY (Super Admin) จาก Script Properties
+const ADMIN_KEY = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+
+// อ่านค่า Token จาก Script Properties
+const LINE_CHANNEL_ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+
+// รหัสผ่านสำหรับหน่วยงานต่างๆ (ย้ายมาจาก Frontend เพื่อความปลอดภัย)
+// สามารถเพิ่ม/ลบ ได้ที่นี่โดยตรง
+const ORG_ADMIN_KEYS = {
+    // Provincial Health Office
+    "PHO@SATUN": "pho_satun",
+    "ADMIN@PHO": "pho_satun",
+
+    // Hospitals (รพ.)
+    "HOSP@SATUN": "hosp_satun",
+    "ADMIN@HOSP_SATUN": "hosp_satun",
+    "ADMIN@HOSP_KHUANDON": "hosp_khuandon",
+    "ADMIN@HOSP_LANGU": "hosp_la-ngu",
+    "ADMIN@HOSP_THUNGWA": "hosp_thungwa",
+    "ADMIN@HOSP_MANANG": "hosp_manang",
+    "ADMIN@HOSP_KK": "hosp_khuan-kalong",
+    "ADMIN@HOSP_TP": "hosp_tha-phae",
+
+    // District Health Offices (สสอ.)
+    "DHO@MUANG": "dho_muang",
+    "ADMIN@DHO_MUANG": "dho_muang",
+    "ADMIN@DHO_KHUANDON": "dho_khuandon",
+    "ADMIN@DHO_LANGU": "dho_la-ngu",
+    "ADMIN@DHO_THUNGWA": "dho_thungwa",
+    "ADMIN@DHO_MANANG": "dho_manang",
+    "ADMIN@DHO_KK": "dho_khuan-kalong",
+    "ADMIN@DHO_TP": "dho_tha-phae",
+
+    // General
+    "ADMIN@GENERAL": "general"
+};
+
 const LIFF_URL = "https://liff.line.me/2008705690-V5wrjpTX";
 
 // ใส่ User ID หรือ Group ID ที่ต้องการทดสอบ (Hardcoded ตามคำขอ)
@@ -260,8 +296,19 @@ function handleRequest(e, method) {
     
     // 1. PUBLIC ACTIONS
     if (action === 'getConfig') return handleGetConfig();
-    if (action === 'getAllData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
-    if (action === 'getAllAdminData' && params.adminKey === ADMIN_KEY) return handleAdminFetch();
+    
+    // ตรวจสอบ ADMIN_KEY ทั้งจาก Params และ Environment Variables
+    if (action === 'getAllData' || action === 'getAllAdminData') {
+       const requestAdminKey = params.adminKey;
+       // ตรวจสอบว่าเป็น Super Admin Key หรือ Org Admin Key ที่ถูกต้อง
+       if (requestAdminKey === ADMIN_KEY || ORG_ADMIN_KEYS[requestAdminKey]) {
+           return handleAdminFetch();
+       } else {
+           return createErrorResponse("Invalid Admin Key");
+       }
+    }
+
+    if (action === 'adminLogin') return handleAdminLogin(params.password);
     if (action === 'verifyUser') return handleVerifyUser(params.email, params.password);
     if (action === 'register') return handleRegisterUser(params.user, params.password);
     if (action === 'socialAuth') return handleSocialAuth(params.payload || params.profile);
@@ -292,6 +339,9 @@ function handleRequest(e, method) {
       case 'clear': 
         if (!user || !user.username) throw new Error("User required for clear");
         return handleClear(params.type, user);
+      case 'fetchUserData': // FIX: Handle fetchUserData via POST
+         if (!params.username) throw new Error("Username required");
+         return createSuccessResponse(getUserFullData(params.username));
       default: 
         if (method === 'GET' && params.username) {
              const username = params.username;
@@ -304,7 +354,34 @@ function handleRequest(e, method) {
   }
 }
 
-// ... (Functions below are Database Logic - kept same as before) ...
+// ... (Functions below are Database Logic) ...
+
+function handleAdminLogin(password) {
+    // 1. Check Super Admin (Script Property)
+    if (password === ADMIN_KEY) {
+        return createSuccessResponse({
+            username: "admin_super",
+            displayName: "Super Admin",
+            role: "admin",
+            organization: "all",
+            profilePicture: "🛡️"
+        });
+    }
+
+    // 2. Check Org Admins (Code Constant)
+    const orgId = ORG_ADMIN_KEYS[password];
+    if (orgId) {
+        return createSuccessResponse({
+            username: "admin_" + orgId,
+            displayName: "Admin: " + orgId,
+            role: "admin",
+            organization: orgId,
+            profilePicture: "👨‍💼"
+        });
+    }
+
+    return createErrorResponse("รหัสผ่านไม่ถูกต้อง");
+}
 
 function getUserFullData(username) {
     return {
@@ -391,10 +468,11 @@ function handleJoinGroup(code, user) {
     const members = memberSheet.getDataRange().getValues();
     for(let i=1; i<members.length; i++) {
         if(members[i][0] === targetGroup.id && members[i][1] === user.username) {
-            return createErrorResponse("คุณเป็นสมาชิกกลุ่มนี้อยู่แล้ว");
+            return createSuccessResponse({ status: "Joined", message: "คุณเป็นสมาชิกกลุ่มนี้อยู่แล้ว" }); // Handle as success for idempotency
         }
     }
     
+    // Add joinedAt date
     memberSheet.appendRow([targetGroup.id, user.username, new Date()]);
     return createSuccessResponse({ status: "Joined", group: targetGroup });
 }
@@ -513,6 +591,7 @@ function handleGetGroupMembers(groupId, user) {
     return createSuccessResponse(Object.values(users));
 }
 
+// Updated Leaderboard Logic with Group XP Support
 function handleGetLeaderboardJS(groupId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const profileSheet = ss.getSheetByName(SHEET_NAMES.PROFILE);
@@ -521,18 +600,23 @@ function handleGetLeaderboardJS(groupId) {
     return createSuccessResponse({ leaderboard: [], trending: [], categories: {water:[], food:[], activity:[]} });
   }
 
-  // 1. FILTERING (Server-side constraint)
-  let allowedGroupMembers = null;
+  // 1. FILTERING & JOIN DATE (Server-side constraint)
+  let groupMemberJoinDates = null; // Map<username, joinedAtDate>
+  
   if (groupId) {
       const memberSheet = ss.getSheetByName(SHEET_NAMES.GROUP_MEMBERS);
       if (memberSheet) {
-          allowedGroupMembers = new Set();
+          groupMemberJoinDates = new Map();
           const mData = memberSheet.getDataRange().getValues();
+          // Assuming structure: [groupId, username, joinedAt]
           for(let i=1; i<mData.length; i++) {
-              if(mData[i][0] === groupId) allowedGroupMembers.add(mData[i][1]);
+              if(mData[i][0] === groupId) {
+                  let joinDate = mData[i][2] ? new Date(mData[i][2]) : new Date(0); 
+                  groupMemberJoinDates.set(mData[i][1], joinDate);
+              }
           }
       } else {
-          return createSuccessResponse({ leaderboard: [] });
+          return createSuccessResponse({ leaderboard: [] }); // Group not found or empty
       }
   }
 
@@ -546,7 +630,8 @@ function handleGetLeaderboardJS(groupId) {
     const username = row[1];
     if (!username) continue; 
     
-    if (allowedGroupMembers && !allowedGroupMembers.has(username)) continue;
+    // Check if user belongs to the requested group
+    if (groupId && (!groupMemberJoinDates || !groupMemberJoinDates.has(username))) continue;
 
     const timestamp = new Date(row[0]);
     const displayName = row[2];
@@ -568,10 +653,12 @@ function handleGetLeaderboardJS(groupId) {
         organization: org,
         xp: 0,
         level: 1,
-        weeklyXp: 0 
+        weeklyXp: 0,
+        groupXp: 0 // Initialize groupXp
       };
     }
 
+    // Always update latest display info
     users[username].displayName = displayName;
     users[username].profilePicture = profilePicture;
     users[username].organization = org;
@@ -581,17 +668,27 @@ function handleGetLeaderboardJS(groupId) {
       users[username].level = level;
     }
 
+    // Weekly XP
     if (timestamp >= oneWeekAgo) {
       users[username].weeklyXp += deltaXp; 
+    }
+
+    // Group XP Logic: Only count deltaXp if action timestamp >= joinedAt
+    if (groupId && groupMemberJoinDates) {
+        const joinDate = groupMemberJoinDates.get(username);
+        if (timestamp >= joinDate) {
+            users[username].groupXp += deltaXp;
+        }
     }
   }
 
   const userArray = Object.values(users);
   
   if (groupId) {
-      const groupLeaderboard = [...userArray].sort((a, b) => b.xp - a.xp);
+      // Sort by Group XP
+      const groupLeaderboard = [...userArray].sort((a, b) => b.groupXp - a.groupXp);
       return createSuccessResponse({
-          apiVersion: "v14.4-GROUP-FILTER",
+          apiVersion: "v14.5-GROUP-XP",
           leaderboard: groupLeaderboard 
       });
   }
@@ -601,7 +698,7 @@ function handleGetLeaderboardJS(groupId) {
   const categories = getCategoryRankingsSafe(ss);
 
   return createSuccessResponse({
-      apiVersion: "v14.4-GLOBAL",
+      apiVersion: "v14.5-GLOBAL",
       leaderboard: leaderboard,
       trending: trending,
       categories: categories
@@ -837,20 +934,20 @@ function getAllHistoryForUser(sheetName, username) {
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
   const rows = data.filter(row => row[1] === username);
   try {
-    if (sheetName === SHEET_NAMES.BMI) return rows.map(r => ({ date: r[0], value: r[4], category: r[5] }));
-    if (sheetName === SHEET_NAMES.TDEE) return rows.map(r => ({ date: r[0], value: r[4], bmr: r[5] }));
-    if (sheetName === SHEET_NAMES.WATER) return rows.map(r => ({ date: r[0], id: r[0], amount: r[4] }));
-    if (sheetName === SHEET_NAMES.CALORIE) return rows.map(r => ({ date: r[0], id: r[0], name: r[4], calories: r[5], image: r[6], imageHash: r[7] }));
-    if (sheetName === SHEET_NAMES.ACTIVITY) return rows.map(r => ({ date: r[0], id: r[0], name: r[4], caloriesBurned: r[5], duration: r[6], distance: r[7], image: r[8], imageHash: r[9] }));
-    if (sheetName === SHEET_NAMES.FOOD) return rows.map(r => ({ date: r[0], id: r[0], analysis: JSON.parse(r[6]) }));
-    if (sheetName === SHEET_NAMES.SLEEP) return rows.map(r => ({ date: r[0], id: r[0], bedTime: r[4], wakeTime: r[5], duration: r[6], quality: r[7], hygieneChecklist: JSON.parse(r[8] || "[]") }));
-    if (sheetName === SHEET_NAMES.MOOD) return rows.map(r => ({ date: r[0], id: r[0], moodEmoji: r[4], stressLevel: r[5], gratitude: r[6] }));
-    if (sheetName === SHEET_NAMES.HABIT) return rows.map(r => ({ date: r[0], id: r[0], type: r[4], amount: r[5], isClean: r[6] }));
-    if (sheetName === SHEET_NAMES.SOCIAL) return rows.map(r => ({ date: r[0], id: r[0], interaction: r[4], feeling: r[5] }));
-    if (sheetName === SHEET_NAMES.PLANNER) return rows.map(r => ({ date: r[0], id: r[0], cuisine: r[4], diet: r[5], tdee: r[6], plan: JSON.parse(r[7]) }));
-    if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: r[0], id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
-    if (sheetName === 'QuizHistory') return rows.map(r => ({ date: r[0], id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
-    if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: r[0], id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
+    if (sheetName === SHEET_NAMES.BMI) return rows.map(r => ({ date: new Date(r[0]).toISOString(), value: r[4], category: r[5] }));
+    if (sheetName === SHEET_NAMES.TDEE) return rows.map(r => ({ date: new Date(r[0]).toISOString(), value: r[4], bmr: r[5] }));
+    if (sheetName === SHEET_NAMES.WATER) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], amount: r[4] }));
+    if (sheetName === SHEET_NAMES.CALORIE) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], name: r[4], calories: r[5], image: r[6], imageHash: r[7] }));
+    if (sheetName === SHEET_NAMES.ACTIVITY) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], name: r[4], caloriesBurned: r[5], duration: r[6], distance: r[7], image: r[8], imageHash: r[9] }));
+    if (sheetName === SHEET_NAMES.FOOD) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], analysis: JSON.parse(r[6]) }));
+    if (sheetName === SHEET_NAMES.SLEEP) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], bedTime: r[4], wakeTime: r[5], duration: r[6], quality: r[7], hygieneChecklist: JSON.parse(r[8] || "[]") }));
+    if (sheetName === SHEET_NAMES.MOOD) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], moodEmoji: r[4], stressLevel: r[5], gratitude: r[6] }));
+    if (sheetName === SHEET_NAMES.HABIT) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], type: r[4], amount: r[5], isClean: r[6] }));
+    if (sheetName === SHEET_NAMES.SOCIAL) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], interaction: r[4], feeling: r[5] }));
+    if (sheetName === SHEET_NAMES.PLANNER) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], cuisine: r[4], diet: r[5], tdee: r[6], plan: JSON.parse(r[7]) }));
+    if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
+    if (sheetName === 'QuizHistory') return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
+    if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
     return [];
   } catch(e) { return []; }
 }
@@ -863,15 +960,60 @@ function handleAdminFetch() {
     if (name === 'loginLog' || name === 'login_logs') return;
     const data = s.getDataRange().getValues();
     if (data.length < 2) { result[name] = []; return; }
-    const headers = data[0];
+    
+    // Explicit mapping for Profile to ensure lowercase keys matching frontend expectations
     if (name === SHEET_NAMES.PROFILE) {
-        result['profiles'] = data.slice(1).map(row => { let obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return obj; });
+        result['profiles'] = data.slice(1).map(row => ({
+            timestamp: row[0],
+            username: row[1],
+            displayName: row[2],
+            profilePicture: row[3],
+            gender: row[4],
+            age: row[5],
+            weight: row[6],
+            height: row[7],
+            waist: row[8],
+            hip: row[9],
+            activityLevel: row[10],
+            role: row[11],
+            xp: row[12],
+            level: row[13],
+            badges: row[14],
+            email: row[15],
+            password: row[16],
+            healthCondition: row[17],
+            lineUserId: row[18],
+            receiveDailyReminders: row[19],
+            researchId: row[20],
+            pdpaAccepted: row[21],
+            pdpaAcceptedDate: row[22],
+            organization: row[23],
+            deltaXp: row[24],
+            birthDate: row[25],
+            targetWeight: row[26]
+        }));
     } else if (name === SHEET_NAMES.LOGIN_LOGS) {
         result['loginLogs'] = data.slice(1).map(row => ({ timestamp: row[0], username: row[1], displayName: row[2], role: row[3], organization: row[4] || 'general' }));
     } else if (name === SHEET_NAMES.EVALUATION) {
         result['evaluationHistory'] = data.slice(1).map(row => ({ timestamp: row[0], username: row[1], displayName: row[2], role: row[3], satisfaction_json: row[4], outcome_json: row[5] }));
     } else {
-        result[name] = data.slice(1).map(row => { let obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return obj; });
+        // Generic mapping for other sheets (Logs)
+        // Note: Using explicit index mapping for key log sheets to ensure robustness
+        if (name === SHEET_NAMES.BMI) result['bmiHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], bmi: Number(r[4]), category: r[5] }));
+        else if (name === SHEET_NAMES.TDEE) result['tdeeHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], tdee: Number(r[4]) }));
+        else if (name === SHEET_NAMES.FOOD) result['foodHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], calories: Number(r[5]) }));
+        else if (name === SHEET_NAMES.WATER) result['waterHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], amount: Number(r[4]) }));
+        else if (name === SHEET_NAMES.ACTIVITY) result['activityHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], calories: Number(r[5]) }));
+        else if (name === SHEET_NAMES.CALORIE) result['calorieHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], calories: Number(r[5]) }));
+        else if (name === SHEET_NAMES.SLEEP) result['sleepHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], duration: Number(r[6]), quality: Number(r[7]) }));
+        else if (name === SHEET_NAMES.MOOD) result['moodHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], emoji: r[4], stressLevel: Number(r[5]) }));
+        else if (name === SHEET_NAMES.HABIT) result['habitHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], type: r[4], amount: Number(r[5]), isClean: r[6] }));
+        else if (name === SHEET_NAMES.SOCIAL) result['socialHistory'] = data.slice(1).map(r => ({ timestamp: r[0], username: r[1], interaction: r[4], feeling: r[5] }));
+        else {
+             // Fallback for unknown sheets (like Groups)
+             const headers = data[0];
+             result[name] = data.slice(1).map(row => { let obj = {}; headers.forEach((h, i) => obj[h] = row[i]); return obj; });
+        }
     }
   });
   return createSuccessResponse(result);
@@ -936,7 +1078,7 @@ function setupSheets() {
       catSheet.getRange("N2").setFormula(`=ARRAYFORMULA(IF(K2:K="", "", IFERROR(VLOOKUP(K2:K, ${SHEET_NAMES.PROFILE}!B:D, 3, 0), "")))`);
   }
 
-  return "Setup Complete (v15.0) - Modularized";
+  return "Setup Complete (v16.0) - Full Features";
 }
 
 function createSuccessResponse(data) {
