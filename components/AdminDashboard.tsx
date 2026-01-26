@@ -1,4 +1,5 @@
 
+// ... existing imports
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { fetchAllAdminDataFromSheet, resetUserData, AllAdminData } from '../services/googleSheetService';
@@ -705,7 +706,7 @@ const OutcomeAnalysis: React.FC<{
                             </div>
                         </div>
                         <div className="text-xs text-gray-400 italic">
-                            * Success Rate คำนวณจากผู้ที่ลดระดับ BMI ลงมาสู่เกณฑ์ที่ดีขึ้น (เช่น อ้วน -> ท้วม) หรือผู้ที่รักษาระดับสมส่วนไว้ได้
+                            * Success Rate คำนวณจากผู้ที่ลดระดับ BMI ลงมาสู่เกณฑ์ที่ดีขึ้น (เช่น อ้วน &rarr; ท้วม) หรือผู้ที่รักษาระดับสมส่วนไว้ได้
                         </div>
                     </div>
 
