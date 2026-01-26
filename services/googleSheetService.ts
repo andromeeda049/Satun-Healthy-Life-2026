@@ -2,9 +2,18 @@
 import { User, UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, RedemptionHistoryEntry, HealthGroup } from '../types';
 
 export interface AllAdminData {
-    users: any[];
-    groups: any[];
-    stats: any;
+    profiles?: any[];
+    groups?: any[];
+    groupMembers?: any[];
+    bmiHistory?: any[];
+    tdeeHistory?: any[];
+    foodHistory?: any[];
+    activityHistory?: any[];
+    loginLogs?: any[];
+    evaluationHistory?: any[];
+    quizHistory?: any[];
+    stats?: any;
+    [key: string]: any;
 }
 
 const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
@@ -189,7 +198,7 @@ export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: st
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'getAllAdminData', adminKey }), // Fixed action name from fetchAllAdminData
+            body: JSON.stringify({ action: 'getAllAdminData', adminKey }), 
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         });
         const res = await response.json();
