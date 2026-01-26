@@ -1,11 +1,11 @@
 
 import React, { useEffect } from 'react';
 import { Achievement } from '../types';
-import { TrophyIcon, MedalIcon, StarIcon } from './icons';
+import { TrophyIcon, MedalIcon, StarIcon, UserGroupIcon } from './icons';
 
 interface LevelUpModalProps {
-    type: 'level' | 'badge';
-    data: any; // number for level, Achievement object for badge
+    type: 'level' | 'badge' | 'group_join';
+    data: any; // number for level, Achievement object for badge, Group Object for join
     onClose: () => void;
 }
 
@@ -65,6 +65,11 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ type, data, onClose }) => {
                              <TrophyIcon className="w-12 h-12 text-white drop-shadow-md" />
                              <div className="absolute inset-0 rounded-full bg-white opacity-20 animate-pulse-fast"></div>
                          </div>
+                     ) : type === 'group_join' ? (
+                         <div className="w-24 h-24 bg-gradient-to-b from-teal-400 to-emerald-600 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-gray-800 relative">
+                             <UserGroupIcon className="w-12 h-12 text-white drop-shadow-md" />
+                             <div className="absolute inset-0 rounded-full bg-white opacity-20 animate-pulse-fast"></div>
+                         </div>
                      ) : (
                          <div className="w-24 h-24 bg-gradient-to-b from-purple-400 to-indigo-600 rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-gray-800 relative">
                              <span className="text-5xl drop-shadow-md filter grayscale-0">{(data as Achievement).icon || '🎉'}</span>
@@ -82,6 +87,15 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ type, data, onClose }) => {
                                 {data}
                             </div>
                         </>
+                    ) : type === 'group_join' ? (
+                        <>
+                            <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-emerald-600 mb-2 uppercase tracking-wide drop-shadow-sm">Welcome!</h2>
+                            <p className="text-gray-600 dark:text-gray-300 text-lg font-medium">ยินดีต้อนรับเข้าสู่กลุ่ม</p>
+                            <h3 className="text-2xl font-bold text-gray-800 dark:text-white my-3 line-clamp-2 leading-tight">
+                                {(data as any).name || 'กลุ่มใหม่'}
+                            </h3>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">พร้อมแล้วที่จะดูแลสุขภาพไปด้วยกัน</p>
+                        </>
                     ) : (
                         <>
                             <h2 className="text-2xl font-black text-purple-600 dark:text-purple-400 mb-2 uppercase tracking-wide">New Achievement!</h2>
@@ -93,7 +107,11 @@ const LevelUpModal: React.FC<LevelUpModalProps> = ({ type, data, onClose }) => {
 
                 <button 
                     onClick={onClose}
-                    className="mt-8 w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold py-3 px-6 rounded-xl hover:scale-105 transition-transform shadow-lg active:scale-95 relative z-10"
+                    className={`mt-8 w-full font-bold py-3 px-6 rounded-xl hover:scale-105 transition-transform shadow-lg active:scale-95 relative z-10 text-white ${
+                        type === 'group_join' 
+                        ? 'bg-gradient-to-r from-teal-500 to-emerald-600' 
+                        : 'bg-gradient-to-r from-yellow-400 to-orange-500'
+                    }`}
                 >
                     เยี่ยมมาก! (Close)
                 </button>

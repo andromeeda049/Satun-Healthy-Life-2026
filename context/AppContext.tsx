@@ -3,7 +3,7 @@ import React, { createContext, ReactNode, useState, useEffect, useCallback, useR
 import useLocalStorage from '../hooks/useLocalStorage';
 import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
-import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService } from '../services/googleSheetService';
+import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService, resetUserData } from '../services/googleSheetService';
 
 // HARDCODED URL (v17.0) - Updated Verified URL
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaH1AGEMnL0FAuvGKynIT-s-A06zGg73YYG3l6CgUwwiPBXhQrLCHOMlb01fANkxTx_w/exec';
@@ -69,11 +69,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const [showLevelUp, setShowLevelUp] = useState<{ type: 'level' | 'badge', data: any } | null>(null);
+  const [showLevelUp, setShowLevelUp] = useState<{ type: 'level' | 'badge' | 'group_join', data: any } | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'info' });
   const [organizations, setOrganizations] = useLocalStorage<Organization[]>('organizations', DEFAULT_ORGANIZATIONS);
-  const [myGroups, setMyGroups] = useLocalStorage<HealthGroup[]>('myGroups', []);
+  
+  // FIX: Use useState instead of useLocalStorage for myGroups to avoid QuotaExceededError
+  // Groups data can be large (images) and should be fetched fresh anyway.
+  const [myGroups, setMyGroups] = useState<HealthGroup[]>([]);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -119,6 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsDataSynced(false);
     setIsSyncing(false);
     setActiveView('home');
+    setMyGroups([]); // Clear groups on logout
     
     // NOTE: We do NOT clear history or profile data here. 
     // This allows data to persist if the SAME user logs back in.
@@ -168,6 +172,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const resetData = async (): Promise<boolean> => {
+      if (!currentUser || !scriptUrl) return false;
+      try {
+          const success = await resetUserData(scriptUrl, currentUser);
+          if (success) {
+              // Clear Local History but keep critical profile info (Name, Gender, etc.)
+              _setBmiHistory([]); 
+              _setTdeeHistory([]); 
+              _setFoodHistory([]); 
+              _setPlannerHistory([]); 
+              _setWaterHistory([]); 
+              _setCalorieHistory([]); 
+              _setActivityHistory([]); 
+              _setSleepHistory([]);
+              _setMoodHistory([]); 
+              _setHabitHistory([]); 
+              _setSocialHistory([]); 
+              _setEvaluationHistory([]); 
+              _setQuizHistory([]); 
+              _setRedemptionHistory([]);
+              
+              // Reset XP/Level but keep personal info
+              const resetProfile = { 
+                  ...userProfile, 
+                  xp: 0, 
+                  level: 1, 
+                  badges: ['novice'], 
+                  deltaXp: 0 
+              };
+              _setUserProfile(resetProfile);
+              
+              setNotification({ show: true, message: 'รีเซ็ตข้อมูลสำเร็จ! เริ่มต้นใหม่กันเถอะ', type: 'success' });
+              return true;
+          } else {
+              setNotification({ show: true, message: 'การรีเซ็ตข้อมูลล้มเหลว', type: 'warning' });
+              return false;
+          }
+      } catch (e) {
+          console.error(e);
+          return false;
+      }
+  };
+
   const closeNotification = () => setNotification(prev => ({ ...prev, show: false }));
   
   const openSOS = () => setIsSOSOpen(true);
@@ -176,8 +223,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Group Management Functions
   const refreshGroups = useCallback(async () => {
       if(!currentUser || !scriptUrl) return;
-      const groups = await getUserGroups(scriptUrl, currentUser);
-      setMyGroups(groups);
+      // Fetch groups fresh every time
+      try {
+          const groups = await getUserGroups(scriptUrl, currentUser);
+          setMyGroups(groups);
+      } catch (e) {
+          console.error("Failed to refresh groups", e);
+      }
   }, [currentUser, scriptUrl]);
 
   const joinGroup = async (code: string) => {
@@ -201,13 +253,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Success response structure: { status: "success", data: { status: "Joined", ... } }
       if (res.status === 'success' && res.data?.status === 'Joined') {
           refreshGroups();
-          return { success: true, message: 'Joined' };
+          return { success: true, message: 'Joined', data: res.data.group };
       }
       
       // Fallback for direct response or legacy
       if (res.status === 'Joined') {
           refreshGroups();
-          return { success: true, message: 'Joined' };
+          return { success: true, message: 'Joined', data: res.group };
       }
 
       // Treat "Already member" as success to handle race conditions or double clicks
@@ -266,6 +318,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setNotification({ show: true, message: `+${amount} HP!`, type: 'success' });
           setTimeout(closeNotification, 2000);
       }
+  };
+
+  const showCelebration = (type: 'level' | 'badge' | 'group_join', data: any) => {
+      setShowLevelUp({ type, data });
   };
 
   const closeLevelUpModal = () => setShowLevelUp(null);
@@ -367,12 +423,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       quizHistory, saveQuizResult, waterGoal, setWaterGoal, latestFoodAnalysis, setLatestFoodAnalysis,
       userProfile, setUserProfile, scriptUrl, setScriptUrl, apiKey: '', setApiKey: () => {}, isDataSynced,
       clearBmiHistory, clearTdeeHistory, clearFoodHistory, clearWaterHistory, clearCalorieHistory,
-      clearActivityHistory, clearWellnessHistory, gainXP, showLevelUp, closeLevelUpModal,
+      clearActivityHistory, clearWellnessHistory, gainXP, showLevelUp, closeLevelUpModal, showCelebration,
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
       organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
       redemptionHistory, setRedemptionHistory,
       // Sync States
-      isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData
+      isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData,
+      resetData
     }}>
       {children}
     </AppContext.Provider>

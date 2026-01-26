@@ -58,6 +58,13 @@ const Community: React.FC = () => {
     const shareCardRef = useRef<HTMLDivElement>(null);
     const leaderboardRef = useRef<HTMLDivElement>(null);
 
+    // Auto-select first group if available and not selected
+    useEffect(() => {
+        if (!selectedGroupId && myGroups && myGroups.length > 0) {
+            setSelectedGroupId(myGroups[0].id);
+        }
+    }, [myGroups, selectedGroupId]);
+
     // 1. Initial Load (Global Data) - Run ONCE
     useEffect(() => {
         const loadGlobalData = async () => {
@@ -66,11 +73,6 @@ const Community: React.FC = () => {
             setError(null);
             
             try {
-                // Determine initial group selection if available
-                if (myGroups && myGroups.length > 0) {
-                    setSelectedGroupId(myGroups[0].id);
-                }
-
                 const data = await fetchLeaderboard(scriptUrl, currentUser || undefined); // No groupId = Global
                 if (!data) throw new Error("ไม่ได้รับข้อมูลจาก Server");
 
@@ -82,7 +84,7 @@ const Community: React.FC = () => {
                         const name = String(u.displayName || '').toLowerCase();
                         const org = String(u.organization || '').toLowerCase();
                         
-                        // กรอง Admin และ User เฉพาะที่ระบุ
+                        // Strict filter for GLOBAL view: No Admins allowed
                         return role !== 'admin' && 
                                !username.startsWith('admin') && 
                                !name.includes('admin') && 
@@ -110,7 +112,7 @@ const Community: React.FC = () => {
         };
 
         loadGlobalData();
-    }, [scriptUrl]); // Dependency on scriptUrl only (essentially mount)
+    }, [scriptUrl]);
 
     // 2. Group Load - Run when selectedGroupId changes
     useEffect(() => {
@@ -125,21 +127,19 @@ const Community: React.FC = () => {
                 // Pass groupId to Backend for SERVER-SIDE filtering
                 const data = await fetchLeaderboard(scriptUrl, currentUser || undefined, selectedGroupId);
                 
-                const filterAdmins = (list: any[]) => {
+                // Allow Admins in GROUP View
+                const filterSystem = (list: any[]) => {
                     if (!Array.isArray(list)) return [];
                     return list.filter((u: any) => {
-                        const role = String(u.role || '').toLowerCase();
                         const username = String(u.username || '').toLowerCase();
-                        // กรอง Admin และ User เฉพาะที่ระบุ
-                        return role !== 'admin' && 
-                               !username.startsWith('admin') &&
-                               username !== 'line_1765868496729'; 
+                        // Only filter system/bot accounts
+                        return username !== 'line_1765868496729'; 
                     });
                 };
 
                 if (data && Array.isArray(data.leaderboard)) {
                     // Backend calculates groupXp and sorts by it
-                    setGroupData(filterAdmins(data.leaderboard));
+                    setGroupData(filterSystem(data.leaderboard));
                 } else {
                     setGroupData([]);
                 }

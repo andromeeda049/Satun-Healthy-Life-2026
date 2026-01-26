@@ -1,16 +1,18 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
-import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon } from './icons';
-import { sendTestNotification } from '../services/googleSheetService';
+import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
+import { sendTestNotification, systemFactoryReset } from '../services/googleSheetService';
 import PDPAModal from './PDPAModal';
 
 const Settings: React.FC = () => {
-    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout } = useContext(AppContext);
+    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout, resetData } = useContext(AppContext);
     
     const [currentScriptUrl, setCurrentScriptUrl] = useState(scriptUrl);
     const [saved, setSaved] = useState<'none' | 'sheets' | 'notifications' | 'ai'>('none');
     const [showPDPA, setShowPDPA] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+    const [isFactoryResetting, setIsFactoryResetting] = useState(false);
     
     const [aiInstruction, setAiInstruction] = useState(userProfile.aiSystemInstruction || '');
 
@@ -19,6 +21,7 @@ const Settings: React.FC = () => {
         setAiInstruction(userProfile.aiSystemInstruction || '');
     }, [scriptUrl, userProfile]);
 
+    // ... existing handlers ...
     const handleSheetsSave = (e: React.FormEvent) => {
         e.preventDefault();
         setScriptUrl(currentScriptUrl);
@@ -59,9 +62,36 @@ const Settings: React.FC = () => {
         }
     };
 
+    const handleResetData = async () => {
+        if (window.confirm("⚠️ ยืนยันการรีเซ็ตข้อมูล?\n\nประวัติสุขภาพทั้งหมดและแต้มสะสมจะหายไป แต่บัญชีของคุณจะยังอยู่\n\nกด 'ตกลง' เพื่อเริ่มใหม่ (Start Over)")) {
+            setIsResetting(true);
+            await resetData();
+            setIsResetting(false);
+        }
+    };
+
+    const handleFactoryReset = async () => {
+        const confirm1 = window.confirm("⛔️ DANGER: คุณกำลังจะล้างข้อมูลทั้งระบบ!\n\nประวัติสุขภาพของผู้ใช้ 'ทุกคน' จะถูกลบถาวร\n(User Accounts จะไม่ถูกลบ แต่ XP/Level จะถูกรีเซ็ต)\n\nคุณแน่ใจหรือไม่?");
+        if (!confirm1) return;
+        
+        const confirm2 = window.confirm("‼️ ยืนยันครั้งสุดท้าย: การกระทำนี้ไม่สามารถกู้คืนได้\n\nกด 'ตกลง' เพื่อล้างข้อมูลทั้งระบบ (Factory Reset)");
+        if (!confirm2) return;
+
+        if (currentUser && scriptUrl) {
+            setIsFactoryResetting(true);
+            const success = await systemFactoryReset(scriptUrl, currentUser);
+            setIsFactoryResetting(false);
+            if (success) {
+                alert("✅ System Factory Reset Completed.\nระบบถูกรีเซ็ตเรียบร้อยแล้ว");
+                window.location.reload();
+            } else {
+                alert("❌ Failed to reset system.");
+            }
+        }
+    };
+
     const isRemindersOn = !!userProfile.receiveDailyReminders;
     const isAdmin = currentUser?.role === 'admin';
-    // Specific check for Super Admin (organization === 'all')
     const isSuperAdmin = isAdmin && currentUser?.organization === 'all';
 
     return (
@@ -98,12 +128,13 @@ const Settings: React.FC = () => {
                             <SquaresIcon className="w-6 h-6 text-teal-600 dark:text-teal-400" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Database Connection</h2>
-                            <p className="text-xs text-slate-500 dark:text-gray-400">Google Apps Script Web App URL (Super Admin Only)</p>
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">System Admin Zone</h2>
+                            <p className="text-xs text-slate-500 dark:text-gray-400">Database & Critical Actions</p>
                         </div>
                     </div>
                     
-                    <form onSubmit={handleSheetsSave} className="space-y-3">
+                    <form onSubmit={handleSheetsSave} className="space-y-3 mb-6">
+                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">Database URL</label>
                         <input 
                             type="url" 
                             value={currentScriptUrl} 
@@ -124,6 +155,24 @@ const Settings: React.FC = () => {
                             </button>
                         </div>
                     </form>
+
+                    {/* Factory Reset Section */}
+                    <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-800">
+                        <div className="flex items-center gap-3 mb-3">
+                            <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+                            <h3 className="font-bold text-red-700 dark:text-red-400 text-sm">Emergency Zone</h3>
+                        </div>
+                        <p className="text-xs text-red-600/80 dark:text-red-400/80 mb-4">
+                            การกดปุ่มด้านล่างจะลบข้อมูลประวัติสุขภาพของผู้ใช้ "ทุกคน" ในระบบ (History Logs) และรีเซ็ตค่าประสบการณ์ (XP/Level) ทั้งหมด
+                        </p>
+                        <button 
+                            onClick={handleFactoryReset}
+                            disabled={isFactoryResetting}
+                            className="w-full py-3 bg-red-600 text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg hover:bg-red-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        >
+                            {isFactoryResetting ? 'WIPING SYSTEM...' : '⚠️ FACTORY RESET SYSTEM (ล้างข้อมูลทั้งระบบ)'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -193,6 +242,28 @@ const Settings: React.FC = () => {
                                 className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300"
                             >
                                 Review
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* DANGER ZONE - RESET DATA (Individual) */}
+                    <div className="bg-red-50 dark:bg-red-900/10 p-6 md:p-8 rounded-2xl shadow-md w-full border border-red-200 dark:border-red-800">
+                        <div className="flex items-center gap-4 justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/30">
+                                    <TrashIcon className="w-6 h-6 text-red-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-base font-bold text-red-700 dark:text-red-400">Danger Zone</h2>
+                                    <p className="text-red-500/80 text-[10px] uppercase font-bold tracking-wider">Reset Account Progress</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleResetData}
+                                disabled={isResetting}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-red-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                                {isResetting ? 'Resetting...' : 'Reset My Data'}
                             </button>
                         </div>
                     </div>

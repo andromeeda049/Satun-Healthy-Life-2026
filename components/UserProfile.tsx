@@ -10,7 +10,7 @@ const emojis = ['😊', '😎', '🎉', '🚀', '🌟', '💡', '🌱', '🍎', 
 const getRandomEmoji = () => emojis[Math.floor(Math.random() * emojis.length)];
 
 const UserProfile: React.FC = () => {
-    const { userProfile, setUserProfile, currentUser, organizations, joinGroup } = useContext(AppContext);
+    const { userProfile, setUserProfile, currentUser, organizations, joinGroup, showCelebration } = useContext(AppContext);
     
     // Safety check for userProfile
     const safeUserProfile = userProfile || {
@@ -109,7 +109,11 @@ const UserProfile: React.FC = () => {
         setJoining(true);
         const res = await joinGroup(groupCode);
         if (res.success) {
-            alert('เข้าร่วมกลุ่มสำเร็จ! คุณสามารถดูข้อมูลกลุ่มได้ที่หน้าหลัก');
+            if (res.data) {
+                showCelebration('group_join', res.data);
+            } else {
+                alert(res.message);
+            }
             setGroupCode('');
             setConsentGiven(false);
         } else {

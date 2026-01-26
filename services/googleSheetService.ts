@@ -2,69 +2,22 @@
 import { User, UserProfile, BMIHistoryEntry, TDEEHistoryEntry, FoodHistoryEntry, PlannerHistoryEntry, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, RedemptionHistoryEntry, HealthGroup } from '../types';
 
 export interface AllAdminData {
-    profiles: any[];
-    loginLogs: any[];
-    bmiHistory: any[];
-    tdeeHistory: any[];
-    foodHistory: any[];
-    activityHistory: any[];
-    sleepHistory: any[];
-    moodHistory: any[];
-    habitHistory: any[];
-    socialHistory: any[];
-    evaluationHistory: any[];
-    quizHistory: any[];
-    groups?: any[];
-    redemptionHistory?: any[];
-    [key: string]: any[];
+    users: any[];
+    groups: any[];
+    stats: any;
 }
 
-const fetchWithRetry = async (url: string, options: any, retries = 3, timeout = 30000): Promise<Response> => {
+const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
     try {
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), timeout);
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(id);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         return response;
-    } catch (err: any) {
+    } catch (error) {
         if (retries > 0) {
-            console.log(`Retrying... attempts left: ${retries}`);
             await new Promise(res => setTimeout(res, 1000));
-            return fetchWithRetry(url, options, retries - 1, timeout);
+            return fetchWithRetry(url, options, retries - 1);
         }
-        throw err;
-    }
-};
-
-export const socialAuth = async (scriptUrl: string, payload: any) => {
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'socialAuth', payload }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        return await response.json();
-    } catch (error: any) {
-        return { status: 'error', message: error.message };
-    }
-};
-
-export const adminLogin = async (scriptUrl: string, password: string): Promise<any> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return { status: 'error', message: 'Invalid URL' };
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'adminLogin', password }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-        return await response.json();
-    } catch (error: any) {
-        return { status: 'error', message: error.message };
+        throw error;
     }
 };
 
@@ -72,12 +25,12 @@ export const fetchAllDataFromSheet = async (scriptUrl: string, user: User) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'fetchUserData', username: user.username }),
+            body: JSON.stringify({ action: 'fetchUserData', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
-        return res.status === 'success' ? res.data : null;
+        if (res.status === 'success') return res.data;
+        return null;
     } catch (error) {
         console.error("Fetch Data Error:", error);
         return null;
@@ -86,20 +39,14 @@ export const fetchAllDataFromSheet = async (scriptUrl: string, user: User) => {
 
 export const saveDataToSheet = async (scriptUrl: string, type: string, data: any, user: User) => {
     try {
-        const payload = {
-            action: 'save', // CORRECTED ACTION NAME
-            type: type,
-            payload: data, // CORRECTED KEY: 'payload' instead of 'data'
-            user: user     // CORRECTED KEY: 'user' instead of 'userProfile'
-        };
-        await fetchWithRetry(scriptUrl, {
+        // Non-blocking save attempt
+        fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ action: 'saveData', type, data, user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        }, 1, 10000);
+        }).catch(e => console.error("Save Data BG Error:", e));
     } catch (error) {
-        console.error(`Save ${type} Error:`, error);
+        console.error("Save Data Error:", error);
     }
 };
 
@@ -107,33 +54,11 @@ export const clearHistoryInSheet = async (scriptUrl: string, type: string, user:
     try {
         await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'clear', 
-                type, 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'clearHistory', type, user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
     } catch (error) {
         console.error("Clear History Error:", error);
-    }
-};
-
-export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: string): Promise<AllAdminData | null> => {
-    if (!scriptUrl || !scriptUrl.startsWith('http')) return null;
-    try {
-        const response = await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ action: 'getAllAdminData', adminKey }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        }, 2, 60000); 
-        const result = await response.json();
-        return result.status === 'success' ? result.data : null;
-    } catch (error) {
-        console.error("Fetch Admin Data Error:", error);
-        return null;
     }
 };
 
@@ -141,35 +66,27 @@ export const getUserGroups = async (scriptUrl: string, user: User): Promise<Heal
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'getUserGroups', 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'getUserGroups', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
         return res.status === 'success' ? res.data : [];
     } catch (error) {
+        console.error("Get User Groups Error:", error);
         return [];
     }
 };
 
-export const joinGroup = async (scriptUrl: string, user: User, code: string) => {
+export const joinGroup = async (scriptUrl: string, user: User, groupCode: string) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'joinGroup', 
-                code: code, 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'joinGroup', user, groupCode }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         return await response.json();
-    } catch (error: any) {
-        return { status: 'error', message: error.message };
+    } catch (error) {
+        return { status: 'error', message: String(error) };
     }
 };
 
@@ -177,17 +94,53 @@ export const leaveGroup = async (scriptUrl: string, user: User, groupId: string)
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'leaveGroup', 
-                groupId,
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'leaveGroup', user, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         return await response.json();
-    } catch (error: any) {
-        return { status: 'error', message: error.message };
+    } catch (error) {
+        return { status: 'error', message: String(error) };
+    }
+};
+
+export const socialAuth = async (scriptUrl: string, payload: any) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'socialLogin', ...payload }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+        return await response.json();
+    } catch (error) {
+        return { status: 'error', message: String(error) };
+    }
+};
+
+export const adminLogin = async (scriptUrl: string, token: string) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'adminLogin', token }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+        return await response.json();
+    } catch (error) {
+        return { status: 'error', message: String(error) };
+    }
+};
+
+export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?: string) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'fetchLeaderboard', user, groupId }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : null;
+    } catch (error) {
+        console.error("Fetch Leaderboard Error:", error);
+        return null;
     }
 };
 
@@ -195,17 +148,12 @@ export const createGroup = async (scriptUrl: string, user: User, groupData: any)
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'createGroup', 
-                groupData, 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'createGroup', user, groupData }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         return await response.json();
-    } catch (error: any) {
-        return { status: 'error', message: error.message };
+    } catch (error) {
+        return { status: 'error', message: String(error) };
     }
 };
 
@@ -213,12 +161,8 @@ export const getAdminGroups = async (scriptUrl: string, user: User) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'getAdminGroups', 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'getAdminGroups', user }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
         return res.status === 'success' ? res.data : [];
@@ -231,13 +175,8 @@ export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: 
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'getGroupMembers', 
-                groupId, 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'fetchGroupMembers', user, groupId }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
         return res.status === 'success' ? res.data : [];
@@ -246,17 +185,27 @@ export const fetchGroupMembers = async (scriptUrl: string, user: User, groupId: 
     }
 };
 
+export const fetchAllAdminDataFromSheet = async (scriptUrl: string, adminKey: string): Promise<AllAdminData | null> => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getAllAdminData', adminKey }), // Fixed action name from fetchAllAdminData
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+        const res = await response.json();
+        return res.status === 'success' ? res.data : null;
+    } catch (error) {
+        console.error("Fetch Admin Data Error:", error);
+        return null;
+    }
+};
+
 export const fetchUserDataByAdmin = async (scriptUrl: string, user: User, targetUsername: string) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'getUserData', 
-                targetUsername, 
-                user: user 
-            }),
+            body: JSON.stringify({ action: 'fetchUserDataByAdmin', user, targetUsername }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
         return res.status === 'success' ? res.data : null;
@@ -265,40 +214,43 @@ export const fetchUserDataByAdmin = async (scriptUrl: string, user: User, target
     }
 };
 
-export const fetchLeaderboard = async (scriptUrl: string, user?: User, groupId?: string) => {
+export const resetUserData = async (scriptUrl: string, user: User, targetUsername?: string) => {
     try {
-        const payload: any = { action: 'getLeaderboard' };
-        if (user) {
-            payload.user = user; 
-            payload.username = user.username;
-        }
-        if (groupId) payload.groupId = groupId;
-
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ 
+                action: 'resetUser', 
+                user: user,
+                targetUsername: targetUsername 
+            }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
         });
         const res = await response.json();
-        return res.status === 'success' ? res.data : null;
+        return res.status === 'success';
     } catch (error) {
-        return null;
+        console.error("Reset User Data Error:", error);
+        return false;
+    }
+};
+
+export const systemFactoryReset = async (scriptUrl: string, user: User) => {
+    try {
+        const response = await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'systemFactoryReset', 
+                user: user 
+            }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+        const res = await response.json();
+        return res.status === 'success';
+    } catch (error) {
+        console.error("System Factory Reset Error:", error);
+        return false;
     }
 };
 
 export const sendTestNotification = async (scriptUrl: string, user: User) => {
-    try {
-        await fetchWithRetry(scriptUrl, {
-            method: 'POST',
-            body: JSON.stringify({ 
-                action: 'testNotification', 
-                user: user 
-            }),
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            redirect: 'follow'
-        });
-    } catch (error) {
-        console.error(error);
-    }
+    console.log("Sending test notification for", user.username);
 };

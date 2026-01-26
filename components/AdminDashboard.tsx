@@ -1,785 +1,1049 @@
 
-// ... existing imports ...
-import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { fetchAllAdminDataFromSheet, AllAdminData, createGroup, getAdminGroups, fetchGroupMembers, fetchUserDataByAdmin } from '../services/googleSheetService';
-import { ChartBarIcon, UserGroupIcon, FireIcon, ClipboardCheckIcon, UserCircleIcon, PrinterIcon, BeakerIcon, WaterDropIcon, BoltIcon, HeartIcon, LineIcon, ArrowLeftIcon, XIcon, ScaleIcon, StarIcon, TrophyIcon, BookOpenIcon, SquaresIcon, CameraIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon } from './icons';
-import { SATISFACTION_QUESTIONS, OUTCOME_QUESTIONS } from '../constants';
+import { fetchAllAdminDataFromSheet, resetUserData, AllAdminData } from '../services/googleSheetService';
+import { ChartBarIcon, UserGroupIcon, FireIcon, HeartIcon, ScaleIcon, SquaresIcon, ClipboardListIcon, ExclamationTriangleIcon, SearchIcon, ArrowLeftIcon, ClipboardCheckIcon, BoltIcon, TrophyIcon, StarIcon, BookOpenIcon } from './icons';
+
+// --- Helper Components ---
 
 const Spinner: React.FC = () => (
     <div className="flex flex-col items-center justify-center gap-4 py-16">
-        <div className="w-12 h-12 border-4 border-t-red-500 border-gray-200 dark:border-gray-600 rounded-full animate-spin"></div>
-        <p className="text-red-600 dark:text-red-400 font-medium">กำลังดึงข้อมูลวิจัยเชิงลึก...</p>
+        <div className="w-12 h-12 border-4 border-t-teal-500 border-gray-200 dark:border-gray-600 rounded-full animate-spin"></div>
+        <p className="text-teal-600 dark:text-teal-400 font-medium">กำลังประมวลผลข้อมูล...</p>
     </div>
 );
 
-// ... UserDetailModal, GroupDetailView, convertToCSV, DataTable, GroupManagementTab ...
-// (Keeping existing helper components exactly as they were, skipping for brevity in this XML block but they must be preserved in final file)
-
-// ... Re-insert helper components ...
-const UserDetailModal: React.FC<{ userData: any, onClose: () => void }> = ({ userData, onClose }) => {
-    if(!userData) return null;
-    const bmi = userData.bmiHistory.length > 0 ? userData.bmiHistory[0].value.toFixed(1) : '-';
-    const tdee = userData.tdeeHistory.length > 0 ? Math.round(userData.tdeeHistory[0].value) : '-';
+const FilterBar: React.FC<{
+    orgs: any[],
+    groups: any[],
+    selectedOrg: string,
+    setSelectedOrg: (val: string) => void,
+    selectedGroup: string,
+    setSelectedGroup: (val: string) => void,
+    startDate: string,
+    setStartDate: (val: string) => void,
+    endDate: string,
+    setEndDate: (val: string) => void,
+    onRefresh: () => void
+}> = ({ orgs, groups, selectedOrg, setSelectedOrg, selectedGroup, setSelectedGroup, startDate, setStartDate, endDate, setEndDate, onRefresh }) => {
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col relative animate-bounce-in max-h-[90vh]">
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200"><XIcon className="w-5 h-5 text-gray-600" /></button>
-                <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-6 text-white">
-                    <div className="flex items-center gap-4">
-                        {userData.profile?.profilePicture ? (
-                            <img src={userData.profile.profilePicture} className="w-16 h-16 rounded-full border-2 border-white" />
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-end md:items-center justify-between animate-fade-in-down">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                {/* Org Filter */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">หน่วยงาน (Organization)</label>
+                    <div className="relative">
+                        <select 
+                            value={selectedOrg} 
+                            onChange={(e) => setSelectedOrg(e.target.value)}
+                            className="w-full p-2.5 pl-9 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-teal-500 outline-none appearance-none"
+                        >
+                            <option value="all">ทั้งหมด (All Organizations)</option>
+                            {orgs.map((o, i) => <option key={i} value={o.id}>{o.name}</option>)}
+                        </select>
+                        <UserGroupIcon className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                    </div>
+                </div>
+
+                {/* Group Filter (New) */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">กลุ่ม/คลินิก (Group/Clinic)</label>
+                    <div className="relative">
+                        <select 
+                            value={selectedGroup} 
+                            onChange={(e) => setSelectedGroup(e.target.value)}
+                            className="w-full p-2.5 pl-9 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                        >
+                            <option value="all">ทั้งหมด (All Groups)</option>
+                            {groups && groups.map((g, i) => <option key={i} value={g.GroupId || g.id}>{g.Name || g.name}</option>)}
+                        </select>
+                        <SquaresIcon className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+                    </div>
+                </div>
+
+                {/* Date Filters */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">ตั้งแต่วันที่</label>
+                    <input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-teal-500 dark:text-white"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">ถึงวันที่</label>
+                    <input 
+                        type="date" 
+                        value={endDate} 
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full p-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium outline-none focus:ring-2 focus:ring-teal-500 dark:text-white"
+                    />
+                </div>
+            </div>
+            
+            <button 
+                onClick={onRefresh}
+                className="mt-4 md:mt-0 w-full md:w-auto px-6 py-2.5 bg-teal-600 text-white font-bold rounded-lg shadow-md hover:bg-teal-700 active:scale-95 transition-all flex items-center justify-center gap-2 whitespace-nowrap h-[42px]"
+            >
+                <SearchIcon className="w-4 h-4" /> ประมวลผล
+            </button>
+        </div>
+    );
+};
+
+const KPICard: React.FC<{ title: string, value: string, subValue?: string, change?: string, icon: React.ReactNode, color: string }> = ({ title, value, subValue, change, icon, color }) => (
+    <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
+        <div className={`absolute top-0 right-0 p-3 opacity-10 transform group-hover:scale-110 transition-transform duration-500 ${color.replace('text-', 'text-')}`}>
+            {React.cloneElement(icon as React.ReactElement<any>, { className: "w-16 h-16" })}
+        </div>
+        <div className="relative z-10">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${color.replace('text-', 'bg-').replace('600', '100').replace('500', '100')} ${color}`}>
+                {icon}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">{title}</p>
+            <div className="flex items-end gap-2 mt-1">
+                <h3 className="text-2xl font-black text-gray-800 dark:text-white">{value}</h3>
+                {change && (
+                    <span className={`text-xs font-bold mb-1 ${change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>
+                        {change}
+                    </span>
+                )}
+            </div>
+            {subValue && <p className="text-xs text-gray-400 mt-1 font-medium">{subValue}</p>}
+        </div>
+    </div>
+);
+
+const StatBar: React.FC<{ label: string, count: number, total: number, color: string }> = ({ label, count, total, color }) => {
+    const percent = total > 0 ? (count / total) * 100 : 0;
+    return (
+        <div className="mb-3">
+            <div className="flex justify-between text-xs font-medium mb-1">
+                <span className="text-gray-600 dark:text-gray-300">{label}</span>
+                <span className="text-gray-800 dark:text-white font-bold">{count} ({percent.toFixed(1)}%)</span>
+            </div>
+            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                <div className={`h-full ${color}`} style={{ width: `${percent}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+// --- Macro View Logic ---
+
+const MacroOverview: React.FC<{ 
+    adminData: AllAdminData | null, 
+    filterOrg: string, 
+    filterGroup: string,
+    startDate: string, 
+    endDate: string 
+}> = ({ adminData, filterOrg, filterGroup, startDate, endDate }) => {
+    if (!adminData) return <div className="text-center py-10 text-gray-400">No Data Loaded</div>;
+
+    const { profiles, bmiHistory, groupMembers } = adminData as any;
+
+    const stats = useMemo(() => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59);
+
+        const validUsernamesInGroup = new Set();
+        if (filterGroup && filterGroup !== 'all' && groupMembers) {
+            groupMembers.forEach((m: any) => {
+                if (m.GroupId === filterGroup || m.groupId === filterGroup) {
+                    validUsernamesInGroup.add(m.Username || m.username);
+                }
+            });
+        }
+
+        const userMap = new Map();
+        (profiles || []).forEach((p: any) => {
+            if (filterOrg !== 'all' && p.organization !== filterOrg) return;
+            if (filterGroup !== 'all' && !validUsernamesInGroup.has(p.username)) return;
+
+            const joinDate = new Date(p.timestamp);
+            if (joinDate <= end) {
+                userMap.set(p.username, p);
+            }
+        });
+
+        const uniqueUsers = Array.from(userMap.values());
+        const totalN = uniqueUsers.length;
+
+        // Counters
+        let gender = { male: 0, female: 0, unspecified: 0 };
+        let bmiStats = { under: 0, normal: 0, over: 0, obese: 0 };
+        
+        // Waist & WHR separated by gender
+        let waistRiskDetail = { male: 0, female: 0 }; // Male > 90, Female > 80
+        let whrRiskDetail = { male: 0, female: 0 }; // Male >= 0.90, Female >= 0.85
+        
+        let ncdCount = 0; // Total people with NCDs
+        let ncdBreakdown: Record<string, number> = {}; // Breakdown by disease type
+        
+        let ageGroups = { 'ต่ำกว่า 18': 0, '18-29': 0, '30-39': 0, '40-49': 0, '50-59': 0, '60+': 0, 'ไม่ระบุ': 0 };
+        let activeUsersCount = 0;
+
+        uniqueUsers.forEach((u: any) => {
+            // 1. Gender Logic
+            const sex = u.gender ? u.gender.toLowerCase() : 'unknown';
+            if (sex === 'male') gender.male++;
+            else if (sex === 'female') gender.female++;
+            else gender.unspecified++;
+
+            // 2. Age Logic
+            const age = parseInt(u.age);
+            if (isNaN(age) || age <= 0) ageGroups['ไม่ระบุ']++;
+            else if (age < 18) ageGroups['ต่ำกว่า 18']++;
+            else if (age >= 18 && age <= 29) ageGroups['18-29']++;
+            else if (age >= 30 && age <= 39) ageGroups['30-39']++;
+            else if (age >= 40 && age <= 49) ageGroups['40-49']++;
+            else if (age >= 50 && age <= 59) ageGroups['50-59']++;
+            else ageGroups['60+']++;
+
+            // 3. BMI Logic
+            const weight = parseFloat(u.weight);
+            const height = parseFloat(u.height);
+            if (weight > 0 && height > 0) {
+                const hM = height / 100;
+                const bmi = weight / (hM * hM);
+                if (bmi < 18.5) bmiStats.under++;
+                else if (bmi < 23) bmiStats.normal++;
+                else if (bmi < 25) bmiStats.over++;
+                else bmiStats.obese++;
+            }
+
+            // 4. Waist & WHR Risk Logic (Gender Specific)
+            const waist = parseFloat(u.waist);
+            const hip = parseFloat(u.hip);
+            
+            if (waist > 0) {
+                if (sex === 'male' && waist > 90) waistRiskDetail.male++;
+                if (sex === 'female' && waist > 80) waistRiskDetail.female++;
+            }
+
+            if (waist > 0 && hip > 0) {
+                const whr = waist / hip;
+                if (sex === 'male' && whr >= 0.90) whrRiskDetail.male++;
+                if (sex === 'female' && whr >= 0.85) whrRiskDetail.female++;
+            }
+
+            // 5. NCDs Breakdown
+            const condition = u.healthCondition;
+            if (condition && condition !== 'ไม่มีโรคประจำตัว' && condition !== 'N/A' && condition !== '-') {
+                ncdCount++;
+                // Sometimes condition might be comma separated if multiple selected, but assuming single for now based on UI
+                // Standardize keys
+                const disease = condition.trim();
+                ncdBreakdown[disease] = (ncdBreakdown[disease] || 0) + 1;
+            }
+
+            // Check Activity Log overlap
+            const userLogs = (bmiHistory || []).filter((b: any) => b.username === u.username);
+            if (userLogs.length > 0) activeUsersCount++;
+        });
+
+        return { 
+            totalN, 
+            gender, 
+            bmiStats, 
+            waistRiskDetail, 
+            whrRiskDetail, 
+            ncdCount, 
+            ncdBreakdown, 
+            ageGroups,
+            activeUsersCount
+        };
+
+    }, [profiles, bmiHistory, groupMembers, filterOrg, filterGroup, startDate, endDate]);
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex items-center gap-2 mb-2">
+                <span className="bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded dark:bg-teal-900 dark:text-teal-300">Macro View</span>
+                <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">สถิติและผลลัพธ์สุขภาพ (Statistics & Outcomes)</h2>
+            </div>
+
+            {/* KPI Cards Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard 
+                    title="กลุ่มตัวอย่าง (N)" 
+                    value={stats.totalN.toLocaleString()} 
+                    subValue={`ชาย ${stats.gender.male} | หญิง ${stats.gender.female}`} 
+                    icon={<UserGroupIcon />} 
+                    color="text-blue-600" 
+                />
+                <KPICard 
+                    title="กลุ่มเสี่ยงโรค (NCDs)" 
+                    value={stats.ncdCount.toLocaleString()} 
+                    subValue={`คิดเป็น ${stats.totalN > 0 ? ((stats.ncdCount/stats.totalN)*100).toFixed(1) : 0}%`} 
+                    icon={<HeartIcon />} 
+                    color="text-rose-500" 
+                />
+                <KPICard 
+                    title="เสี่ยงรอบเอว (รวม)" 
+                    value={(stats.waistRiskDetail.male + stats.waistRiskDetail.female).toLocaleString()} 
+                    subValue={`ชาย ${stats.waistRiskDetail.male} | หญิง ${stats.waistRiskDetail.female}`} 
+                    icon={<ScaleIcon />} 
+                    color="text-orange-500" 
+                />
+                <KPICard 
+                    title="เสี่ยง WHR (รวม)" 
+                    value={(stats.whrRiskDetail.male + stats.whrRiskDetail.female).toLocaleString()} 
+                    subValue={`อัตราส่วนสะโพกเกินเกณฑ์`} 
+                    icon={<ExclamationTriangleIcon />} 
+                    color="text-red-600" 
+                />
+            </div>
+
+            {/* Detailed Stats Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* 1. Demographics (Gender & Age) */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div>
+                        <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                            <UserGroupIcon className="w-5 h-5 text-blue-500"/> 
+                            ประชากรศาสตร์ (Demographics)
+                        </h3>
+                        <div className="space-y-1">
+                            <StatBar label="ชาย (Male)" count={stats.gender.male} total={stats.totalN} color="bg-blue-500" />
+                            <StatBar label="หญิง (Female)" count={stats.gender.female} total={stats.totalN} color="bg-pink-500" />
+                            <StatBar label="ไม่ระบุ (Unspecified)" count={stats.gender.unspecified} total={stats.totalN} color="bg-gray-400" />
+                        </div>
+                    </div>
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">ช่วงอายุ (Age Groups)</h4>
+                        <div className="space-y-2">
+                            {Object.entries(stats.ageGroups).map(([range, count]) => {
+                                if (count === 0) return null;
+                                return (
+                                    <div key={range} className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-600 dark:text-gray-300">{range} ปี</span>
+                                        <span className="text-xs font-bold text-gray-800 dark:text-white">{count} คน</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Health Status (BMI & NCDs) */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
+                    <div>
+                        <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                            <ScaleIcon className="w-5 h-5 text-teal-500"/> 
+                            ภาวะโภชนาการ (BMI)
+                        </h3>
+                        <div className="space-y-1">
+                            <StatBar label="ผอม (Underweight)" count={stats.bmiStats.under} total={stats.totalN} color="bg-blue-400" />
+                            <StatBar label="สมส่วน (Normal)" count={stats.bmiStats.normal} total={stats.totalN} color="bg-green-500" />
+                            <StatBar label="ท้วม (Overweight)" count={stats.bmiStats.over} total={stats.totalN} color="bg-yellow-400" />
+                            <StatBar label="โรคอ้วน (Obese)" count={stats.bmiStats.obese} total={stats.totalN} color="bg-red-500" />
+                        </div>
+                    </div>
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">โรคประจำตัว (NCDs Breakdown)</h4>
+                        {Object.keys(stats.ncdBreakdown).length > 0 ? (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                {Object.entries(stats.ncdBreakdown)
+                                    .sort(([,a], [,b]) => b - a)
+                                    .map(([disease, count]) => (
+                                    <div key={disease} className="flex items-center justify-between p-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
+                                        <span className="text-xs font-medium text-rose-800 dark:text-rose-200 truncate max-w-[70%]">{disease}</span>
+                                        <div className="text-xs font-bold text-rose-600 dark:text-rose-300">
+                                            {count} <span className="opacity-70 text-[9px]">({((count/stats.totalN)*100).toFixed(1)}%)</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         ) : (
-                            <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center text-2xl">👤</div>
+                            <p className="text-xs text-gray-400 text-center py-2">ไม่มีข้อมูลกลุ่มเสี่ยง</p>
                         )}
-                        <div>
-                            <h2 className="text-xl font-bold">{userData.profile?.displayName || 'Unknown User'}</h2>
-                            <p className="text-sm opacity-90">ID: {userData.profile?.username}</p>
-                            <div className="flex gap-2 mt-1 text-xs font-bold">
-                                <span className="bg-white/20 px-2 py-0.5 rounded">Level {userData.profile?.level}</span>
-                                <span className="bg-white/20 px-2 py-0.5 rounded">{userData.profile?.xp} HP</span>
+                    </div>
+                </div>
+
+                {/* 3. Metabolic Risk (Waist & WHR) */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                        <BoltIcon className="w-5 h-5 text-indigo-500"/> 
+                        ความเสี่ยงเมตาบอลิก (Metabolic Risk)
+                    </h3>
+                    <div className="space-y-4">
+                        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800">
+                            <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">รอบเอวเกินเกณฑ์ (Waist Risk)</p>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">ชาย (&gt;90 ซม.)</span>
+                                    <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
+                                        {stats.waistRiskDetail.male} <span className="text-[10px] opacity-70">({stats.gender.male > 0 ? ((stats.waistRiskDetail.male/stats.gender.male)*100).toFixed(1) : 0}%)</span>
+                                    </span>
+                                </div>
+                                <div className="w-full bg-orange-200 dark:bg-orange-900 rounded-full h-1.5">
+                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${stats.gender.male > 0 ? (stats.waistRiskDetail.male/stats.gender.male)*100 : 0}%` }}></div>
+                                </div>
+
+                                <div className="flex justify-between items-center mt-3">
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">หญิง (&gt;80 ซม.)</span>
+                                    <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
+                                        {stats.waistRiskDetail.female} <span className="text-[10px] opacity-70">({stats.gender.female > 0 ? ((stats.waistRiskDetail.female/stats.gender.female)*100).toFixed(1) : 0}%)</span>
+                                    </span>
+                                </div>
+                                <div className="w-full bg-orange-200 dark:bg-orange-900 rounded-full h-1.5">
+                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${stats.gender.female > 0 ? (stats.waistRiskDetail.female/stats.gender.female)*100 : 0}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800">
+                            <p className="text-xs font-bold text-red-600 dark:text-red-400 uppercase mb-2">WHR เกินเกณฑ์ (Waist-Hip Ratio)</p>
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">ชาย (&ge; 0.90)</span>
+                                    <span className="text-sm font-bold text-red-700 dark:text-red-300">
+                                        {stats.whrRiskDetail.male} <span className="text-[10px] opacity-70">({stats.gender.male > 0 ? ((stats.whrRiskDetail.male/stats.gender.male)*100).toFixed(1) : 0}%)</span>
+                                    </span>
+                                </div>
+                                <div className="w-full bg-red-200 dark:bg-red-900 rounded-full h-1.5">
+                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${stats.gender.male > 0 ? (stats.whrRiskDetail.male/stats.gender.male)*100 : 0}%` }}></div>
+                                </div>
+
+                                <div className="flex justify-between items-center mt-3">
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">หญิง (&ge; 0.85)</span>
+                                    <span className="text-sm font-bold text-red-700 dark:text-red-300">
+                                        {stats.whrRiskDetail.female} <span className="text-[10px] opacity-70">({stats.gender.female > 0 ? ((stats.whrRiskDetail.female/stats.gender.female)*100).toFixed(1) : 0}%)</span>
+                                    </span>
+                                </div>
+                                <div className="w-full bg-red-200 dark:bg-red-900 rounded-full h-1.5">
+                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${stats.gender.female > 0 ? (stats.whrRiskDetail.female/stats.gender.female)*100 : 0}%` }}></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="p-6 overflow-y-auto space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
-                            <ScaleIcon className="w-5 h-5 text-blue-500 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">BMI</p>
-                            <p className="font-bold text-lg dark:text-white">{bmi}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
-                            <FireIcon className="w-5 h-5 text-orange-500 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">TDEE</p>
-                            <p className="font-bold text-lg dark:text-white">{tdee}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
-                            <BoltIcon className="w-5 h-5 text-yellow-500 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Activity</p>
-                            <p className="font-bold text-lg dark:text-white">{userData.activityHistory.length} ครั้ง</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
-                            <HeartIcon className="w-5 h-5 text-rose-500 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Condition</p>
-                            <p className="font-bold text-xs dark:text-white truncate">{userData.profile?.healthCondition || '-'}</p>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-700 dark:text-gray-300 mb-2 border-b pb-1">ประวัติการบันทึกล่าสุด</h3>
-                        <div className="space-y-2 text-sm">
-                            {userData.foodHistory.slice(0,3).map((f: any, i: number) => (
-                                <div key={i} className="flex justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                                    <span>🍽️ {f.analysis.description}</span>
-                                    <span className="text-gray-500">{new Date(f.date).toLocaleDateString()}</span>
-                                </div>
-                            ))}
-                            {userData.activityHistory.slice(0,3).map((a: any, i: number) => (
-                                <div key={i} className="flex justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
-                                    <span>🏃 {a.name}</span>
-                                    <span className="text-gray-500">{new Date(a.date).toLocaleDateString()}</span>
-                                </div>
-                            ))}
-                        </div>
-                        {userData.foodHistory.length === 0 && userData.activityHistory.length === 0 && (
-                            <p className="text-center text-gray-400 text-sm">ยังไม่มีประวัติกิจกรรม</p>
-                        )}
-                    </div>
-                </div>
             </div>
         </div>
     );
 };
 
-const GroupDetailView: React.FC<{ group: any, onBack: () => void }> = ({ group, onBack }) => {
-    const { scriptUrl, currentUser } = useContext(AppContext);
-    const [members, setMembers] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedUser, setSelectedUser] = useState<any>(null);
-    const [loadingUser, setLoadingUser] = useState(false);
+// --- Outcome Analysis Component (New) ---
 
-    useEffect(() => {
-        const loadMembers = async () => {
-            if(!scriptUrl || !currentUser) return;
-            const data = await fetchGroupMembers(scriptUrl, currentUser, group.id);
-            setMembers(data);
-            setLoading(false);
+const OutcomeAnalysis: React.FC<{ 
+    adminData: AllAdminData | null, 
+    filterOrg: string, 
+    filterGroup: string,
+    startDate: string, 
+    endDate: string 
+}> = ({ adminData, filterOrg, filterGroup, startDate, endDate }) => {
+    if (!adminData) return <div className="text-center py-10 text-gray-400">No Data Loaded</div>;
+
+    const { profiles, bmiHistory, quizHistory, groupMembers } = adminData as any;
+
+    const outcomes = useMemo(() => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59);
+
+        // 1. Identify Target Users based on Filters
+        const validUsernamesInGroup = new Set<string>();
+        
+        if (filterGroup && filterGroup !== 'all' && groupMembers) {
+            groupMembers.forEach((m: any) => {
+                if (m.GroupId === filterGroup || m.groupId === filterGroup) {
+                    validUsernamesInGroup.add(m.Username || m.username);
+                }
+            });
+        }
+
+        const validUsernames = new Set<string>();
+        (profiles || []).forEach((p: any) => {
+            if (filterOrg !== 'all' && p.organization !== filterOrg) return;
+            if (filterGroup !== 'all' && !validUsernamesInGroup.has(p.username)) return;
+            validUsernames.add(p.username);
+        });
+
+        // 2. Health Literacy Outcome (Separated Pre & Post)
+        // Store scores for calculation
+        const preScores: number[] = [];
+        const postScores: number[] = [];
+        
+        // Also keep Paired logic for Improvement Rate (still useful)
+        const userQuizMap: Record<string, { pre: number | null, post: number | null }> = {};
+
+        (quizHistory || []).forEach((q: any) => {
+            if (!validUsernames.has(q.username)) return;
+            const qDate = new Date(q.date);
+            if (qDate < start || qDate > end) return;
+
+            // Independent Arrays for detailed stats
+            if (q.type === 'pre-test') preScores.push(q.score);
+            else if (q.type === 'post-test') postScores.push(q.score);
+
+            // Paired Mapping
+            if (!userQuizMap[q.username]) userQuizMap[q.username] = { pre: null, post: null };
+            if (q.type === 'pre-test') userQuizMap[q.username].pre = q.score;
+            else if (q.type === 'post-test') userQuizMap[q.username].post = q.score;
+        });
+
+        // Calculate Paired Improvement Stats
+        let totalImprovement = 0;
+        let countImproved = 0;
+        let totalPairs = 0;
+        
+        Object.values(userQuizMap).forEach((scores) => {
+            if (scores.pre !== null && scores.post !== null) {
+                totalPairs++;
+                const diff = scores.post - scores.pre;
+                totalImprovement += diff;
+                if (diff > 0) countImproved++;
+            }
+        });
+
+        // Helper to calculate Stats (N, Pass, %, Avg, Max, Min)
+        const calculateStats = (scores: number[]) => {
+            if (scores.length === 0) return { n: 0, pass: 0, passPct: 0, avg: 0, max: 0, min: 0 };
+            const n = scores.length;
+            const pass = scores.filter(s => s >= 80).length;
+            const passPct = (pass / n) * 100;
+            const sum = scores.reduce((a, b) => a + b, 0);
+            const avg = sum / n;
+            const max = Math.max(...scores);
+            const min = Math.min(...scores);
+            return { n, pass, passPct, avg, max, min };
         };
-        loadMembers();
-    }, [group.id]);
 
-    const handleViewUser = async (username: string) => {
-        setLoadingUser(true);
-        const data = await fetchUserDataByAdmin(scriptUrl, currentUser!, username);
-        if(data) {
-            const memberInfo = members.find(m => m.username === username);
-            if (data.profile) {
-                if (!data.profile.displayName && memberInfo) data.profile.displayName = memberInfo.displayName;
-                if (!data.profile.profilePicture && memberInfo) data.profile.profilePicture = memberInfo.profilePicture;
-                if (!data.profile.username) data.profile.username = username;
-            } else if (memberInfo) {
-                data.profile = { 
-                    ...memberInfo, 
-                    gender: '-', age: '-', weight: '-', height: '-', 
-                    activityLevel: 1.2, healthCondition: 'N/A' 
-                };
-            }
-            setSelectedUser(data);
-        } else {
-            alert('ไม่สามารถดึงข้อมูลได้');
-        }
-        setLoadingUser(false);
-    };
+        const detailedStats = {
+            pre: calculateStats(preScores),
+            post: calculateStats(postScores)
+        };
 
-    return (
-        <div className="space-y-6">
-            <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-gray-800 font-bold mb-4">
-                <ArrowLeftIcon className="w-5 h-5" /> กลับไปหน้ารวมกลุ่ม
-            </button>
-            <div className="bg-white dark:bg-gray-700 p-6 rounded-xl shadow-md border-l-4 border-teal-500 relative overflow-hidden">
-                <div className="relative z-10 flex items-start gap-4">
-                    {group.image && (
-                        <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-white shadow-md flex-shrink-0">
-                            <img src={group.image} alt="Group" className="w-full h-full object-cover" />
-                        </div>
-                    )}
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">{group.name}</h2>
-                        <p className="text-gray-500 dark:text-gray-300">Code: {group.code} | สมาชิก: {members.length} คน</p>
-                        {group.lineLink && <a href={group.lineLink} target="_blank" className="text-sm text-green-600 font-bold flex items-center gap-1 mt-2"><LineIcon className="w-4 h-4"/> Line Group</a>}
-                    </div>
-                </div>
-            </div>
-            {loading ? <Spinner /> : (
-                <div className="bg-white dark:bg-gray-700 rounded-xl shadow-md overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-200 uppercase text-xs">
-                            <tr>
-                                <th className="px-6 py-3">สมาชิก</th>
-                                <th className="px-6 py-3">ระดับ</th>
-                                <th className="px-6 py-3">XP</th>
-                                <th className="px-6 py-3">สุขภาพ</th>
-                                <th className="px-6 py-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-600">
-                            {members.map((m, i) => (
-                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                                    <td className="px-6 py-4 flex items-center gap-3">
-                                        {m.profilePicture ? <img src={m.profilePicture} className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">👤</div>}
-                                        <div>
-                                            <p className="font-bold text-gray-800 dark:text-white">{m.displayName}</p>
-                                            <p className="text-xs text-gray-400">{m.username}</p>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">Level {m.level}</td>
-                                    <td className="px-6 py-4 font-bold text-teal-600">{m.xp.toLocaleString()}</td>
-                                    <td className="px-6 py-4 text-xs">{m.healthCondition}</td>
-                                    <td className="px-6 py-4">
-                                        <button onClick={() => handleViewUser(m.username)} className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100">ดูรายงาน</button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {members.length === 0 && <tr><td colSpan={5} className="text-center py-8 text-gray-400">ยังไม่มีสมาชิกในกลุ่ม</td></tr>}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-            {loadingUser && <div className="fixed inset-0 bg-black/50 z-[190] flex items-center justify-center"><Spinner /></div>}
-            {selectedUser && <UserDetailModal userData={selectedUser} onClose={() => setSelectedUser(null)} />}
-        </div>
-    );
-};
+        const literacyStats = {
+            totalPairs,
+            avgImprovement: totalPairs > 0 ? (totalImprovement / totalPairs).toFixed(1) : 0,
+            improvedPct: totalPairs > 0 ? (countImproved / totalPairs) * 100 : 0,
+            detailed: detailedStats
+        };
 
-const convertToCSV = (objArray: any[]) => {
-    const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
-    let str = '';
-    let headers = Object.keys(array[0] || {}).join(',') + '\r\n';
-    str += headers;
-    for (let i = 0; i < array.length; i++) {
-        let line = '';
-        for (let index in array[i]) {
-            if (line !== '') line += ',';
-            let val = array[i][index];
-            if (typeof val === 'string') {
-                val = val.replace(/"/g, '""'); 
-                line += `"${val}"`;
-            } else if (typeof val === 'object') {
-                 line += `"${JSON.stringify(val).replace(/"/g, '""')}"`;
+        // 3. Clinical Outcome (BMI Migration) - Same as before
+        const getBmiScore = (cat: string) => {
+            if (!cat) return -1;
+            if (cat.includes('ผอม') || cat.includes('Under')) return 0;
+            if (cat.includes('สมส่วน') || cat.includes('Normal')) return 1;
+            if (cat.includes('ท้วม') || cat.includes('Over')) return 2;
+            if (cat.includes('อ้วน 1') || cat.includes('Obese 1')) return 3;
+            if (cat.includes('อ้วน 2') || cat.includes('Obese 2')) return 4;
+            return -1;
+        };
+
+        const bmiUserMap: Record<string, { start: any, end: any }> = {};
+        (bmiHistory || []).forEach((b: any) => {
+            if (!validUsernames.has(b.username)) return;
+            const bDate = new Date(b.timestamp);
+            if (bDate < start || bDate > end) return;
+
+            if (!bmiUserMap[b.username]) {
+                bmiUserMap[b.username] = { start: b, end: b };
             } else {
-                line += val;
+                if (new Date(b.timestamp) < new Date(bmiUserMap[b.username].start.timestamp)) {
+                    bmiUserMap[b.username].start = b;
+                }
+                if (new Date(b.timestamp) > new Date(bmiUserMap[b.username].end.timestamp)) {
+                    bmiUserMap[b.username].end = b;
+                }
             }
-        }
-        str += line + '\r\n';
-    }
-    return str;
-};
+        });
 
-const DataTable: React.FC<{ data: any[], title: string, allowExport?: boolean }> = ({ data, title, allowExport }) => {
-    if (!data || data.length === 0) {
-        return <p className="text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg text-center">ไม่มีข้อมูลในส่วน {title}</p>;
-    }
-    const headers = Object.keys(data[0]);
-    const handleExport = () => {
-        const csv = convertToCSV(data);
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `${title}_export_${new Date().toISOString().slice(0,10)}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-    const renderCellContent = (header: string, value: any) => {
-        if (header === 'profilePicture') {
-            if (String(value).startsWith('data:image/')) return <img src={String(value)} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-gray-200" />;
-            return <span className="text-2xl">{String(value)}</span>;
-        }
-        if (header === 'timestamp' || header === 'lastSeen' || header === 'date') {
-            const date = new Date(value);
-             if (!isNaN(date.getTime())) return date.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        }
-        if (typeof value === 'object' && value !== null) return JSON.stringify(value).substring(0, 30) + '...';
-        const stringValue = String(value);
-        return stringValue.length > 50 ? stringValue.substring(0, 50) + '...' : stringValue;
-    };
-    return (
-        <div>
-            {allowExport && (
-                <div className="flex justify-end mb-2">
-                    <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-teal-700 bg-teal-100 hover:bg-teal-200 rounded-md transition-colors"><PrinterIcon className="w-4 h-4" /> Export CSV (สำหรับงานวิจัย)</button>
-                </div>
-            )}
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300">
-                        <tr>{headers.map(header => (<th key={header} scope="col" className="px-6 py-3 whitespace-nowrap">{header}</th>))}</tr>
-                    </thead>
-                    <tbody>
-                        {data.map((row, index) => (
-                            <tr key={index} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
-                                {headers.map(header => (<td key={`${header}-${index}`} className="px-6 py-4 align-middle whitespace-nowrap">{renderCellContent(header, row[header])}</td>))}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
+        let successMigration = 0;
+        let maintainedNormal = 0;
+        let totalBmiUsers = 0;
+        const migrationFlow: string[] = [];
 
-const GroupManagementTab: React.FC = () => {
-    const { scriptUrl, currentUser } = useContext(AppContext);
-    const [groups, setGroups] = useState<any[]>([]);
-    const [newGroup, setNewGroup] = useState({ name: '', code: '', description: '', lineLink: '', image: '' });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedGroup, setSelectedGroup] = useState<any>(null);
-    const imageInputRef = useRef<HTMLInputElement>(null);
+        Object.values(bmiUserMap).forEach(({ start, end }) => {
+            if (start && end && start !== end) {
+                const startScore = getBmiScore(start.category);
+                const endScore = getBmiScore(end.category);
+                if (startScore !== -1 && endScore !== -1) {
+                    totalBmiUsers++;
+                    if (endScore < startScore && startScore > 1) {
+                        successMigration++;
+                        migrationFlow.push(`${start.category} -> ${end.category}`);
+                    } else if (startScore === 1 && endScore === 1) {
+                        maintainedNormal++;
+                    }
+                }
+            }
+        });
 
-    useEffect(() => { loadGroups(); }, []);
+        const bmiStats = {
+            totalUsers: totalBmiUsers,
+            successRate: totalBmiUsers > 0 ? ((successMigration + maintainedNormal) / totalBmiUsers) * 100 : 0,
+            improvedCount: successMigration,
+            maintainedCount: maintainedNormal,
+            flows: migrationFlow.reduce((acc, curr) => {
+                acc[curr] = (acc[curr] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>)
+        };
 
-    const loadGroups = async () => {
-        if(!currentUser) return;
-        const res = await getAdminGroups(scriptUrl, currentUser);
-        setGroups(res);
-    };
+        return { literacyStats, bmiStats };
 
-    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setNewGroup({ ...newGroup, image: reader.result as string });
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleCreate = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true); setError(null);
-        try {
-            const res = await createGroup(scriptUrl, currentUser!, newGroup);
-            if(res.status === 'success') {
-                alert('สร้างกลุ่มสำเร็จ!');
-                setNewGroup({ name: '', code: '', description: '', lineLink: '', image: '' });
-                loadGroups();
-            } else { setError(res.message || 'สร้างกลุ่มไม่สำเร็จ'); }
-        } catch(e: any) { setError(e.message); } finally { setLoading(false); }
-    };
-
-    if (selectedGroup) return <GroupDetailView group={selectedGroup} onBack={() => setSelectedGroup(null)} />;
+    }, [profiles, quizHistory, bmiHistory, groupMembers, filterOrg, filterGroup, startDate, endDate]);
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="bg-white dark:bg-gray-700 p-6 rounded-xl shadow-md border-l-4 border-teal-500">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><UserGroupIcon className="w-6 h-6 text-teal-600" /> สร้างกลุ่มสุขภาพใหม่ (Create Group)</h3>
-                <form onSubmit={handleCreate} className="space-y-4">
-                    <div className="flex flex-col items-center mb-4">
-                        <div onClick={() => imageInputRef.current?.click()} className="w-24 h-24 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-500 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600 overflow-hidden">
-                            {newGroup.image ? <img src={newGroup.image} alt="Preview" className="w-full h-full object-cover" /> : <><CameraIcon className="w-8 h-8 text-gray-400" /><span className="text-[10px] text-gray-400 mt-1">รูปกลุ่ม</span></>}
-                        </div>
-                        <input type="file" ref={imageInputRef} onChange={handleImageChange} className="hidden" accept="image/*" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">ชื่อกลุ่ม *</label><input type="text" required value={newGroup.name} onChange={e => setNewGroup({...newGroup, name: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="เช่น คลินิกเบาหวาน รุ่น 1" /></div>
-                        <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">รหัสเข้ากลุ่ม (Access Code) *</label><input type="text" required value={newGroup.code} onChange={e => setNewGroup({...newGroup, code: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="เช่น DM001 (ต้องไม่ซ้ำ)" /></div>
-                    </div>
-                    <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">รายละเอียด</label><input type="text" value={newGroup.description} onChange={e => setNewGroup({...newGroup, description: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="คำอธิบายสั้นๆ" /></div>
-                    <div><label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">LINE Group Link (Optional)</label><input type="url" value={newGroup.lineLink} onChange={e => setNewGroup({...newGroup, lineLink: e.target.value})} className="w-full p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600" placeholder="https://line.me/..." /></div>
-                    {error && <p className="text-red-500 text-sm font-bold">{error}</p>}
-                    <button type="submit" disabled={loading} className="px-6 py-2 bg-teal-600 text-white font-bold rounded-lg hover:bg-teal-700 disabled:opacity-50">{loading ? 'กำลังสร้าง...' : '+ สร้างกลุ่ม'}</button>
-                </form>
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-4">
+                <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2.5 py-0.5 rounded dark:bg-purple-900 dark:text-purple-300">Outcomes</span>
+                <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">ผลลัพธ์และการเปลี่ยนแปลง (Impact Analysis)</h2>
             </div>
-            <div className="bg-white dark:bg-gray-700 p-6 rounded-xl shadow-md">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">กลุ่มที่ดูแลอยู่ ({groups.length})</h3>
-                <div className="grid gap-4">
-                    {groups.map(g => (
-                        <div key={g.id} className="p-4 border dark:border-gray-600 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 dark:bg-gray-800 hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedGroup(g)}>
-                            <div className="flex items-center gap-4">
-                                {g.image ? <img src={g.image} className="w-12 h-12 rounded-lg object-cover bg-gray-200" /> : <div className="w-12 h-12 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600"><UserGroupIcon className="w-6 h-6" /></div>}
-                                <div><h4 className="font-bold text-teal-700 dark:text-teal-300 text-lg">{g.name}</h4><p className="text-sm text-gray-500 dark:text-gray-400">Code: <span className="font-mono font-bold bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">{g.code}</span></p><p className="text-xs text-gray-400 mt-1">{g.description}</p></div>
-                            </div>
-                            <div className="mt-2 md:mt-0 flex flex-col items-end gap-2">{g.lineLink && (<a href={g.lineLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-xs bg-green-500 text-white px-3 py-1.5 rounded-full hover:bg-green-600"><LineIcon className="w-3 h-3" /> LINE Group</a>)}<span className="text-xs text-indigo-500 font-bold bg-indigo-50 dark:bg-indigo-900 px-2 py-1 rounded">คลิกเพื่อจัดการ</span></div>
+
+            {/* 1. Health Literacy Section */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <BookOpenIcon className="w-6 h-6 text-teal-500" />
+                        ความรอบรู้ทางสุขภาพ (Health Literacy Outcome)
+                    </h3>
+                    <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                        Pairs N = {outcomes.literacyStats.totalPairs}
+                    </span>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-100 dark:border-teal-800 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-teal-600 dark:text-teal-400 uppercase mb-1">Knowledge Improvement</p>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">คะแนนเฉลี่ยที่เพิ่มขึ้น</p>
                         </div>
-                    ))}
-                    {groups.length === 0 && <p className="text-gray-500 text-center">ยังไม่มีกลุ่มที่สร้าง</p>}
+                        <span className="text-3xl font-black text-gray-800 dark:text-white">+{outcomes.literacyStats.avgImprovement}%</span>
+                    </div>
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-1">Improvement Rate</p>
+                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">อัตราผู้ที่มีคะแนนดีขึ้น</p>
+                        </div>
+                        <span className="text-3xl font-black text-gray-800 dark:text-white">{outcomes.literacyStats.improvedPct.toFixed(1)}%</span>
+                    </div>
+                </div>
+
+                {/* Detailed Comparison Table */}
+                <div className="overflow-x-auto bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 text-xs uppercase font-bold">
+                            <tr>
+                                <th className="p-4 rounded-tl-xl">ตัวชี้วัด (Metric)</th>
+                                <th className="p-4 text-center text-blue-600 dark:text-blue-400">Pre-test</th>
+                                <th className="p-4 text-center text-teal-600 dark:text-teal-400 rounded-tr-xl">Post-test</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">จำนวนผู้ทำแบบทดสอบ (N)</td>
+                                <td className="p-4 text-center font-bold text-gray-800 dark:text-white">{outcomes.literacyStats.detailed.pre.n}</td>
+                                <td className="p-4 text-center font-bold text-gray-800 dark:text-white">{outcomes.literacyStats.detailed.post.n}</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">จำนวนผู้ที่ผ่านเกณฑ์ (≥ 80%)</td>
+                                <td className="p-4 text-center text-gray-600 dark:text-gray-300">
+                                    {outcomes.literacyStats.detailed.pre.pass} 
+                                    <span className="text-xs ml-1 text-gray-400">({outcomes.literacyStats.detailed.pre.passPct.toFixed(1)}%)</span>
+                                </td>
+                                <td className="p-4 text-center font-bold text-teal-600 dark:text-teal-400">
+                                    {outcomes.literacyStats.detailed.post.pass} 
+                                    <span className="text-xs ml-1">({outcomes.literacyStats.detailed.post.passPct.toFixed(1)}%)</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนเฉลี่ย (Mean Score)</td>
+                                <td className="p-4 text-center font-mono text-gray-600 dark:text-gray-300">{outcomes.literacyStats.detailed.pre.avg.toFixed(2)}</td>
+                                <td className="p-4 text-center font-mono font-bold text-teal-600 dark:text-teal-400">{outcomes.literacyStats.detailed.post.avg.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนสูงสุด / ต่ำสุด (Max/Min)</td>
+                                <td className="p-4 text-center text-xs text-gray-500">
+                                    Max: {outcomes.literacyStats.detailed.pre.max} / Min: {outcomes.literacyStats.detailed.pre.min}
+                                </td>
+                                <td className="p-4 text-center text-xs text-gray-500">
+                                    Max: {outcomes.literacyStats.detailed.post.max} / Min: {outcomes.literacyStats.detailed.post.min}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* 2. Clinical Outcomes Section (BMI) */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <ScaleIcon className="w-6 h-6 text-orange-500" />
+                        ผลลัพธ์ทางคลินิก: BMI Migration
+                    </h3>
+                    <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                        N = {outcomes.bmiStats.totalUsers} คน (ที่มีการเปลี่ยนแปลง)
+                    </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left: Summary KPIs */}
+                    <div className="space-y-4">
+                        <div className="flex gap-4">
+                            <div className="flex-1 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800 text-center">
+                                <TrophyIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                                <p className="text-3xl font-black text-gray-800 dark:text-white">{outcomes.bmiStats.successRate.toFixed(1)}%</p>
+                                <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase mt-1">Success Rate</p>
+                                <p className="text-[10px] text-gray-500 mt-1">ลดระดับความเสี่ยง หรือ รักษาสมส่วน</p>
+                            </div>
+                            <div className="flex-1 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800 text-center flex flex-col justify-center">
+                                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{outcomes.bmiStats.improvedCount}</p>
+                                <p className="text-xs text-gray-500">คน ที่ลดระดับความอ้วนได้</p>
+                                <div className="h-[1px] bg-orange-200 w-full my-2"></div>
+                                <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">{outcomes.bmiStats.maintainedCount}</p>
+                                <p className="text-xs text-gray-500">คน ที่รักษารูปร่างสมส่วนไว้ได้</p>
+                            </div>
+                        </div>
+                        <div className="text-xs text-gray-400 italic">
+                            * Success Rate คำนวณจากผู้ที่ลดระดับ BMI ลงมาสู่เกณฑ์ที่ดีขึ้น (เช่น อ้วน -> ท้วม) หรือผู้ที่รักษาระดับสมส่วนไว้ได้
+                        </div>
+                    </div>
+
+                    {/* Right: Migration Flow List */}
+                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+                        <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                            <BoltIcon className="w-4 h-4 text-yellow-500" />
+                            การเคลื่อนย้ายกลุ่ม (Migration Flow)
+                        </h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                            {Object.entries(outcomes.bmiStats.flows).length > 0 ? (
+                                Object.entries(outcomes.bmiStats.flows)
+                                    .sort(([,a], [,b]) => b - a)
+                                    .map(([flow, count]) => (
+                                    <div key={flow} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded shadow-sm border-l-4 border-green-500">
+                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{flow}</span>
+                                        <span className="text-xs font-black text-green-600 dark:text-green-400">+{count} คน</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-400 text-center py-4">ยังไม่มีข้อมูลการเปลี่ยนแปลงกลุ่ม BMI ในช่วงเวลานี้</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-const OverviewStatCard: React.FC<{ title: string; value: string | number; subValue?: string; icon: React.ReactNode; colorClass: string }> = ({ title, value, subValue, icon, colorClass }) => (
-    <div className="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600 flex items-center justify-between hover:shadow-md transition-shadow">
-        <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">{title}</p>
-            <h3 className="text-2xl font-black text-gray-800 dark:text-white mt-1">{value}</h3>
-            {subValue && <p className="text-[10px] text-gray-400 mt-0.5">{subValue}</p>}
-        </div>
-        <div className={`p-3 rounded-full ${colorClass} bg-opacity-20`}>{icon}</div>
-    </div>
-);
-
-const BarChart: React.FC<{ data: { label: string; value: number; color: string }[]; title: string }> = ({ data, title }) => (
-    <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-        <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2">
-            <ChartBarIcon className="w-4 h-4" /> {title}
-        </h4>
-        <div className="space-y-3">
-            {data.map((item, idx) => (
-                <div key={idx} className="relative">
-                    <div className="flex justify-between text-xs mb-1 font-medium">
-                        <span className="text-gray-600 dark:text-gray-300">{item.label}</span>
-                        <span className="text-gray-800 dark:text-white font-bold">{item.value}%</span>
-                    </div>
-                    <div className="w-full bg-gray-100 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
-                        <div className={`h-full ${item.color}`} style={{ width: `${item.value}%` }}></div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    </div>
-);
-
-const StatGrid: React.FC<{ title: string; stats: { label: string; value: string }[], icon: React.ReactNode, color: string }> = ({ title, stats, icon, color }) => (
-    <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-        <h4 className={`font-bold ${color} mb-4 text-sm uppercase flex items-center gap-2`}>
-            {icon} {title}
-        </h4>
-        <div className="grid grid-cols-3 gap-2 text-center divide-x divide-gray-200 dark:divide-gray-600">
-            {stats.map((s, i) => (
-                <div key={i} className="px-1">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-tight">{s.label}</p>
-                    <p className="text-lg font-black text-gray-800 dark:text-white">{s.value}</p>
-                </div>
-            ))}
-        </div>
-    </div>
-);
-
-const AdminDashboard: React.FC = () => {
-    const { scriptUrl, currentUser, organizations } = useContext(AppContext);
-    const [allData, setAllData] = useState<AllAdminData | null>(null);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'overview' | 'groups' | 'allUsers' | 'profiles' | 'evaluation'>('overview');
-    const [selectedOrgFilter, setSelectedOrgFilter] = useState<string>('all'); 
-    const [startDate, setStartDate] = useState<string>('');
-    const [endDate, setEndDate] = useState<string>('');
-    const [tempStartDate, setTempStartDate] = useState<string>('');
-    const [tempEndDate, setTempEndDate] = useState<string>('');
-    const [isFiltering, setIsFiltering] = useState<boolean>(false);
+const DataManagementTab: React.FC<{ adminData: AllAdminData | null }> = ({ adminData }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTable, setActiveTable] = useState('profiles');
+    const { scriptUrl, currentUser } = useContext(AppContext);
 
     const isSuperAdmin = currentUser?.organization === 'all';
-    const assignedOrg = currentUser?.organization || 'general';
 
-    useEffect(() => {
-        if (!isSuperAdmin) {
-            setSelectedOrgFilter(assignedOrg);
-        }
-    }, [isSuperAdmin, assignedOrg]);
-
-    useEffect(() => {
-        if (activeTab === 'groups') {
-            setLoading(false);
-            return; 
-        }
-        
-        const fetchData = async () => {
-            if (!scriptUrl) {
-                setError("กรุณาตั้งค่า Web App URL ในหน้า Settings ก่อน");
-                setLoading(false);
-                return;
-            }
-            if (!currentUser?.adminSecret) {
-                setError("กรุณาเข้าสู่ระบบใหม่เพื่อยืนยันสิทธิ์ Admin");
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-            setError(null);
-            try {
-                // Use session admin key from currentUser
-                const data = await fetchAllAdminDataFromSheet(scriptUrl, currentUser.adminSecret);
-                if (data) {
-                    setAllData(data);
-                } else {
-                    setError("ไม่สามารถดึงข้อมูลได้ หรือรหัส Admin ไม่ถูกต้อง");
-                }
-            } catch (err: any) {
-                setError(err.message || "เกิดข้อผิดพลาด");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [scriptUrl, activeTab, currentUser]);
-    
-    // ... rest of the component logic (filterByDate, useMemo hooks, renderContent, etc.) remains exactly the same ...
-    // Just re-copying the core logic structure to ensure valid file
-    
-    const filterByDate = useCallback((data: any[], dateKey: string = 'timestamp') => {
-        if (!startDate && !endDate) return data;
-        const start = startDate ? new Date(startDate) : new Date('2000-01-01');
-        start.setHours(0, 0, 0, 0);
-        const end = endDate ? new Date(endDate) : new Date();
-        end.setHours(23, 59, 59, 999);
-        return data.filter(item => {
-            if(!item) return false;
-            const val = item[dateKey] || item.date; 
-            if(!val) return false;
-            const itemDate = new Date(val);
-            return itemDate >= start && itemDate <= end;
-        });
-    }, [startDate, endDate]);
-
-    const applyDateFilter = () => {
-        setIsFiltering(true);
-        setTimeout(() => {
-            setStartDate(tempStartDate);
-            setEndDate(tempEndDate);
-            setIsFiltering(false);
-        }, 300);
-    };
-
-    const clearDateFilter = () => {
-        setTempStartDate('');
-        setTempEndDate('');
-        setStartDate('');
-        setEndDate('');
-    };
-
-    const userProfilesWithOrg = useMemo(() => {
-        if (!allData?.profiles) return [];
-        const uniqueProfilesMap = new Map();
-        allData.profiles.forEach(p => {
-            if (p.username) {
-                uniqueProfilesMap.set(p.username, { ...p, organization: p.organization || 'general' });
-            }
-        });
-        return Array.from(uniqueProfilesMap.values());
-    }, [allData]);
-
-    const filteredUsers = useMemo(() => {
-        let users = userProfilesWithOrg;
-        if (selectedOrgFilter !== 'all') {
-            users = users.filter(u => u.organization === selectedOrgFilter);
-        }
-        return filterByDate(users, 'timestamp');
-    }, [userProfilesWithOrg, selectedOrgFilter, filterByDate]);
-
-    const filteredLoginLogs = useMemo(() => {
-        if (!allData?.loginLogs) return [];
-        let logs = allData.loginLogs;
-        if (selectedOrgFilter !== 'all') {
-            logs = logs.filter(l => l.organization === selectedOrgFilter);
-        }
-        return filterByDate(logs, 'timestamp');
-    }, [allData, selectedOrgFilter, filterByDate]);
-
-    const filteredUsernames = useMemo(() => {
-        return new Set(filteredUsers.map(u => u.username));
-    }, [filteredUsers]);
-
-    const detailedStats = useMemo(() => {
-        if (!allData) return null;
-        const filterHistory = (data: any[], dateField = 'timestamp') => filterByDate(data.filter(item => filteredUsernames.has(item.username)), dateField);
-
-        const bmiRecords = filterHistory(allData.bmiHistory || []);
-        const userLatestBMI = new Map<string, number>();
-        bmiRecords.forEach((r: any) => userLatestBMI.set(r.username, Number(r.bmi)));
-        let bmiPass = 0, bmiFail = 0, totalBMIUsers = 0;
-        userLatestBMI.forEach((bmi) => { totalBMIUsers++; if (bmi >= 18.5 && bmi <= 22.9) bmiPass++; else bmiFail++; });
-        
-        const sleepRecords = filterHistory(allData.sleepHistory || []);
-        let totalSleep = 0, minSleep = 24, maxSleep = 0, totalQuality = 0;
-        const sleepCount = sleepRecords.length;
-        sleepRecords.forEach((s: any) => {
-            const duration = Number(s.duration || 0);
-            totalSleep += duration;
-            totalQuality += Number(s.quality || 0);
-            if (duration < minSleep) minSleep = duration;
-            if (duration > maxSleep) maxSleep = duration;
-        });
-
-        const activityRecords = filterHistory(allData.activityHistory || []);
-        const stepRecords = activityRecords.map((a: any) => {
-                const match = String(a.name).match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
-                return match ? parseInt(match[1].replace(/,/g, ''), 10) : 0;
-            }).filter((s: number) => s > 0);
-        let totalSteps = 0, minSteps = 100000, maxSteps = 0;
-        const stepsCount = stepRecords.length;
-        stepRecords.forEach((s: number) => { totalSteps += s; if (s < minSteps) minSteps = s; if (s > maxSteps) maxSteps = s; });
-
-        const moodRecords = filterHistory(allData.moodHistory || []);
-        const moodCounts: Record<string, number> = {};
-        moodRecords.forEach((m: any) => { const emoji = m.emoji || m.moodEmoji; if(emoji) moodCounts[emoji] = (moodCounts[emoji] || 0) + 1; });
-        const moodMapping: Record<string, string> = { '😊': 'มีความสุข', '🥰': 'เปี่ยมรัก', '😐': 'เฉยๆ', '😫': 'เหนื่อย', '😰': 'กังวล', '😡': 'โกรธ', '😢': 'เศร้า' };
-        const moodStats = Object.keys(moodMapping).map(emoji => ({ label: moodMapping[emoji], value: moodCounts[emoji] ? Math.round((moodCounts[emoji] / moodRecords.length) * 100) : 0, color: 'bg-rose-400' })).sort((a,b) => b.value - a.value);
-
-        const habitRecords = filterHistory(allData.habitHistory || []);
-        const cleanCount = habitRecords.filter((h: any) => String(h.isClean) === 'true').length;
-        const userCount = habitRecords.length - cleanCount;
-        const habitStats = [ { label: 'ไม่ดื่ม/ไม่สูบ (Clean)', value: habitRecords.length ? Math.round((cleanCount/habitRecords.length)*100) : 0, color: 'bg-green-500' }, { label: 'ดื่ม/สูบ (User)', value: habitRecords.length ? Math.round((userCount/habitRecords.length)*100) : 0, color: 'bg-orange-500' } ];
-
-        const socialRecords = filterHistory(allData.socialHistory || []);
-        const socialCounts: Record<string, number> = { 'energized': 0, 'neutral': 0, 'drained': 0 };
-        socialRecords.forEach((s: any) => { if(socialCounts[s.feeling] !== undefined) socialCounts[s.feeling]++; });
-        const socialStats = [ { label: 'มีพลัง (Energized)', value: socialRecords.length ? Math.round((socialCounts['energized']/socialRecords.length)*100) : 0, color: 'bg-teal-500' }, { label: 'เฉยๆ (Neutral)', value: socialRecords.length ? Math.round((socialCounts['neutral']/socialRecords.length)*100) : 0, color: 'bg-gray-400' }, { label: 'เหนื่อย (Drained)', value: socialRecords.length ? Math.round((socialCounts['drained']/socialRecords.length)*100) : 0, color: 'bg-red-400' } ];
-
-        return { bmi: { pass: totalBMIUsers ? Math.round((bmiPass/totalBMIUsers)*100) : 0, fail: totalBMIUsers ? Math.round((bmiFail/totalBMIUsers)*100) : 0 }, sleep: { min: sleepCount ? minSleep.toFixed(1) : '-', max: sleepCount ? maxSleep.toFixed(1) : '-', avg: sleepCount ? (totalSleep/sleepCount).toFixed(1) : '-', quality: sleepCount ? (totalQuality/sleepCount).toFixed(1) : '-' }, steps: { min: stepsCount ? minSteps.toLocaleString() : '-', max: stepsCount ? maxSteps.toLocaleString() : '-', avg: stepsCount ? Math.round(totalSteps/stepsCount).toLocaleString() : '-' }, moodStats, habitStats, socialStats };
-    }, [allData, filteredUsernames, filterByDate]);
-
-    const stats = useMemo(() => {
-        const totalUsers = filteredUsers.length;
-        const maleCount = filteredUsers.filter(u => u.gender === 'male').length;
-        const femaleCount = filteredUsers.filter(u => u.gender === 'female').length;
-        let totalAge = 0, ageCount = 0;
-        let totalBMI = 0, bmiCount = 0;
-        const userLatestBMI: Record<string, number> = {};
-        if (allData?.bmiHistory) {
-            const filteredBMI = (allData.bmiHistory || []).filter(r => filteredUsernames.has(r.username));
-            const sortedBMI = [...filteredBMI].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            sortedBMI.forEach(b => { userLatestBMI[b.username] = b.bmi; });
-        }
-        filteredUsers.forEach(u => { if (u.age && !isNaN(Number(u.age))) { totalAge += Number(u.age); ageCount++; } if (userLatestBMI[u.username]) { totalBMI += userLatestBMI[u.username]; bmiCount++; } });
-        const avgAge = ageCount > 0 ? (totalAge / ageCount).toFixed(1) : '-';
-        const avgBMI = bmiCount > 0 ? (totalBMI / bmiCount).toFixed(1) : '-';
-        const conditionCounts: Record<string, number> = {};
-        filteredUsers.forEach(u => { const cond = u.healthCondition || 'ไม่ระบุ'; conditionCounts[cond] = (conditionCounts[cond] || 0) + 1; });
-        const conditionStats = Object.entries(conditionCounts).map(([label, count]) => ({ label, value: Math.round((count / totalUsers) * 100) || 0, color: 'bg-rose-500' })).sort((a, b) => b.value - a.value).slice(0, 5); 
-        const levelCounts: Record<string, number> = {};
-        filteredUsers.forEach(u => { const lvl = u.level || 1; const group = lvl >= 10 ? 'Lv.10+' : lvl >= 5 ? 'Lv.5-9' : 'Lv.1-4'; levelCounts[group] = (levelCounts[group] || 0) + 1; });
-        const levelStats = [ { label: 'Lv.1-4 (Beginner)', value: Math.round((levelCounts['Lv.1-4'] || 0) / totalUsers * 100) || 0, color: 'bg-gray-400' }, { label: 'Lv.5-9 (Intermediate)', value: Math.round((levelCounts['Lv.5-9'] || 0) / totalUsers * 100) || 0, color: 'bg-yellow-400' }, { label: 'Lv.10+ (Expert)', value: Math.round((levelCounts['Lv.10+'] || 0) / totalUsers * 100) || 0, color: 'bg-purple-500' }, ];
-        const totalAdmins = allData?.profiles ? allData.profiles.filter(p => String(p.role).toLowerCase() === 'admin').length : 0;
-        const totalOrgs = organizations?.length || 0;
-        const totalGroups = allData?.['Groups']?.length || 0; 
-        return { totalUsers, malePercent: Math.round((maleCount/totalUsers)*100)||0, femalePercent: Math.round((femaleCount/totalUsers)*100)||0, avgAge, avgBMI, conditionStats, levelStats, totalAdmins, totalOrgs, totalGroups };
-    }, [filteredUsers, allData, organizations, filteredUsernames]);
-
-    const evalStats = useMemo(() => {
-        if (!allData?.evaluationHistory) return { satisfaction: [], outcomes: [] };
-        let filteredEvals = allData.evaluationHistory.filter(e => filteredUsernames.has(e.username));
-        filteredEvals = filterByDate(filteredEvals, 'timestamp');
-        if (filteredEvals.length === 0) return { satisfaction: [], outcomes: [] };
-        const satSums: Record<string, number> = {};
-        const satCounts: Record<string, number> = {};
-        const outCounts: Record<string, { better: number, same: number, worse: number }> = {};
-        filteredEvals.forEach(e => {
-            try {
-                const sat = typeof e.satisfaction_json === 'string' ? JSON.parse(e.satisfaction_json) : e.satisfaction_json;
-                const out = typeof e.outcome_json === 'string' ? JSON.parse(e.outcome_json) : e.outcome_json;
-                if (sat) { Object.entries(sat).forEach(([k, v]) => { satSums[k] = (satSums[k] || 0) + Number(v); satCounts[k] = (satCounts[k] || 0) + 1; }); }
-                if (out) { Object.entries(out).forEach(([k, v]) => { if (!outCounts[k]) outCounts[k] = { better: 0, same: 0, worse: 0 }; if (v === 'better' || v === 'much_better') outCounts[k].better++; else if (v === 'same') outCounts[k].same++; else outCounts[k].worse++; }); }
-            } catch (err) {}
-        });
-        const satisfactionData = SATISFACTION_QUESTIONS.map(q => ({ label: q.label, value: satCounts[q.id] ? (satSums[q.id] / satCounts[q.id]).toFixed(1) : '0', color: 'bg-indigo-500' }));
-        const outcomeData = OUTCOME_QUESTIONS.map(q => { const counts = outCounts[q.id] || { better: 0, same: 0, worse: 0 }; const total = counts.better + counts.same + counts.worse; return { label: q.label, value: total > 0 ? Math.round((counts.better / total) * 100) : 0, color: 'bg-green-500' }; });
-        return { satisfaction: satisfactionData, outcomes: outcomeData };
-    }, [allData, filteredUsernames, filterByDate]);
-
-    const quizStats = useMemo(() => {
-        if (!allData?.quizHistory) return { prePass: 0, postPass: 0 };
-        let filteredQuiz = allData.quizHistory.filter(q => filteredUsernames.has(q.username || q.username)); 
-        filteredQuiz = filterByDate(filteredQuiz, 'timestamp');
-        const preTests = filteredQuiz.filter((q: any) => q.type === 'pre-test');
-        const postTests = filteredQuiz.filter((q: any) => q.type === 'post-test');
-        const calcPass = (arr: any[]) => { if (arr.length === 0) return 0; const passCount = arr.filter(q => (Number(q.score) || 0) >= 60).length; return Math.round((passCount / arr.length) * 100); };
-        return { prePass: calcPass(preTests), postPass: calcPass(postTests) };
-    }, [allData, filteredUsernames, filterByDate]);
-
-    const renderContent = () => {
-        if (activeTab === 'groups') return <GroupManagementTab />;
-        if (loading) return <Spinner />;
-        if (error) return <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 dark:text-red-400 p-4 rounded-lg">{error}</p>;
-        if (!allData) return <p className="text-center text-gray-500">ไม่มีข้อมูล</p>;
-
-        if (activeTab === 'overview') {
-             return (
-                 <div className="space-y-6 animate-fade-in">
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                         <OverviewStatCard title="ผู้ใช้งาน (ตามช่วงเวลา)" value={stats.totalUsers.toLocaleString()} subValue="Registered in Period" icon={<UserGroupIcon className="w-6 h-6 text-blue-500"/>} colorClass="bg-blue-500 text-blue-500"/>
-                         <OverviewStatCard title="อายุเฉลี่ย" value={stats.avgAge} subValue="ปี (Years)" icon={<UserCircleIcon className="w-6 h-6 text-teal-500"/>} colorClass="bg-teal-500 text-teal-500"/>
-                         <OverviewStatCard title="BMI เฉลี่ย" value={stats.avgBMI} subValue="kg/m²" icon={<ScaleIcon className="w-6 h-6 text-orange-500"/>} colorClass="bg-orange-500 text-orange-500"/>
-                         {isSuperAdmin && <OverviewStatCard title="องค์กร/กลุ่ม" value={`${stats.totalOrgs} / ${stats.totalGroups}`} subValue="Org / Groups" icon={<SquaresIcon className="w-6 h-6 text-purple-500"/>} colorClass="bg-purple-500 text-purple-500"/>}
-                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                             <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><ScaleIcon className="w-4 h-4"/> สัดส่วน BMI (Pass Criteria)</h4>
-                             {detailedStats && (
-                                <div className="flex items-center gap-4 mt-6">
-                                    <div className="flex-1 text-center">
-                                        <div className="text-3xl font-black text-green-500">{detailedStats.bmi.pass}%</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">สมส่วน (18.5-22.9)</div>
-                                        <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-green-500 rounded-full" style={{width: `${detailedStats.bmi.pass}%`}}></div></div>
-                                    </div>
-                                    <div className="flex-1 text-center">
-                                        <div className="text-3xl font-black text-red-500">{detailedStats.bmi.fail}%</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">เสี่ยง / ไม่ผ่านเกณฑ์</div>
-                                        <div className="w-full bg-gray-200 h-2 rounded-full mt-2"><div className="h-full bg-red-500 rounded-full" style={{width: `${detailedStats.bmi.fail}%`}}></div></div>
-                                    </div>
-                                </div>
-                             )}
-                         </div>
-                         <BarChart title="โรคประจำตัว / ความเสี่ยง (Top 5)" data={stats.conditionStats} />
-                     </div>
-                     {detailedStats && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <StatGrid title="การนอนหลับ (Sleep)" icon={<MoonIcon className="w-4 h-4" />} color="text-indigo-600 dark:text-indigo-400" stats={[{ label: 'สูงสุด (ชม.)', value: detailedStats.sleep.max }, { label: 'เฉลี่ย (ชม.)', value: detailedStats.sleep.avg }, { label: 'คุณภาพเฉลี่ย (เต็ม 5)', value: detailedStats.sleep.quality }]} />
-                            <StatGrid title="ก้าวเดิน (Steps)" icon={<BoltIcon className="w-4 h-4" />} color="text-yellow-600 dark:text-yellow-400" stats={[{ label: 'สูงสุด (ก้าว)', value: detailedStats.steps.max }, { label: 'น้อยสุด (ก้าว)', value: detailedStats.steps.min }, { label: 'เฉลี่ย (ก้าว)', value: detailedStats.steps.avg }]} />
-                        </div>
-                     )}
-                     {detailedStats && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <BarChart title="ความรู้สึก (Mood)" data={detailedStats.moodStats} />
-                            <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                                <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><NoSymbolIcon className="w-4 h-4" /> พฤติกรรมเสี่ยง</h4>
-                                <div className="space-y-4 pt-2">
-                                    {detailedStats.habitStats.map((item, idx) => (
-                                        <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-gray-800 p-2 rounded-lg">
-                                            <span className="text-xs text-gray-600 dark:text-gray-300 font-bold">{item.label}</span>
-                                            <span className={`text-xs font-black px-2 py-1 rounded text-white ${item.color.replace('bg-', 'bg-opacity-80 bg-')}`}>{item.value}%</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <BarChart title="ความรู้สึกทางสังคม" data={detailedStats.socialStats} />
-                        </div>
-                     )}
-                     <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm border border-slate-100 dark:border-gray-600">
-                         <h4 className="font-bold text-gray-700 dark:text-white mb-4 text-sm uppercase flex items-center gap-2"><BookOpenIcon className="w-4 h-4"/> ผลการทดสอบความรู้ (Health Literacy)</h4>
-                         <div className="grid grid-cols-2 gap-4 mt-4">
-                             <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center"><p className="text-xs text-orange-600 dark:text-orange-300 font-bold mb-1">Pre-Test Pass Rate</p><p className="text-3xl font-black text-orange-600 dark:text-orange-400">{quizStats.prePass}%</p></div>
-                             <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl text-center"><p className="text-xs text-green-600 dark:text-green-300 font-bold mb-1">Post-Test Pass Rate</p><p className="text-3xl font-black text-green-600 dark:text-green-400">{quizStats.postPass}%</p></div>
-                         </div>
-                         <p className="text-[10px] text-gray-400 text-center mt-3">*เกณฑ์ผ่าน 60%</p>
-                     </div>
-                 </div>
-             );
-        }
-
-        if (activeTab === 'evaluation') {
-            return (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 rounded-xl text-white shadow-lg">
-                        <h3 className="text-xl font-bold flex items-center gap-2"><ClipboardCheckIcon className="w-6 h-6"/> รายงานผลการประเมินแอปพลิเคชัน</h3>
-                        <p className="text-indigo-100 text-sm mt-1">สรุปความพึงพอใจและผลลัพธ์การปรับเปลี่ยนพฤติกรรม</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm">
-                            <h4 className="font-bold text-gray-800 dark:text-white mb-4 text-sm border-b pb-2 dark:border-gray-600">คะแนนความพึงพอใจเฉลี่ย (เต็ม 5)</h4>
-                            <div className="space-y-4">{evalStats.satisfaction.map((item, idx) => (<div key={idx}><div className="flex justify-between text-xs mb-1"><span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span><span className="font-bold text-indigo-600 dark:text-indigo-400">{item.value}</span></div><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className="bg-indigo-500 h-2 rounded-full" style={{width: `${(Number(item.value)/5)*100}%`}}></div></div></div>))}</div>
-                        </div>
-                        <div className="bg-white dark:bg-gray-700 p-5 rounded-xl shadow-sm">
-                            <h4 className="font-bold text-gray-800 dark:text-white mb-4 text-sm border-b pb-2 dark:border-gray-600">ผลลัพธ์สุขภาพ (% ผู้ตอบว่า "ดีขึ้น")</h4>
-                            <div className="space-y-4">{evalStats.outcomes.map((item, idx) => (<div key={idx}><div className="flex justify-between text-xs mb-1"><span className="text-gray-600 dark:text-gray-300 truncate w-3/4">{item.label}</span><span className="font-bold text-green-600 dark:text-green-400">{item.value}%</span></div><div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2"><div className="bg-green-500 h-2 rounded-full" style={{width: `${item.value}%`}}></div></div></div>))}</div>
-                        </div>
-                    </div>
-                    <DataTable data={allData.evaluationHistory || []} title="ข้อมูลดิบแบบประเมิน (Raw Data)" allowExport={true} />
-                </div>
-            );
-        }
-        
-        const tabsDef = [
-            { id: 'allUsers', label: 'ประวัติการเข้าใช้งาน (Login Logs)', data: filteredLoginLogs },
-            { id: 'profiles', label: 'ข้อมูลสุขภาพ (Profiles)', data: filteredUsers },
-        ];
-        const activeTabData = tabsDef.find(t => t.id === activeTab);
-        return <DataTable data={activeTabData?.data || []} title={activeTabData?.label || ''} allowExport={true} />;
-    };
-
-    const tabs = [
-        { id: 'overview', label: 'ภาพรวม (Overview)' },
-        { id: 'groups', label: 'จัดการกลุ่ม (Groups)' },
-        { id: 'allUsers', label: 'สมาชิก (Members/Logs)' },
-        { id: 'profiles', label: 'Profiles' },
-        { id: 'evaluation', label: 'แบบประเมิน (Evaluation)' }, 
+    // Available tables configuration
+    const tables = [
+        { id: 'profiles', label: 'ผู้ใช้งาน (Users)' },
+        { id: 'loginLogs', label: 'ประวัติการเข้าสู่ระบบ' },
+        { id: 'bmiHistory', label: 'ประวัติ BMI' },
+        { id: 'foodHistory', label: 'ประวัติอาหาร' },
+        { id: 'activityHistory', label: 'ประวัติกิจกรรม' },
+        { id: 'evaluationHistory', label: 'แบบประเมิน' },
+        { id: 'groups', label: 'กลุ่ม (Groups)' },
     ];
 
-    const currentOrgName = (organizations || []).find(o => o.id === selectedOrgFilter)?.name || 'ทั้งหมด';
+    const currentData = useMemo(() => {
+        if (!adminData) return [];
+        // @ts-ignore
+        return adminData[activeTable] || [];
+    }, [adminData, activeTable]);
+
+    const filteredData = useMemo(() => {
+        let data = currentData;
+
+        // --- Role-based Filtering ---
+        if (!isSuperAdmin && currentUser) {
+            const myOrg = currentUser.organization;
+            
+            if (activeTable === 'profiles') {
+                data = data.filter((r: any) => r.organization === myOrg);
+            } else if (activeTable === 'groups') {
+                // Filter groups created by this admin
+                data = data.filter((r: any) => r.AdminUsername === currentUser.username);
+            } else if (activeTable === 'loginLogs') {
+                data = data.filter((r: any) => r.organization === myOrg);
+            } else {
+                // For history logs, filter by users in my organization
+                // Need list of my users
+                // @ts-ignore
+                const myUsers = new Set((adminData?.profiles || [])
+                    .filter((p: any) => p.organization === myOrg)
+                    .map((p: any) => p.username));
+                
+                data = data.filter((r: any) => r.username && myUsers.has(r.username));
+            }
+        }
+
+        if (!searchTerm) return data;
+        const lowerTerm = searchTerm.toLowerCase();
+        return data.filter((row: any) => 
+            Object.values(row).some(val => String(val).toLowerCase().includes(lowerTerm))
+        );
+    }, [currentData, searchTerm, isSuperAdmin, currentUser, activeTable, adminData]);
+
+    const columns = useMemo(() => {
+        if (filteredData.length === 0) return [];
+        return Object.keys(filteredData[0]);
+    }, [filteredData]);
+
+    const handleResetUser = async (username: string) => {
+        if (!window.confirm(`ต้องการรีเซ็ตข้อมูลผู้ใช้ ${username} ใช่หรือไม่?`)) return;
+        if (scriptUrl && currentUser) {
+            await resetUserData(scriptUrl, currentUser, username);
+            alert('รีเซ็ตข้อมูลเรียบร้อย');
+        }
+    };
+
+    if (!adminData) return <div className="text-center p-8 text-gray-500">ไม่พบข้อมูล (No Data)</div>;
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full transform transition-all duration-300">
-            <div className="flex flex-col gap-6 mb-6">
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="text-center md:text-left">
-                        <h2 className="text-2xl font-bold text-gray-800 dark:text-white">
-                            {isSuperAdmin ? 'Research Admin Dashboard' : `Dashboard: ${currentOrgName}`}
-                        </h2>
-                        <p className="text-gray-500 text-sm">ระบบติดตามและประเมินผล</p>
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-end">
+                {/* Table Selector */}
+                <div className="w-full md:w-auto">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">เลือกตารางข้อมูล</label>
+                    <div className="flex flex-wrap gap-2">
+                        {tables.map(t => (
+                            <button
+                                key={t.id}
+                                onClick={() => setActiveTable(t.id)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                                    activeTable === t.id 
+                                    ? 'bg-teal-600 text-white shadow-md' 
+                                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
-                    {isSuperAdmin && activeTab !== 'groups' && (
-                        <select value={selectedOrgFilter} onChange={(e) => setSelectedOrgFilter(e.target.value)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-red-500 text-sm">
-                            <option value="all">-- แสดงข้อมูลทุกพื้นที่ --</option>
-                            {(organizations || []).map(org => (<option key={org.id} value={org.id}>{org.name}</option>))}
-                        </select>
-                    )}
                 </div>
-                {activeTab !== 'groups' && (
-                    <div className="flex flex-col md:flex-row gap-4 items-end md:items-center bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-                        <div className="flex-1 w-full md:w-auto"><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ตั้งแต่วันที่ (Start Date)</label><input type="date" value={tempStartDate} onChange={e => setTempStartDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"/></div>
-                        <div className="flex-1 w-full md:w-auto"><label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">ถึงวันที่ (End Date)</label><input type="date" value={tempEndDate} onChange={e => setTempEndDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"/></div>
-                        <div className="flex gap-2 w-full md:w-auto">
-                            <button onClick={applyDateFilter} disabled={isFiltering} className={`flex-1 md:flex-none px-4 py-2 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${isFiltering ? 'bg-gray-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700'}`}>{isFiltering ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'ตกลง'}</button>
-                            <button onClick={clearDateFilter} className="flex-1 md:flex-none px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-bold hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">ล้าง</button>
-                        </div>
+
+                {/* Search */}
+                <div className="w-full md:w-64">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1 block">ค้นหาในตาราง</label>
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            placeholder="ค้นหา..." 
+                            className="w-full p-2.5 pl-9 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 outline-none focus:ring-2 focus:ring-teal-500 dark:text-white text-sm"
+                        />
+                        <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                     </div>
-                )}
-                {startDate && endDate && <div className="px-1"><span className="text-xs bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200 px-2 py-1 rounded-full font-bold">🔍 กำลังกรองข้อมูล: {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}</span></div>}
+                </div>
             </div>
-            <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-                <nav className="-mb-px flex space-x-6 overflow-x-auto pb-2" aria-label="Tabs">
-                    {tabs.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`${activeTab === tab.id ? 'border-red-500 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors`}>{tab.label}</button>
-                    ))}
-                </nav>
+            
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-600 dark:text-gray-300">
+                        <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-white font-bold uppercase text-xs">
+                            <tr>
+                                {columns.map(col => (
+                                    <th key={col} className="p-3 whitespace-nowrap">{col}</th>
+                                ))}
+                                {activeTable === 'profiles' && <th className="p-3">Action</th>}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                            {filteredData.slice(0, 100).map((row: any, i: number) => (
+                                <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    {columns.map(col => (
+                                        <td key={col} className="p-3 whitespace-nowrap max-w-xs truncate">
+                                            {typeof row[col] === 'object' ? JSON.stringify(row[col]) : String(row[col])}
+                                        </td>
+                                    ))}
+                                    {activeTable === 'profiles' && (
+                                        <td className="p-3">
+                                            <button 
+                                                onClick={() => handleResetUser(row.username)} 
+                                                className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded"
+                                            >
+                                                Reset
+                                            </button>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                            {filteredData.length === 0 && (
+                                <tr>
+                                    <td colSpan={columns.length + (activeTable === 'profiles' ? 1 : 0)} className="p-8 text-center text-gray-400">
+                                        ไม่พบข้อมูล
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="p-3 text-center text-xs text-gray-400 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-700">
+                    แสดงสูงสุด 100 รายการล่าสุด (จากทั้งหมด {filteredData.length} รายการ)
+                </div>
             </div>
-            <div className="mt-4">{renderContent()}</div>
+        </div>
+    );
+};
+
+// --- Main Dashboard Container ---
+
+const AdminDashboard: React.FC = () => {
+    const { scriptUrl, currentUser, organizations, setActiveView } = useContext(AppContext);
+    const [adminData, setAdminData] = useState<AllAdminData | null>(null);
+    const [loadingData, setLoadingData] = useState(false);
+    const [activeTab, setActiveTab] = useState<'overview' | 'outcomes' | 'data'>('overview');
+    const [fetchError, setFetchError] = useState<string | null>(null);
+
+    const isSuperAdmin = currentUser?.organization === 'all';
+
+    // Filters - Initialize based on role
+    const [selectedOrg, setSelectedOrg] = useState(isSuperAdmin ? 'all' : (currentUser?.organization || 'all'));
+    const [selectedGroup, setSelectedGroup] = useState('all');
+    
+    // Default Date Range: Last 30 Days
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+    // Update filters if currentUser changes
+    useEffect(() => {
+        if (currentUser) {
+             const isSuper = currentUser.organization === 'all';
+             if (!isSuper) {
+                 setSelectedOrg(currentUser.organization || 'all');
+                 // Default group stays 'all' (meaning all my groups)
+             }
+        }
+    }, [currentUser]);
+
+    const loadData = () => {
+        if (scriptUrl && currentUser?.adminSecret) {
+            setLoadingData(true);
+            setFetchError(null);
+            fetchAllAdminDataFromSheet(scriptUrl, currentUser.adminSecret).then(data => {
+                if (data) {
+                    setAdminData(data);
+                } else {
+                    setFetchError("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (Connection Failed)");
+                }
+                setLoadingData(false);
+            });
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, [scriptUrl, currentUser]);
+
+    // Filter Dropdowns
+    const availableOrgs = useMemo(() => {
+        if (isSuperAdmin) return organizations;
+        return organizations.filter(o => o.id === currentUser?.organization);
+    }, [organizations, isSuperAdmin, currentUser]);
+
+    const availableGroups = useMemo(() => {
+        const groups = adminData?.groups || [];
+        if (isSuperAdmin) return groups;
+        return groups.filter((g: any) => g.AdminUsername === currentUser?.username);
+    }, [adminData, isSuperAdmin, currentUser]);
+
+    return (
+        <div className="space-y-6 animate-fade-in pb-20">
+            <div className="flex items-center gap-4 mb-2">
+                <button onClick={() => setActiveView('menu')} className="p-2 rounded-full bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700">
+                    <ArrowLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                    <span className="bg-gray-800 dark:bg-white text-white dark:text-gray-800 p-2 rounded-lg"><SquaresIcon className="w-6 h-6" /></span>
+                    Research Dashboard
+                </h1>
+            </div>
+            
+            <div className="flex justify-end text-xs text-gray-500 mb-4">
+                <div className="text-right">
+                    <p className="font-bold">{currentUser?.displayName}</p>
+                    <p>{currentUser?.organization === 'all' ? 'Super Admin' : currentUser?.organization}</p>
+                </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl overflow-x-auto mb-4">
+                <button 
+                    onClick={() => setActiveTab('overview')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeTab === 'overview' ? 'bg-white dark:bg-gray-700 text-teal-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <ChartBarIcon className="w-4 h-4" /> ภาพรวมวิจัย
+                </button>
+                <button 
+                    onClick={() => setActiveTab('outcomes')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeTab === 'outcomes' ? 'bg-white dark:bg-gray-700 text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <TrophyIcon className="w-4 h-4" /> ผลลัพธ์
+                </button>
+                <button 
+                    onClick={() => setActiveTab('data')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeTab === 'data' ? 'bg-white dark:bg-gray-700 text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    <SquaresIcon className="w-4 h-4" /> ฐานข้อมูลดิบ
+                </button>
+            </div>
+
+            {/* Global Filter Bar (Show on Overview & Outcomes) */}
+            {(activeTab === 'overview' || activeTab === 'outcomes') && (
+                <FilterBar 
+                    orgs={availableOrgs}
+                    groups={availableGroups}
+                    selectedOrg={selectedOrg} 
+                    setSelectedOrg={setSelectedOrg}
+                    selectedGroup={selectedGroup}
+                    setSelectedGroup={setSelectedGroup}
+                    startDate={startDate}
+                    setStartDate={setStartDate}
+                    endDate={endDate}
+                    setEndDate={setEndDate}
+                    onRefresh={loadData}
+                />
+            )}
+
+            {/* Content Area */}
+            {fetchError ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center animate-fade-in">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                        <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">เกิดข้อผิดพลาด</h3>
+                    <p className="text-gray-500 mb-6">{fetchError}</p>
+                    <button onClick={loadData} className="px-6 py-2 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 transition-colors">ลองใหม่อีกครั้ง</button>
+                </div>
+            ) : (
+                <>
+                    {activeTab === 'overview' && (
+                        loadingData ? <Spinner /> : <MacroOverview adminData={adminData} filterOrg={selectedOrg} filterGroup={selectedGroup} startDate={startDate} endDate={endDate} />
+                    )}
+
+                    {activeTab === 'outcomes' && (
+                        loadingData ? <Spinner /> : <OutcomeAnalysis adminData={adminData} filterOrg={selectedOrg} filterGroup={selectedGroup} startDate={startDate} endDate={endDate} />
+                    )}
+
+                    {activeTab === 'data' && (
+                        loadingData ? <Spinner /> : <DataManagementTab adminData={adminData} />
+                    )}
+                </>
+            )}
         </div>
     );
 };

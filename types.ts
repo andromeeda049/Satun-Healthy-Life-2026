@@ -31,7 +31,7 @@ export interface NutrientInfo {
   items: FoodItem[];
 }
 
-export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards';
+export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards';
 export type Theme = 'light' | 'dark';
 
 export interface User {
@@ -59,7 +59,8 @@ export interface HealthGroup {
     lineLink: string;
     adminId: string;
     createdAt: string;
-    image?: string; // Added image field
+    image?: string;
+    memberCount?: number; // Added memberCount
 }
 
 export interface PillarScore {
@@ -357,10 +358,12 @@ export interface AppContextType {
   clearCalorieHistory: () => void;
   clearActivityHistory: () => void;
   clearWellnessHistory: () => void;
+  resetData: () => Promise<boolean>; 
 
   gainXP: (amount: number, category?: string) => void;
-  showLevelUp: { type: 'level' | 'badge', data: any } | null;
+  showLevelUp: { type: 'level' | 'badge' | 'group_join', data: any } | null;
   closeLevelUpModal: () => void;
+  showCelebration: (type: 'level' | 'badge' | 'group_join', data: any) => void;
   
   notification: NotificationState;
   closeNotification: () => void;
@@ -372,7 +375,7 @@ export interface AppContextType {
   // --- NEW CONTEXT FOR GROUPS ---
   organizations: Organization[];
   myGroups: HealthGroup[];
-  joinGroup: (code: string) => Promise<{ success: boolean; message: string }>;
+  joinGroup: (code: string) => Promise<{ success: boolean; message: string; data?: any }>;
   leaveGroup: (groupId: string) => Promise<boolean>;
   refreshGroups: () => void;
 }

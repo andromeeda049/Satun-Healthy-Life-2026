@@ -1,10 +1,9 @@
+
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, (process as any).cwd(), '');
   return {
     server: {
@@ -13,7 +12,6 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react()],
     define: {
-      // FIX: Map the variable 'API_KEY' (from Vercel) to 'process.env.API_KEY'
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
     },
     resolve: {
@@ -21,5 +19,19 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve((process as any).cwd(), '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-ui': ['@headlessui/react', 'framer-motion'],
+            'vendor-utils': ['axios', 'jwt-decode'],
+            'vendor-gemini': ['@google/genai'],
+            'vendor-line': ['@line/liff']
+          }
+        }
+      },
+      chunkSizeWarningLimit: 1000
+    }
   };
 });

@@ -138,22 +138,39 @@ const MenuGridPage: React.FC = () => {
             </button>
 
             {currentUser?.role === 'admin' && (
-                <button
-                    onClick={() => navigate('adminDashboard')}
-                    className="w-full bg-gradient-to-r from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800 text-white p-4 rounded-xl shadow-lg flex items-center justify-between group active:scale-[0.98] transition-all relative overflow-hidden border border-gray-700"
-                >
-                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="flex items-center gap-3 relative z-10">
-                        <div className="p-2 bg-white/10 rounded-lg">
-                            <LockIcon className="w-6 h-6 text-white" />
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        onClick={() => navigate('adminDashboard')}
+                        className="bg-gradient-to-r from-gray-800 to-gray-900 dark:from-gray-700 dark:to-gray-800 text-white p-4 rounded-xl shadow-lg flex flex-col justify-between group active:scale-[0.98] transition-all relative overflow-hidden border border-gray-700 h-28"
+                    >
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative z-10 flex justify-between w-full">
+                            <div className="p-2 bg-white/10 rounded-lg">
+                                <LockIcon className="w-6 h-6 text-white" />
+                            </div>
                         </div>
-                        <div className="text-left">
-                            <h3 className="font-bold text-base">Admin Zone</h3>
-                            <p className="text-xs text-gray-300">ระบบจัดการข้อมูลและงานวิจัย</p>
+                        <div className="relative z-10 text-left">
+                            <h3 className="font-bold text-sm">Admin Dashboard</h3>
+                            <p className="text-[10px] text-gray-300">วิเคราะห์ข้อมูลรวม</p>
                         </div>
-                    </div>
-                    <div className="relative z-10 bg-white/20 px-3 py-1 rounded-lg text-xs font-bold">เข้าใช้งาน &gt;</div>
-                </button>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('groupManagement')}
+                        className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-xl shadow-lg flex flex-col justify-between group active:scale-[0.98] transition-all relative overflow-hidden border border-indigo-500 h-28"
+                    >
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <div className="relative z-10 flex justify-between w-full">
+                            <div className="p-2 bg-white/10 rounded-lg">
+                                <UserGroupIcon className="w-6 h-6 text-white" />
+                            </div>
+                        </div>
+                        <div className="relative z-10 text-left">
+                            <h3 className="font-bold text-sm">จัดการกลุ่ม</h3>
+                            <p className="text-[10px] text-indigo-200">สร้าง/ดูแลกลุ่ม</p>
+                        </div>
+                    </button>
+                </div>
             )}
 
             <div className="space-y-3">
