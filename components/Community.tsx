@@ -237,20 +237,45 @@ const Community: React.FC = () => {
 
     const captureAndShare = async (element: HTMLElement, filename: string) => {
         try {
-            const canvas = await html2canvas(element, { useCORS: true, scale: 2, backgroundColor: '#f8fafc' });
+            if (!element) {
+                alert("ไม่พบข้อมูลที่จะแชร์ (Element not found)");
+                return;
+            }
+
+            const canvas = await html2canvas(element, { 
+                useCORS: true, 
+                scale: 2, 
+                backgroundColor: '#f8fafc',
+                logging: false,
+                windowWidth: document.documentElement.scrollWidth,
+                windowHeight: document.documentElement.scrollHeight
+            });
             const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-            if (!blob) throw new Error("Canvas to Blob failed");
+            if (!blob) throw new Error("สร้างรูปภาพไม่สำเร็จ");
+            
             const file = new File([blob], filename, { type: 'image/png' });
+            
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: 'ลำดับคนรักสุขภาพ', text: `🏆 อันดับสุขภาพของฉันใน Satun Smart Life!` });
+                try {
+                    await navigator.share({ files: [file], title: 'Satun Healthy Life', text: `🏆 อันดับสุขภาพของฉันใน Satun Smart Life! #${myStatsInCurrentTab?.rank}` });
+                } catch (shareErr: any) {
+                    if (shareErr.name !== 'AbortError') {
+                        // If sharing failed (not cancelled), try download
+                        const link = document.createElement('a');
+                        link.href = canvas.toDataURL('image/png');
+                        link.download = filename;
+                        link.click();
+                    }
+                }
             } else {
                 const link = document.createElement('a');
                 link.href = canvas.toDataURL('image/png');
                 link.download = filename;
                 link.click();
             }
-        } catch (err) {
-            alert("ไม่สามารถแชร์รูปได้");
+        } catch (err: any) {
+            console.error(err);
+            alert(`ไม่สามารถแชร์รูปได้: ${err.message}`);
         }
     };
 
@@ -324,7 +349,7 @@ const Community: React.FC = () => {
             }`}>
                 <RankIcon index={idx} />
                 <div className="w-9 h-9 rounded-lg overflow-hidden border border-slate-100 bg-slate-50 flex-shrink-0">
-                    {user.profilePicture.startsWith('http') || user.profilePicture.startsWith('data') ? <img src={user.profilePicture} alt="User" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-base">{user.profilePicture || '👤'}</div>}
+                    {user.profilePicture.startsWith('http') || user.profilePicture.startsWith('data') ? <img src={user.profilePicture} alt="User" crossOrigin="anonymous" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-base">{user.profilePicture || '👤'}</div>}
                 </div>
                 <div className="flex-1 min-w-0">
                     <h4 className={`font-bold text-[13px] tracking-tight truncate ${isMe ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-white'}`}>
@@ -426,9 +451,31 @@ const Community: React.FC = () => {
     );
 
     return (
-        <div className="animate-fade-in pb-24">
+        <div className="animate-fade-in pb-24 relative">
             {renderHeader()}
             
+            {/* Hidden Share Card Template - Always Rendered but Off-screen for capturing */}
+            <div style={{ position: 'fixed', top: '-9999px', left: '-9999px' }}>
+                <div ref={shareCardRef} className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-6 rounded-xl shadow-xl flex items-center justify-between border border-white/20 w-[350px]">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center font-bold text-2xl border-2 border-white/30">
+                            #{myStatsInCurrentTab?.rank}
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold uppercase opacity-70 tracking-widest">{myStatsInCurrentTab?.label}</p>
+                            <p className="font-bold text-lg truncate max-w-[180px]">
+                                {activeTab === 'orgs' ? organizations.find(o => o.id === userProfile.organization)?.name : currentUser?.displayName}
+                            </p>
+                            <p className="text-[10px] opacity-75 mt-1 font-medium bg-white/10 px-2 py-0.5 rounded-full inline-block">Satun Healthy Life 2026</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-3xl font-black">{myStatsInCurrentTab?.value}</p>
+                        <p className="text-xs font-bold uppercase opacity-80">{myStatsInCurrentTab?.unit}</p>
+                    </div>
+                </div>
+            </div>
+
             {/* Category Tabs */}
             <div className="bg-white dark:bg-gray-800 p-2 rounded-xl mb-4 shadow-sm border border-slate-100 dark:border-gray-700 overflow-x-auto no-scrollbar">
                 <div className="flex gap-2 min-w-max">
@@ -536,7 +583,7 @@ const Community: React.FC = () => {
 
             {/* Sticky Stats Footer (Always show if myStats found, except top 3 who see themselves on screen) */}
             {myStatsInCurrentTab && myStatsInCurrentTab.rank > 3 && (
-                <div ref={shareCardRef} className="fixed bottom-20 left-4 right-4 bg-indigo-600 text-white p-3 rounded-xl shadow-xl flex items-center justify-between border border-indigo-400 z-30 animate-slide-up">
+                <div className="fixed bottom-20 left-4 right-4 bg-indigo-600 text-white p-3 rounded-xl shadow-xl flex items-center justify-between border border-indigo-400 z-30 animate-slide-up">
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold text-xs">
                             #{myStatsInCurrentTab.rank}
