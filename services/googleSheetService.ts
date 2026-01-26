@@ -43,7 +43,7 @@ export const socialAuth = async (scriptUrl: string, payload: any) => {
     try {
         const response = await fetchWithRetry(scriptUrl, {
             method: 'POST',
-            body: JSON.stringify({ action: 'socialLogin', payload }),
+            body: JSON.stringify({ action: 'socialAuth', payload }),
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             redirect: 'follow'
         });
