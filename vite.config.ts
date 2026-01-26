@@ -24,7 +24,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom'],
-            'vendor-ui': ['@headlessui/react', 'framer-motion'],
             'vendor-utils': ['axios', 'jwt-decode'],
             'vendor-gemini': ['@google/genai'],
             'vendor-line': ['@line/liff']
