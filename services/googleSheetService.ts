@@ -59,6 +59,18 @@ export const saveDataToSheet = async (scriptUrl: string, type: string, data: any
     }
 };
 
+export const deleteDataFromSheet = async (scriptUrl: string, type: string, id: string, user: User) => {
+    try {
+        await fetchWithRetry(scriptUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'deleteData', type, id, user }),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        });
+    } catch (error) {
+        console.error("Delete Data Error:", error);
+    }
+};
+
 export const clearHistoryInSheet = async (scriptUrl: string, type: string, user: User) => {
     try {
         await fetchWithRetry(scriptUrl, {

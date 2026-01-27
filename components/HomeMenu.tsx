@@ -6,7 +6,7 @@ import {
     CameraIcon, SparklesIcon, ClipboardListIcon, 
     SquaresIcon, UserCircleIcon, WaterDropIcon, 
     BeakerIcon, BoltIcon, HeartIcon, TrophyIcon, XIcon, MedalIcon, StarIcon, ChartBarIcon,
-    LineIcon, UserGroupIcon, BrainIcon
+    LineIcon, UserGroupIcon, BrainIcon, TargetIcon
 } from './icons';
 import ProactiveInsight from './ProactiveInsight';
 import { getWeekNumber } from '../constants';
@@ -199,7 +199,15 @@ const HomeMenu: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-md border border-slate-100 dark:border-gray-700">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pl-1">บริการพิเศษ (Services)</h4>
             <div className="space-y-0.5">
-                <button onClick={() => setActiveView('planner')} className="flex items-center p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 w-full group transition-all">
+                {/* Health Goals Button */}
+                <button onClick={() => setActiveView('goals')} className="flex items-center p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 w-full group transition-all">
+                    <div className="p-2.5 rounded-lg mr-3 bg-green-50 text-green-600 group-hover:scale-105 transition-transform">
+                        <TargetIcon className="text-base" />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-gray-200">เป้าหมายสุขภาพ (Health Goals)</span>
+                </button>
+
+                <button onClick={() => setActiveView('planner')} className="flex items-center p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 w-full group transition-all border-t border-slate-50 dark:border-gray-700">
                     <div className="p-2.5 rounded-lg mr-3 bg-emerald-50 text-emerald-600 group-hover:scale-105 transition-transform">
                         <ClipboardListIcon className="text-base" />
                     </div>

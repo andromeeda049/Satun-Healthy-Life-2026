@@ -9,7 +9,7 @@ import {
     ChartBarIcon, ClipboardCheckIcon, MedalIcon,
     SquaresIcon, UserGroupIcon, HeartIcon, LogoutIcon,
     SearchIcon, ChevronDownIcon, CameraIcon, LockIcon,
-    XIcon, SparklesIcon, ChatBubbleLeftEllipsisIcon
+    XIcon, SparklesIcon, ChatBubbleLeftEllipsisIcon, TargetIcon
 } from './icons';
 
 interface MenuItem {
@@ -22,7 +22,8 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
     { id: 'dashboard', label: 'แดชบอร์ดสุขภาพ', icon: <SquaresIcon className="w-6 h-6 text-indigo-500" />, color: 'bg-white', category: 'main' },
-    { id: 'community', label: 'กลุ่มของฉัน', icon: <UserGroupIcon className="w-6 h-6 text-orange-500" />, color: 'bg-white', category: 'main' }, // Renamed/Mapped to community
+    { id: 'community', label: 'กลุ่มของฉัน', icon: <UserGroupIcon className="w-6 h-6 text-orange-500" />, color: 'bg-white', category: 'main' },
+    { id: 'goals', label: 'เป้าหมายสุขภาพ', icon: <TargetIcon className="w-6 h-6 text-red-500" />, color: 'bg-white', category: 'main' },
     { id: 'rewards', label: 'แลกรางวัลสุขภาพ', icon: <MedalIcon className="w-6 h-6 text-amber-500" />, color: 'bg-white', category: 'main' },
     { id: 'planner', label: 'แผนอาหาร 7 วัน', icon: <ClipboardListIcon className="w-6 h-6 text-emerald-500" />, color: 'bg-white', category: 'main' },
     { id: 'literacy', label: 'คลังความรู้', icon: <BookOpenIcon className="w-6 h-6 text-teal-500" />, color: 'bg-white', category: 'main' },
@@ -41,37 +42,20 @@ interface ChangelogVersion {
 
 const CHANGELOG_HISTORY: ChangelogVersion[] = [
     {
+        version: "1.6.0",
+        date: "New Feature",
+        features: [
+            { title: "Health Goals", desc: "ตั้งเป้าหมายสุขภาพ (น้ำหนัก, ความดัน, น้ำตาล) และติดตามผลลัพธ์แบบกราฟ" },
+            { title: "Feedback System", desc: "ช่องทางรับฟังความคิดเห็นและแจ้งปัญหาการใช้งาน" }
+        ]
+    },
+    {
         version: "1.5.0",
-        date: "Current Version",
+        date: "Previous Update",
         features: [
-            { title: "อัปเดตคลังความรู้ (Nutrition Literacy)", desc: "เพิ่ม 11 เสาหลักเวชศาสตร์วิถีชีวิต และแนวทางดูแลโรค NCDs (เบาหวาน, ความดัน, หัวใจ, มะเร็ง)" },
-            { title: "ปรับโฉมดีไซน์ใหม่ (UI Redesign)", desc: "ใช้กราฟิกไอคอนและ Gradients ที่สวยงาม อ่านง่ายขึ้น พร้อม Dark Mode ที่สมบูรณ์" },
+            { title: "อัปเดตคลังความรู้ (Nutrition Literacy)", desc: "เพิ่ม 11 เสาหลักเวชศาสตร์วิถีชีวิต และแนวทางดูแลโรค NCDs" },
+            { title: "ปรับโฉมดีไซน์ใหม่ (UI Redesign)", desc: "ใช้กราฟิกไอคอนและ Gradients ที่สวยงาม อ่านง่ายขึ้น" },
             { title: "ระบบกลุ่มสุขภาพ (Community Groups)", desc: "ปรับปรุงการจัดการสมาชิกและการดูอันดับภายในกลุ่ม" }
-        ]
-    },
-    {
-        version: "1.4.0",
-        date: "Previous Update",
-        features: [
-            { title: "ระบบแลกรางวัล (Rewards)", desc: "นำแต้ม HP มาแลกรับของรางวัลและสิทธิพิเศษ" },
-            { title: "ประวัติ HP (XP History)", desc: "ดูรายการย้อนหลังการได้รับแต้มประสบการณ์อย่างละเอียด" },
-            { title: "หน้าเมนูแบบ Grid", desc: "เข้าถึงฟีเจอร์ต่างๆ ได้ง่ายขึ้นด้วยหน้าเมนูรวม" }
-        ]
-    },
-    {
-        version: "1.3.0",
-        date: "Previous Update",
-        features: [
-            { title: "AI Coach & Consultant", desc: "ปรึกษาปัญหาสุขภาพกับ AI ผู้เชี่ยวชาญเฉพาะด้าน (เทรนเนอร์, นักโภชนาการ)" },
-            { title: "Personalized Planner", desc: "สร้างแผนอาหารและออกกำลังกาย 7 วัน ตามค่า TDEE ส่วนบุคคล" }
-        ]
-    },
-    {
-        version: "1.2.0",
-        date: "Legacy",
-        features: [
-            { title: "Line Login Integration", desc: "เข้าสู่ระบบง่ายๆ ด้วยบัญชี LINE" },
-            { title: "Organization System", desc: "ระบุสังกัดหน่วยงานและโรงพยาบาลเพื่อการดูแลที่ทั่วถึง" }
         ]
     }
 ];
@@ -195,11 +179,11 @@ const MenuGridPage: React.FC = () => {
                         </div>
                         <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300">สแกนอาหาร</span>
                     </button>
-                    <button onClick={() => navigate('hpHistory')} className="flex flex-col items-center gap-1.5 flex-shrink-0">
-                        <div className="w-16 h-16 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl flex items-center justify-center shadow-sm border border-yellow-100/50">
-                            <ChartBarIcon className="w-8 h-8 text-yellow-500" />
+                    <button onClick={() => navigate('goals')} className="flex flex-col items-center gap-1.5 flex-shrink-0">
+                        <div className="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center justify-center shadow-sm border border-green-100/50">
+                            <TargetIcon className="w-8 h-8 text-green-500" />
                         </div>
-                        <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300">ประวัติ HP</span>
+                        <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300">เป้าหมาย</span>
                     </button>
                     {userProfile.level && userProfile.level >= 5 && (
                          <button onClick={() => navigate('rewards')} className="flex flex-col items-center gap-1.5 flex-shrink-0">
@@ -225,6 +209,7 @@ const MenuGridPage: React.FC = () => {
                 ))}
             </div>
 
+            {/* Help & Settings Section */}
             <div className="space-y-1 border-t border-gray-100 dark:border-gray-700 pt-4">
                 <div className="border-b border-gray-100 dark:border-gray-800">
                     <button 
@@ -292,7 +277,7 @@ const MenuGridPage: React.FC = () => {
 
             <div className="text-center">
                 <p className="text-[11px] text-gray-400 font-bold tracking-tighter uppercase">
-                    Satun Healthy Life v1.5.0 • แพลตฟอร์มสุขภาพดิจิทัล
+                    Satun Healthy Life v1.6.0 • แพลตฟอร์มสุขภาพดิจิทัล
                 </p>
             </div>
 

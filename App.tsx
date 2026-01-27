@@ -31,6 +31,7 @@ import XPHistory from './components/XPHistory';
 import RewardsRedemption from './components/RewardsRedemption';
 import MenuGridPage from './components/MenuGridPage';
 import FeedbackForm from './components/FeedbackForm';
+import HealthGoals from './components/HealthGoals'; // NEW IMPORT
 import { AppProvider, AppContext } from './context/AppContext';
 import { AppView, User, WaterHistoryEntry } from './types';
 import { HomeIcon, CameraIcon, SparklesIcon, MenuIcon, XIcon, SquaresIcon, UserCircleIcon, WaterDropIcon, HeartIcon, BellIcon, UserGroupIcon, PhoneIcon, BeakerIcon, BoltIcon, ExclamationTriangleIcon } from './components/icons';
@@ -260,6 +261,7 @@ const AppContent: React.FC = () => {
       case 'hpHistory': return <XPHistory />; 
       case 'rewards': return <RewardsRedemption />;
       case 'feedback': return <FeedbackForm />;
+      case 'goals': return <HealthGoals />; // NEW ROUTE
       case 'adminDashboard': return currentUser?.role === 'admin' ? <AdminDashboard /> : <HomeMenu />;
       case 'groupManagement': return currentUser?.role === 'admin' ? <GroupManagement /> : <HomeMenu />;
       default: return <HomeMenu />;

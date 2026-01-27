@@ -2,7 +2,7 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { AppView, PillarScore } from '../types';
-import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon } from './icons';
+import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon, StethoscopeIcon } from './icons';
 import { PILLAR_LABELS, LEVEL_THRESHOLDS } from '../constants';
 import GamificationCard from './GamificationCard';
 
@@ -57,6 +57,72 @@ const calculateMetrics = (profile: any) => {
     }
 
     return { bmi, bmiCategory, bmr, tdee };
+};
+
+// --- NCDs Risk Evaluation Logic ---
+const evaluateNCDStatus = (bmi: number, sys: number, dia: number, fbs: number) => {
+    let status = 'normal';
+    const risks = [];
+
+    // 1. Diabetes Risk (FBS)
+    if (fbs > 0) {
+        if (fbs >= 126) { 
+            if(status !== 'sick') status = 'sick'; 
+            risks.push('น้ำตาลสูง (เบาหวาน)');
+        } else if (fbs >= 100) {
+            if(status === 'normal') status = 'risk';
+            risks.push('น้ำตาลเริ่มสูง');
+        }
+    }
+
+    // 2. Hypertension Risk (BP)
+    if (sys > 0 && dia > 0) {
+        if (sys >= 140 || dia >= 90) {
+            if(status !== 'sick') status = 'sick';
+            risks.push('ความดันสูง');
+        } else if (sys >= 120 || dia >= 80) {
+            if(status === 'normal') status = 'risk';
+            risks.push('ความดันเริ่มสูง');
+        }
+    }
+
+    // 3. Obesity Risk (BMI - Asian Criteria)
+    if (bmi > 0) {
+        if (bmi >= 25) { // Obese
+            if(status === 'normal') status = 'risk'; // Obesity alone is usually 'Risk' unless paired with others, but let's flagging as high risk
+            risks.push('โรคอ้วน');
+        } else if (bmi >= 23) { // Overweight
+            if(status === 'normal') status = 'risk';
+            risks.push('น้ำหนักเกิน');
+        }
+    }
+
+    // Return Display Config
+    if (status === 'sick') {
+        return { 
+            label: 'กลุ่มป่วย / สีแดง', 
+            desc: risks.join(', ') || 'ค่าสุขภาพเกินเกณฑ์อันตราย',
+            color: 'bg-red-500 text-white', 
+            icon: '🚨',
+            borderColor: 'border-red-200'
+        };
+    } else if (status === 'risk') {
+        return { 
+            label: 'กลุ่มเสี่ยง / สีเหลือง-ส้ม', 
+            desc: risks.join(', ') || 'ควรปรับพฤติกรรม',
+            color: 'bg-orange-500 text-white', 
+            icon: '⚠️',
+            borderColor: 'border-orange-200'
+        };
+    } else {
+        return { 
+            label: 'กลุ่มปกติ / สีเขียว', 
+            desc: 'สุขภาพอยู่ในเกณฑ์ดี',
+            color: 'bg-green-500 text-white', 
+            icon: '✅',
+            borderColor: 'border-green-200'
+        };
+    }
 };
 
 // --- CHART COMPONENTS ---
@@ -197,10 +263,11 @@ const PersonalHealthGrid: React.FC<{
     userProfile: any;
     bmiHistory: any[];
     tdeeHistory: any[];
+    clinicalHistory: any[];
     caloriesConsumed: number;
     caloriesBurned: number;
     stepsToday: number;
-}> = ({ userProfile, bmiHistory, tdeeHistory, caloriesConsumed, caloriesBurned, stepsToday }) => {
+}> = ({ userProfile, bmiHistory, tdeeHistory, clinicalHistory, caloriesConsumed, caloriesBurned, stepsToday }) => {
     const latestBmi = bmiHistory.length > 0 ? bmiHistory[0] : null;
     const latestTdee = tdeeHistory.length > 0 ? tdeeHistory[0] : null;
     
@@ -220,10 +287,44 @@ const PersonalHealthGrid: React.FC<{
     const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
     const isDeficit = calorieBalance >= 0;
 
+    // Latest Clinical Data
+    const sortedClinical = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const latestClinical = sortedClinical.length > 0 ? sortedClinical[0] : null;
+
+    const displayBP = latestClinical && latestClinical.systolic && latestClinical.diastolic 
+        ? `${latestClinical.systolic}/${latestClinical.diastolic}` 
+        : '-/-';
+    
+    const displayFBS = latestClinical && latestClinical.fbs 
+        ? `${latestClinical.fbs}` 
+        : '-';
+
+    // Evaluate Risk Status
+    const riskStatus = evaluateNCDStatus(
+        bmi, 
+        latestClinical?.systolic || 0, 
+        latestClinical?.diastolic || 0, 
+        latestClinical?.fbs || 0
+    );
+
     return (
         <div className="space-y-4 mb-6">
+            {/* Health Group Assessment Banner */}
+            <div className={`p-4 rounded-2xl shadow-sm border flex items-center justify-between ${riskStatus.borderColor} bg-white dark:bg-gray-800`}>
+                <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md ${riskStatus.color}`}>
+                        {riskStatus.icon}
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide">ประเมินกลุ่มสุขภาพ</p>
+                        <h3 className="text-lg font-black text-gray-800 dark:text-white">{riskStatus.label}</h3>
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{riskStatus.desc}</p>
+                    </div>
+                </div>
+            </div>
+
             {/* Row 1: Key Body Metrics */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {/* BMI Card */}
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
                     <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-full">
@@ -263,10 +364,30 @@ const PersonalHealthGrid: React.FC<{
                     </div>
                 </div>
 
+                {/* Blood Pressure (BP) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-pink-50 dark:bg-pink-900/30 rounded-full">
+                        <HeartIcon className="w-5 h-5 text-pink-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ความดัน (BP)</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{displayBP}</p>
+                    <p className="text-[9px] text-slate-500">mmHg</p>
+                </div>
+
+                {/* Blood Sugar (FBS) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-900/30 rounded-full">
+                        <WaterDropIcon className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">น้ำตาล (FBS)</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{displayFBS}</p>
+                    <p className="text-[9px] text-slate-500">mg/dL</p>
+                </div>
+
                 {/* Condition Card */}
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-900/30 rounded-full">
-                        <HeartIcon className="w-5 h-5 text-rose-500" />
+                    <div className="mb-2 p-2 bg-teal-50 dark:bg-teal-900/30 rounded-full">
+                        <StethoscopeIcon className="w-5 h-5 text-teal-500" />
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">โรคประจำตัว</p>
                     <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2 leading-tight mt-1">
@@ -431,7 +552,8 @@ const Dashboard: React.FC = () => {
       socialHistory,
       waterGoal, 
       userProfile, 
-      currentUser 
+      currentUser,
+      clinicalHistory // Added clinicalHistory
   } = useContext(AppContext);
 
   // Expanded Tab State to include all requested categories
@@ -518,6 +640,7 @@ const Dashboard: React.FC = () => {
             userProfile={userProfile}
             bmiHistory={bmiHistory}
             tdeeHistory={tdeeHistory}
+            clinicalHistory={clinicalHistory} // Pass clinical history
             caloriesConsumed={caloriesConsumedToday}
             caloriesBurned={activityToday}
             stepsToday={stepsToday}

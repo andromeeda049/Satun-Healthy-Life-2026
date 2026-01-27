@@ -1,9 +1,9 @@
 
 import React, { createContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry } from '../types';
+import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry, HealthGoal, ClinicalHistoryEntry } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
-import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService, resetUserData } from '../services/googleSheetService';
+import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService, resetUserData, deleteDataFromSheet } from '../services/googleSheetService';
 
 // HARDCODED URL (v17.0) - Updated Verified URL
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaH1AGEMnL0FAuvGKynIT-s-A06zGg73YYG3l6CgUwwiPBXhQrLCHOMlb01fANkxTx_w/exec';
@@ -62,6 +62,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [latestFoodAnalysis, setLatestFoodAnalysis] = useLocalStorage<NutrientInfo | null>('latestFoodAnalysis', null);
   const [userProfile, _setUserProfile] = useLocalStorage<UserProfile>('userProfile', defaultProfile);
   
+  // New States for Goals & Clinical
+  const [goals, setGoals] = useLocalStorage<HealthGoal[]>('goals', []);
+  const [clinicalHistory, setClinicalHistory] = useLocalStorage<ClinicalHistoryEntry[]>('clinicalHistory', []);
+
   // Updated key to force refresh to new Hardcoded URL (v17)
   const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v17', DEFAULT_SCRIPT_URL);
   
@@ -74,8 +78,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notification, setNotification] = useState<NotificationState>({ show: false, message: '', type: 'info' });
   const [organizations, setOrganizations] = useLocalStorage<Organization[]>('organizations', DEFAULT_ORGANIZATIONS);
   
-  // FIX: Use useState instead of useLocalStorage for myGroups to avoid QuotaExceededError
-  // Groups data can be large (images) and should be fetched fresh anyway.
   const [myGroups, setMyGroups] = useState<HealthGroup[]>([]);
 
   useEffect(() => {
@@ -91,52 +93,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const login = (user: User) => {
-    // Check if a different user is logging in
     const lastLogonUser = localStorage.getItem('lastLogonUser');
     
     if (lastLogonUser && lastLogonUser !== user.username) {
-        // Different user detected, clear previous user's data from local storage
         console.log("User switch detected. Clearing previous user data.");
         _setUserProfile(defaultProfile);
         _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
         _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
         _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]); _setRedemptionHistory([]);
+        setGoals([]); setClinicalHistory([]);
         setMyGroups([]);
     }
 
-    // Update last logon user
     localStorage.setItem('lastLogonUser', user.username);
-
     setCurrentUser(user);
-    // Reset sync state to force a fresh sync
     setIsDataSynced(false);
     setIsSyncing(false);
     setSyncError(null);
   };
 
   const logout = () => {
-    // Set flag to prevent auto-login loop in Auth.tsx
     sessionStorage.setItem('isLoggedOut', 'true');
-    
     setCurrentUser(null);
     setIsDataSynced(false);
     setIsSyncing(false);
     setActiveView('home');
-    setMyGroups([]); // Clear groups on logout
-    
-    // NOTE: We do NOT clear history or profile data here. 
-    // This allows data to persist if the SAME user logs back in.
-    // Data clearing is now handled in 'login' if a DIFFERENT user logs in.
+    setMyGroups([]);
   };
 
-  // Helper to handle functional updates before saving to sheet
-  // This ensures 'val' sent to saveDataToSheet is the actual array/object, not a function
   const handleHistoryUpdate = (setter: any, currentVal: any, newVal: any, type: string) => {
       const valueToSave = newVal instanceof Function ? newVal(currentVal) : newVal;
       setter(valueToSave);
-      
-      // Save only if user is logged in and synced
-      // Note: We send the whole new array, backend will pick the first item (newest) based on logic
       if (currentUser && isDataSynced) {
           saveDataToSheet(scriptUrl, type, valueToSave, currentUser);
       }
@@ -145,7 +132,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const setBmiHistory = (val: any) => handleHistoryUpdate(_setBmiHistory, bmiHistory, val, 'BMI');
   const setTdeeHistory = (val: any) => handleHistoryUpdate(_setTdeeHistory, tdeeHistory, val, 'TDEE');
   const setFoodHistory = (val: any) => handleHistoryUpdate(_setFoodHistory, foodHistory, val, 'FOOD');
-  // Planner history setting wrapper - Not used directly for new items anymore, use savePlannerEntry
   const setPlannerHistory = (val: any) => { _setPlannerHistory(val); }; 
   const setWaterHistory = (val: any) => handleHistoryUpdate(_setWaterHistory, waterHistory, val, 'WATER');
   const setCalorieHistory = (val: any) => handleHistoryUpdate(_setCalorieHistory, calorieHistory, val, 'CALORIE');
@@ -191,37 +177,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  // --- GOAL & CLINICAL FUNCTIONS ---
+  const saveGoal = (goal: HealthGoal) => {
+      setGoals(prev => {
+          // If update existing, replace it. Else add new.
+          const existingIdx = prev.findIndex(g => g.id === goal.id);
+          if (existingIdx >= 0) {
+              const newGoals = [...prev];
+              newGoals[existingIdx] = goal;
+              return newGoals;
+          }
+          return [goal, ...prev];
+      });
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, 'goal', goal, currentUser);
+      }
+  };
+
+  const deleteGoal = (id: string) => {
+      setGoals(prev => prev.filter(g => g.id !== id));
+      if (currentUser && isDataSynced) {
+          deleteDataFromSheet(scriptUrl, 'goal', id, currentUser);
+      }
+  };
+
+  const saveClinicalEntry = (entry: ClinicalHistoryEntry) => {
+      setClinicalHistory(prev => [entry, ...prev]);
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, 'clinical', entry, currentUser);
+      }
+  };
+
   const resetData = async (): Promise<boolean> => {
       if (!currentUser || !scriptUrl) return false;
       try {
           const success = await resetUserData(scriptUrl, currentUser);
           if (success) {
-              // Clear Local History but keep critical profile info (Name, Gender, etc.)
-              _setBmiHistory([]); 
-              _setTdeeHistory([]); 
-              _setFoodHistory([]); 
-              _setPlannerHistory([]); 
-              _setWaterHistory([]); 
-              _setCalorieHistory([]); 
-              _setActivityHistory([]); 
-              _setSleepHistory([]);
-              _setMoodHistory([]); 
-              _setHabitHistory([]); 
-              _setSocialHistory([]); 
-              _setEvaluationHistory([]); 
-              _setQuizHistory([]); 
-              _setRedemptionHistory([]);
+              _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
+              _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
+              _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); 
+              _setQuizHistory([]); _setRedemptionHistory([]);
+              setGoals([]); setClinicalHistory([]);
               
-              // Reset XP/Level but keep personal info
-              const resetProfile = { 
-                  ...userProfile, 
-                  xp: 0, 
-                  level: 1, 
-                  badges: ['novice'], 
-                  deltaXp: 0 
-              };
+              const resetProfile = { ...userProfile, xp: 0, level: 1, badges: ['novice'], deltaXp: 0 };
               _setUserProfile(resetProfile);
-              
               setNotification({ show: true, message: 'รีเซ็ตข้อมูลสำเร็จ! เริ่มต้นใหม่กันเถอะ', type: 'success' });
               return true;
           } else {
@@ -235,14 +234,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const closeNotification = () => setNotification(prev => ({ ...prev, show: false }));
-  
   const openSOS = () => setIsSOSOpen(true);
   const closeSOS = () => setIsSOSOpen(false);
 
-  // Group Management Functions
   const refreshGroups = useCallback(async () => {
       if(!currentUser || !scriptUrl) return;
-      // Fetch groups fresh every time
       try {
           const groups = await getUserGroups(scriptUrl, currentUser);
           setMyGroups(groups);
@@ -253,36 +249,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const joinGroup = async (code: string) => {
       if (!currentUser) return { success: false, message: 'Not logged in' };
-      
-      const safeUser = {
-          username: currentUser.username,
-          displayName: currentUser.displayName,
-          role: currentUser.role,
-          profilePicture: currentUser.profilePicture
-      };
-
-      if (!safeUser.username) {
-          console.error("Join Group Error: Username missing in currentUser", currentUser);
-          return { success: false, message: 'ข้อมูลผู้ใช้ไม่สมบูรณ์ (Username missing)' };
-      }
+      const safeUser = { username: currentUser.username, displayName: currentUser.displayName, role: currentUser.role, profilePicture: currentUser.profilePicture };
+      if (!safeUser.username) return { success: false, message: 'ข้อมูลผู้ใช้ไม่สมบูรณ์' };
 
       const res = await joinGroupService(scriptUrl, safeUser as User, code);
-      
-      // FIX logic to correctly check response structure
-      // Success response structure: { status: "success", data: { status: "Joined", ... } }
       if (res.status === 'success' && res.data?.status === 'Joined') {
           refreshGroups();
           return { success: true, message: 'Joined', data: res.data.group };
       }
-      
-      // Fallback for direct response or legacy
       if (res.status === 'Joined') {
           refreshGroups();
           return { success: true, message: 'Joined', data: res.group };
       }
-
-      // Treat "Already member" as success to handle race conditions or double clicks
-      if (res.message && (res.message.includes('already') || res.message.includes('เป็นสมาชิกกลุ่มนี้อยู่แล้ว'))) {
+      if (res.message && (res.message.includes('already') || res.message.includes('เป็นสมาชิก'))) {
           refreshGroups();
           return { success: true, message: 'คุณเป็นสมาชิกกลุ่มนี้อยู่แล้ว (Success)' };
       }
@@ -299,25 +278,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return false;
   };
 
-  // --- Gamification Logic ---
   const gainXP = (amount: number, category?: string) => {
       if (!currentUser || currentUser.role === 'guest') return;
-      
-      // Prevent XP spamming using LocalStorage counters
       const todayStr = new Date().toDateString();
       if (category && GAMIFICATION_LIMITS[category]) {
           const limit = GAMIFICATION_LIMITS[category];
           const countKey = `daily_count_${category}_${todayStr}`;
           const currentCount = parseInt(localStorage.getItem(countKey) || '0');
-          if (currentCount >= limit.maxPerDay) {
-              return; // Cap reached, no XP
-          }
+          if (currentCount >= limit.maxPerDay) return; 
           localStorage.setItem(countKey, (currentCount + 1).toString());
       }
 
       let newXP = (userProfile.xp || 0) + amount;
       let newLevel = userProfile.level || 1;
-      
       let leveledUp = false;
       const nextThreshold = LEVEL_THRESHOLDS[newLevel];
       
@@ -361,10 +334,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // --- SYNC LOGIC ---
   const syncData = useCallback(async () => {
       if (!currentUser || currentUser.role === 'guest' || !scriptUrl) {
-          setIsDataSynced(true); // Treat guest as synced
+          setIsDataSynced(true);
           return;
       }
 
@@ -372,15 +344,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSyncError(null);
 
       try {
-          if (currentUser.authProvider === 'line' && !currentUser.username) {
-              console.warn("User missing username, forcing logout to re-auth");
-              // This is a critical error, so we stop here
-              throw new Error("ข้อมูลผู้ใช้ไม่สมบูรณ์ (Missing Username)");
-          }
-
           const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
           if (data) {
-              // Priority: Server Data > Local Data (Source of Truth)
               if (data.profile) _setUserProfile(data.profile);
               if (data.bmiHistory) _setBmiHistory(data.bmiHistory);
               if (data.tdeeHistory) _setTdeeHistory(data.tdeeHistory);
@@ -396,6 +361,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
               if (data.quizHistory) _setQuizHistory(data.quizHistory);
               if (data.redemptionHistory) _setRedemptionHistory(data.redemptionHistory);
+              if (data.goals) setGoals(data.goals); // Sync Goals
+              if (data.clinicalHistory) setClinicalHistory(data.clinicalHistory); // Sync Clinical
               
               setIsDataSynced(true);
               refreshGroups();
@@ -405,31 +372,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (e: any) {
           console.error("Sync Error:", e);
           setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
-          setIsDataSynced(false); // Ensure we don't treat partial/failed sync as true
+          setIsDataSynced(false);
       } finally {
           setIsSyncing(false);
       }
   }, [currentUser, scriptUrl, refreshGroups]);
 
-  // Initial Sync Effect
   useEffect(() => {
       if (currentUser && currentUser.role !== 'guest' && !isDataSynced && !isSyncing && !syncError) {
           syncData();
       }
   }, [currentUser, isDataSynced, isSyncing, syncError, syncData]);
 
-  // Retry Function
   const retrySync = () => {
       setSyncError(null);
       syncData();
   };
 
-  // Offline Mode Function
   const useOfflineData = () => {
       setSyncError(null);
-      setIsDataSynced(true); // Bypass the guard
-      // Note: Data saved in this mode might be overwritten if user syncs from another device later.
-      // But for "Sync Fast", this is the trade-off if network is down.
+      setIsDataSynced(true);
   };
 
   return (
@@ -446,10 +408,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
       organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
       redemptionHistory, setRedemptionHistory,
-      // Sync States
       isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData,
       resetData,
-      saveFeedback
+      saveFeedback,
+      // GOALS & CLINICAL EXPORTS
+      goals, setGoals, saveGoal, deleteGoal,
+      clinicalHistory, setClinicalHistory, saveClinicalEntry
     }}>
       {children}
     </AppContext.Provider>

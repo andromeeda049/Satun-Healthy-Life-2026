@@ -31,7 +31,7 @@ export interface NutrientInfo {
   items: FoodItem[];
 }
 
-export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards' | 'feedback';
+export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards' | 'feedback' | 'goals';
 export type Theme = 'light' | 'dark';
 
 export interface User {
@@ -224,6 +224,28 @@ export interface RedemptionHistoryEntry {
     cost: number;
 }
 
+// --- NEW TYPES FOR GOALS & CLINICAL ---
+export interface HealthGoal {
+    id: string;
+    type: 'weight' | 'waist' | 'bp' | 'fbs' | 'other';
+    startValue: string;
+    targetValue: string;
+    startDate: string;
+    deadline?: string;
+    status: 'active' | 'achieved' | 'failed';
+}
+
+export interface ClinicalHistoryEntry {
+    id: string;
+    date: string;
+    systolic?: number;
+    diastolic?: number;
+    fbs?: number;
+    waist?: number;
+    weight?: number; // Added weight to clinical history
+    note?: string;
+}
+
 export interface NotificationState {
     show: boolean;
     message: string;
@@ -381,4 +403,14 @@ export interface AppContextType {
   
   // --- FEEDBACK ---
   saveFeedback: (data: { category: string; message: string; rating: number }) => void;
+
+  // --- GOALS & CLINICAL ---
+  goals: HealthGoal[];
+  setGoals: React.Dispatch<React.SetStateAction<HealthGoal[]>>;
+  saveGoal: (goal: HealthGoal) => void;
+  deleteGoal: (id: string) => void;
+  
+  clinicalHistory: ClinicalHistoryEntry[];
+  setClinicalHistory: React.Dispatch<React.SetStateAction<ClinicalHistoryEntry[]>>;
+  saveClinicalEntry: (entry: ClinicalHistoryEntry) => void;
 }

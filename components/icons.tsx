@@ -110,6 +110,10 @@ export const StethoscopeIcon = ({ className }: IconProps) => (
     <i className={`fa-solid fa-stethoscope ${className}`}></i>
 );
 
+export const TargetIcon = ({ className }: IconProps) => (
+    <i className={`fa-solid fa-bullseye ${className}`}></i>
+);
+
 // --- Feature & Utility Icons ---
 
 export const CameraIcon = ({ className }: IconProps) => (

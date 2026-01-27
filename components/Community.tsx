@@ -1,10 +1,12 @@
 
+// ... existing imports ...
 import React, { useEffect, useState, useContext, useMemo, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { fetchLeaderboard } from '../services/googleSheetService';
 import { TrophyIcon, FireIcon, UserGroupIcon, ChartBarIcon, WaterDropIcon, BeakerIcon, BoltIcon, ExclamationTriangleIcon, StarIcon } from './icons';
 import html2canvas from 'html2canvas';
 
+// ... existing interfaces ...
 interface LeaderboardUser {
     username: string;
     displayName: string;
@@ -15,7 +17,7 @@ interface LeaderboardUser {
     organization: string;
     role?: string;
     weeklyXp?: number;
-    groupXp?: number; // Added groupXp
+    groupXp?: number; 
     score?: number;
 }
 
@@ -44,7 +46,7 @@ const Community: React.FC = () => {
     const [loadingGroup, setLoadingGroup] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // UI States: Default to 'myGroup' if user has groups, else 'users'
+    // UI States
     const [activeTab, setActiveTab] = useState<'users' | 'trending' | 'myGroup' | 'orgs' | 'water' | 'food' | 'activity'>(() => {
         return (myGroups && myGroups.length > 0) ? 'myGroup' : 'users';
     });
@@ -114,17 +116,17 @@ const Community: React.FC = () => {
         loadGlobalData();
     }, [scriptUrl]);
 
-    // 2. Group Load - Run when selectedGroupId changes
+    // 2. Group Load - Run when selectedGroupId changes (Pre-fetch enabled)
     useEffect(() => {
         const loadGroupData = async () => {
             if (!scriptUrl || !selectedGroupId) return;
             
-            // Only fetch if we are actually viewing the group tab (optimization)
-            if (activeTab !== 'myGroup') return;
-
+            // REMOVED: activeTab check to allow pre-fetching
+            // We fetch as soon as we know which group is selected (default or user choice)
+            
             setLoadingGroup(true);
             try {
-                // Pass groupId to Backend for SERVER-SIDE filtering
+                // Pass groupId to Backend
                 const data = await fetchLeaderboard(scriptUrl, currentUser || undefined, selectedGroupId);
                 
                 // Allow Admins in GROUP View
@@ -132,13 +134,11 @@ const Community: React.FC = () => {
                     if (!Array.isArray(list)) return [];
                     return list.filter((u: any) => {
                         const username = String(u.username || '').toLowerCase();
-                        // Only filter system/bot accounts
                         return username !== 'line_1765868496729'; 
                     });
                 };
 
                 if (data && Array.isArray(data.leaderboard)) {
-                    // Backend calculates groupXp and sorts by it
                     setGroupData(filterSystem(data.leaderboard));
                 } else {
                     setGroupData([]);
@@ -151,8 +151,9 @@ const Community: React.FC = () => {
         };
 
         loadGroupData();
-    }, [selectedGroupId, activeTab, scriptUrl]);
+    }, [selectedGroupId, scriptUrl]); // Removed activeTab dependency
 
+    // ... (Rest of the component remains unchanged, including rendering) ...
     // Derived Data for Orgs
     const orgRankings = useMemo(() => {
         if (!globalData?.leaderboard) return [];

@@ -1,15 +1,13 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9.2)
+ * Satun Smart Life - Backend Script (Production v20.9.8)
  * Features: 
- * - Leaderboard Category Aggregation Fix
- * - Detailed Group Member Info
- * - Accurate Group Member Counting
- * - Dynamic Group XP Calculation
- * - Robust Data Reset & Factory Reset
- * - Fix: Allow Admins in Group Leaderboard
- * - Fix: Ensure RedemptionHistory sheet setup
- * - Feature: Feedback Form Support
+ * - Leaderboard Caching (Performance Fix)
+ * - Admin Filtering on ALL Leaderboards
+ * - Clinical History with Weight support
+ * - BMI / TDEE Calculation & History
+ * - Group Management & Member Tracking
+ * - Data Reset & Factory Reset
  */
 
 // --- 1. CONFIGURATION ---
@@ -62,7 +60,9 @@ const SHEET_NAMES = {
   GROUPS: "Groups",
   GROUP_MEMBERS: "GroupMembers",
   REDEMPTION: "RedemptionHistory",
-  FEEDBACK: "Feedback"
+  FEEDBACK: "Feedback",
+  GOALS: "Goals",
+  CLINICAL: "ClinicalHistory"
 };
 
 // --- 2. CORE UTILITIES & LOCK SERVICE ---
@@ -94,7 +94,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9.2 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.8 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -163,6 +163,7 @@ function handleRequest(e, method) {
         if (action === 'joinGroup') return withLock(() => handleJoinGroup(params.groupCode, user));
         if (action === 'leaveGroup') return withLock(() => handleLeaveGroup(params.groupId, user));
         if (action === 'saveData') return withLock(() => handleSave(params.type, params.data, user));
+        if (action === 'deleteData') return withLock(() => handleDelete(params.type, params.id, user)); 
         if (action === 'clearHistory') return withLock(() => handleClear(params.type, user));
         
         // --- RESET ACTIONS ---
@@ -402,6 +403,19 @@ function handleGetGroupMembers(groupId, user) {
 // --- Leaderboard & Ranking ---
 
 function handleGetLeaderboardJS(groupId) {
+  // 1. Try Cache First
+  const cache = CacheService.getScriptCache();
+  const cacheKey = groupId ? `lb_group_${groupId}` : `lb_global`;
+  const cached = cache.get(cacheKey);
+  
+  if (cached) {
+    try {
+      return createSuccessResponse(JSON.parse(cached));
+    } catch (e) {
+      // If cache parse fails, proceed to fetch fresh
+    }
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const profileSheet = ss.getSheetByName(SHEET_NAMES.PROFILE);
   if (!profileSheet || profileSheet.getLastRow() < 2) return createSuccessResponse({ leaderboard: [], trending: [], categories: {water:[], food:[], activity:[]} });
@@ -436,11 +450,9 @@ function handleGetLeaderboardJS(groupId) {
     // If viewing group leaderboard, skip non-members
     if (groupId && (!groupMemberJoinDates || !groupMemberJoinDates.has(username))) continue;
 
-    // Filter out Admins from leaderboard
+    // Filter out Admins from ALL leaderboards (Global & Group)
     const role = String(row[11] || '').toLowerCase(); 
-    // FIX: Only filter admins if NOT viewing a specific group (Global View)
-    // This allows admins to see themselves in "My Group" leaderboard
-    if (!groupId && role === 'admin') continue;
+    if (role === 'admin') continue;
 
     const timestamp = new Date(row[0]);
     const xp = Number(row[12] || 0); // Total XP in this row (Snapshot)
@@ -472,64 +484,75 @@ function handleGetLeaderboardJS(groupId) {
 
   const userArray = Object.values(users);
   
+  let responseData;
+
   if (groupId) {
       // Return specific group leaderboard sorted by Group XP
-      return createSuccessResponse({ apiVersion: "v20.9-GROUP", leaderboard: [...userArray].sort((a, b) => b.groupXp - a.groupXp) });
-  }
+      responseData = { apiVersion: "v20.9-GROUP", leaderboard: [...userArray].sort((a, b) => b.groupXp - a.groupXp) };
+  } else {
+      // --- GLOBAL CATEGORY AGGREGATION ---
+      const catWater = {};
+      const catFood = {};
+      const catActivity = {};
 
-  // --- GLOBAL CATEGORY AGGREGATION ---
-  const catWater = {};
-  const catFood = {};
-  const catActivity = {};
-
-  const aggregate = (sheetName, type, colIndex, isCount) => {
-      const sheet = ss.getSheetByName(sheetName);
-      if (sheet && sheet.getLastRow() > 1) {
-          // Read all data from sheet
-          const vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
-          for (let r of vals) {
-              const u = String(r[1] || '').trim(); // Normalize username from history row
-              
-              // Skip if user not found in profile list (e.g. admin or deleted)
-              if (!users[u]) continue; 
-              
-              if (isCount) {
-                  if (type === 'food') catFood[u] = (catFood[u] || 0) + 1;
-              } else {
-                  const val = Number(r[colIndex]) || 0;
-                  if (type === 'water') catWater[u] = (catWater[u] || 0) + val;
-                  if (type === 'activity') catActivity[u] = (catActivity[u] || 0) + val;
+      const aggregate = (sheetName, type, colIndex, isCount) => {
+          const sheet = ss.getSheetByName(sheetName);
+          if (sheet && sheet.getLastRow() > 1) {
+              // Read all data from sheet
+              const vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+              for (let r of vals) {
+                  const u = String(r[1] || '').trim(); // Normalize username from history row
+                  
+                  // Skip if user not found in profile list (e.g. admin or deleted)
+                  if (!users[u]) continue; 
+                  
+                  if (isCount) {
+                      if (type === 'food') catFood[u] = (catFood[u] || 0) + 1;
+                  } else {
+                      const val = Number(r[colIndex]) || 0;
+                      if (type === 'water') catWater[u] = (catWater[u] || 0) + val;
+                      if (type === 'activity') catActivity[u] = (catActivity[u] || 0) + val;
+                  }
               }
           }
-      }
-  };
+      };
 
-  aggregate(SHEET_NAMES.WATER, 'water', 4, false); // Col E (Index 4) = Amount
-  aggregate(SHEET_NAMES.FOOD, 'food', 0, true); // Count Rows (FoodHistory)
-  aggregate(SHEET_NAMES.CALORIE, 'food', 0, true); // Count Rows (CalorieHistory)
-  aggregate(SHEET_NAMES.ACTIVITY, 'activity', 5, false); // Col F (Index 5) = Calories
+      aggregate(SHEET_NAMES.WATER, 'water', 4, false); // Col E (Index 4) = Amount
+      aggregate(SHEET_NAMES.FOOD, 'food', 0, true); // Count Rows (FoodHistory)
+      aggregate(SHEET_NAMES.CALORIE, 'food', 0, true); // Count Rows (CalorieHistory)
+      aggregate(SHEET_NAMES.ACTIVITY, 'activity', 5, false); // Col F (Index 5) = Calories
 
-  const formatCat = (mapObj) => {
-      return Object.keys(mapObj).map(u => ({
-          username: u,
-          displayName: users[u] ? users[u].displayName : u,
-          profilePicture: users[u] ? users[u].profilePicture : '',
-          organization: users[u] ? users[u].organization : '',
-          score: mapObj[u],
-          xp: users[u] ? users[u].xp : 0
-      })).sort((a,b) => b.score - a.score).slice(0, 50);
-  };
+      const formatCat = (mapObj) => {
+          return Object.keys(mapObj).map(u => ({
+              username: u,
+              displayName: users[u] ? users[u].displayName : u,
+              profilePicture: users[u] ? users[u].profilePicture : '',
+              organization: users[u] ? users[u].organization : '',
+              score: mapObj[u],
+              xp: users[u] ? users[u].xp : 0
+          })).sort((a,b) => b.score - a.score).slice(0, 50);
+      };
 
-  let categories = {
-      water: formatCat(catWater),
-      food: formatCat(catFood),
-      activity: formatCat(catActivity)
-  };
+      let categories = {
+          water: formatCat(catWater),
+          food: formatCat(catFood),
+          activity: formatCat(catActivity)
+      };
 
-  const leaderboard = [...userArray].sort((a, b) => b.xp - a.xp).slice(0, 50);
-  const trending = [...userArray].sort((a, b) => b.weeklyXp - a.weeklyXp).slice(0, 50);
+      const leaderboard = [...userArray].sort((a, b) => b.xp - a.xp).slice(0, 50);
+      const trending = [...userArray].sort((a, b) => b.weeklyXp - a.weeklyXp).slice(0, 50);
+      
+      responseData = { apiVersion: "v20.9-GLOBAL", leaderboard, trending, categories };
+  }
 
-  return createSuccessResponse({ apiVersion: "v20.9-GLOBAL", leaderboard, trending, categories });
+  // Save to Cache (5 minutes)
+  try {
+      cache.put(cacheKey, JSON.stringify(responseData), 300);
+  } catch (e) {
+      console.error("Cache Error (Payload too big?):", e);
+  }
+
+  return createSuccessResponse(responseData);
 }
 
 // --- Data Persistence & Reset ---
@@ -541,6 +564,8 @@ function handleSave(type, payload, user) {
   else if (type === 'loginLog') sheetName = SHEET_NAMES.LOGIN_LOGS; 
   else if (Object.values(SHEET_NAMES).includes(type)) sheetName = type;
   else if (type === 'feedback') sheetName = SHEET_NAMES.FEEDBACK;
+  else if (type === 'goal') sheetName = SHEET_NAMES.GOALS; 
+  else if (type === 'clinical') sheetName = SHEET_NAMES.CLINICAL; 
   else {
       const key = Object.keys(SHEET_NAMES).find(k => k.toLowerCase() === type.toLowerCase().replace('history',''));
       if (key) sheetName = SHEET_NAMES[key];
@@ -584,11 +609,55 @@ function handleSave(type, payload, user) {
     case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
     case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break;
     case SHEET_NAMES.FEEDBACK: newRow = [timestamp, user.username, user.displayName, item.category, item.message, item.rating, 'Pending']; break;
+    case SHEET_NAMES.GOALS: newRow = [timestamp, user.username, item.id, item.type, item.startValue, item.targetValue, item.startDate, item.deadline || '', item.status]; break; // NEW
+    case SHEET_NAMES.CLINICAL: 
+        // Updated Clean Schema with weight
+        // 0:time, 1:user, 2:sys, 3:dia, 4:fbs, 5:waist, 6:weight, 7:note
+        newRow = [timestamp, user.username, item.systolic || '', item.diastolic || '', item.fbs || '', item.waist || '', item.weight || '', item.note || '']; 
+        break; 
     default: newRow = [timestamp, user.username, JSON.stringify(item)];
   }
   
   sheet.appendRow(newRow);
   return createSuccessResponse({ status: "Saved" });
+}
+
+function handleDelete(type, id, user) {
+    let sheetName = "";
+    let idColIndex = 2; // Default for Goals (Column C)
+
+    if (type === 'goal') {
+        sheetName = SHEET_NAMES.GOALS;
+        idColIndex = 2; // Goals ID is at index 2
+    } else if (type === 'clinical') {
+        sheetName = SHEET_NAMES.CLINICAL;
+        idColIndex = 0; // Clinical ID (timestamp) is at index 0 (as per getAllHistoryForUser)
+    }
+    else return createErrorResponse("Unsupported delete type");
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) return createErrorResponse("Sheet not found");
+
+    const data = sheet.getDataRange().getValues();
+    
+    // User is always at index 1
+    for (let i = 1; i < data.length; i++) {
+        let rowId = String(data[i][idColIndex]);
+        
+        if (type === 'clinical') {
+             const rowDate = new Date(data[i][0]);
+             // Try to match ISO string or exact value
+             if (rowDate.toISOString() === id || String(data[i][0]) === id) {
+                 rowId = id; // Match found
+             }
+        }
+
+        if (String(data[i][1]) === user.username && rowId === id) {
+            sheet.deleteRow(i + 1);
+            return createSuccessResponse({ status: "Deleted" });
+        }
+    }
+    return createErrorResponse("Item not found");
 }
 
 function handleClear(type, user) {
@@ -641,7 +710,8 @@ function handleResetUser(user, targetUsername) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
+        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL // Add new sheets to reset
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -682,7 +752,8 @@ function handleSystemFactoryReset(adminUser) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
+        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -792,7 +863,9 @@ function getUserFullData(username) {
       socialHistory: getAllHistoryForUser(SHEET_NAMES.SOCIAL, username),
       evaluationHistory: getAllHistoryForUser(SHEET_NAMES.EVALUATION, username),
       quizHistory: getAllHistoryForUser('QuizHistory', username),
-      redemptionHistory: getAllHistoryForUser(SHEET_NAMES.REDEMPTION, username)
+      redemptionHistory: getAllHistoryForUser(SHEET_NAMES.REDEMPTION, username),
+      goals: getAllHistoryForUser(SHEET_NAMES.GOALS, username), 
+      clinicalHistory: getAllHistoryForUser(SHEET_NAMES.CLINICAL, username) 
     };
 }
 
@@ -837,6 +910,17 @@ function getAllHistoryForUser(sheetName, username) {
     if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
     if (sheetName === 'QuizHistory') return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
     if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
+    if (sheetName === SHEET_NAMES.GOALS) return rows.map(r => ({ id: r[2], type: r[3], startValue: r[4], targetValue: r[5], startDate: r[6], deadline: r[7], status: r[8] })); 
+    if (sheetName === SHEET_NAMES.CLINICAL) return rows.map(r => ({ 
+        date: new Date(r[0]).toISOString(), 
+        id: r[0], 
+        systolic: r[2], 
+        diastolic: r[3], 
+        fbs: r[4], 
+        waist: r[5], 
+        weight: r[6], 
+        note: r[7]    
+    })); 
     return [];
   } catch(e) { return []; }
 }
@@ -853,7 +937,7 @@ function handleAdminFetch() {
   const fetchConfig = [
       { name: SHEET_NAMES.PROFILE, key: 'profiles', limit: null },
       { name: SHEET_NAMES.GROUPS, key: 'groups', limit: null },
-      { name: SHEET_NAMES.GROUP_MEMBERS, key: 'groupMembers', limit: null }, // Add Group Members
+      { name: SHEET_NAMES.GROUP_MEMBERS, key: 'groupMembers', limit: null }, 
       { name: SHEET_NAMES.FOOD, key: 'foodHistory', limit: 500 },
       { name: SHEET_NAMES.ACTIVITY, key: 'activityHistory', limit: 500 },
       { name: SHEET_NAMES.BMI, key: 'bmiHistory', limit: 500 },
@@ -1051,7 +1135,13 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.SOCIAL, [...common, "interaction", "feeling"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcomes_json"]);
   ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]); 
-  ensureSheet(SHEET_NAMES.FEEDBACK, ["timestamp", "username", "displayName", "category", "message", "rating", "status"]); // ADDED FEEDBACK SHEET
+  ensureSheet(SHEET_NAMES.FEEDBACK, ["timestamp", "username", "displayName", "category", "message", "rating", "status"]); 
   
-  return "Setup Complete (v20.9.2) - Ready for Production";
+  // NEW SHEETS FOR GOALS & CLINICAL HISTORY
+  ensureSheet(SHEET_NAMES.GOALS, ["timestamp", "username", "id", "type", "startValue", "targetValue", "startDate", "deadline", "status"]);
+  
+  // Updated Clean Schema with weight
+  ensureSheet(SHEET_NAMES.CLINICAL, ["timestamp", "username", "systolic", "diastolic", "fbs", "waist", "weight", "note"]);
+
+  return "Setup Complete (v20.9.8) - Ready for Production";
 }
