@@ -9,7 +9,7 @@ import {
     ChartBarIcon, ClipboardCheckIcon, MedalIcon,
     SquaresIcon, UserGroupIcon, HeartIcon, LogoutIcon,
     SearchIcon, ChevronDownIcon, CameraIcon, LockIcon,
-    XIcon, SparklesIcon
+    XIcon, SparklesIcon, ChatBubbleLeftEllipsisIcon
 } from './icons';
 
 interface MenuItem {
@@ -30,6 +30,7 @@ const MENU_ITEMS: MenuItem[] = [
     { id: 'assessment', label: 'ประเมินความเสี่ยง', icon: <ClipboardCheckIcon className="w-6 h-6 text-purple-500" />, color: 'bg-white', category: 'main' },
     { id: 'quiz', label: 'วัดความรู้ HL', icon: <ClipboardCheckIcon className="w-6 h-6 text-gray-500" />, color: 'bg-white', category: 'main' },
     { id: 'evaluation', label: 'แบบประเมินผล', icon: <HeartIcon className="w-6 h-6 text-pink-500" />, color: 'bg-white', category: 'main' },
+    { id: 'feedback', label: 'เสนอแนะ/แจ้งปัญหา', icon: <ChatBubbleLeftEllipsisIcon className="w-6 h-6 text-violet-500" />, color: 'bg-white', category: 'main' },
 ];
 
 interface ChangelogVersion {

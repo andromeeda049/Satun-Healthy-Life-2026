@@ -31,7 +31,7 @@ export interface NutrientInfo {
   items: FoodItem[];
 }
 
-export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards';
+export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards' | 'feedback';
 export type Theme = 'light' | 'dark';
 
 export interface User {
@@ -378,4 +378,7 @@ export interface AppContextType {
   joinGroup: (code: string) => Promise<{ success: boolean; message: string; data?: any }>;
   leaveGroup: (groupId: string) => Promise<boolean>;
   refreshGroups: () => void;
+  
+  // --- FEEDBACK ---
+  saveFeedback: (data: { category: string; message: string; rating: number }) => void;
 }

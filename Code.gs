@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9.1)
+ * Satun Smart Life - Backend Script (Production v20.9.2)
  * Features: 
  * - Leaderboard Category Aggregation Fix
  * - Detailed Group Member Info
@@ -9,6 +9,7 @@
  * - Robust Data Reset & Factory Reset
  * - Fix: Allow Admins in Group Leaderboard
  * - Fix: Ensure RedemptionHistory sheet setup
+ * - Feature: Feedback Form Support
  */
 
 // --- 1. CONFIGURATION ---
@@ -60,7 +61,8 @@ const SHEET_NAMES = {
   ORGANIZATIONS: "Organization",
   GROUPS: "Groups",
   GROUP_MEMBERS: "GroupMembers",
-  REDEMPTION: "RedemptionHistory"
+  REDEMPTION: "RedemptionHistory",
+  FEEDBACK: "Feedback"
 };
 
 // --- 2. CORE UTILITIES & LOCK SERVICE ---
@@ -92,7 +94,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9.1 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.2 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -538,6 +540,7 @@ function handleSave(type, payload, user) {
   if (type === 'profile') sheetName = SHEET_NAMES.PROFILE;
   else if (type === 'loginLog') sheetName = SHEET_NAMES.LOGIN_LOGS; 
   else if (Object.values(SHEET_NAMES).includes(type)) sheetName = type;
+  else if (type === 'feedback') sheetName = SHEET_NAMES.FEEDBACK;
   else {
       const key = Object.keys(SHEET_NAMES).find(k => k.toLowerCase() === type.toLowerCase().replace('history',''));
       if (key) sheetName = SHEET_NAMES[key];
@@ -580,6 +583,7 @@ function handleSave(type, payload, user) {
     case SHEET_NAMES.EVALUATION: newRow = [timestamp, user.username, user.displayName, user.role, JSON.stringify(item.satisfaction || {}), JSON.stringify(item.outcomes || {})]; break;
     case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
     case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break;
+    case SHEET_NAMES.FEEDBACK: newRow = [timestamp, user.username, user.displayName, item.category, item.message, item.rating, 'Pending']; break;
     default: newRow = [timestamp, user.username, JSON.stringify(item)];
   }
   
@@ -637,7 +641,7 @@ function handleResetUser(user, targetUsername) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        "QuizHistory", SHEET_NAMES.REDEMPTION
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -678,7 +682,7 @@ function handleSystemFactoryReset(adminUser) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        "QuizHistory", SHEET_NAMES.REDEMPTION
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -1046,7 +1050,8 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.HABIT, [...common, "type", "amount", "isClean"]);
   ensureSheet(SHEET_NAMES.SOCIAL, [...common, "interaction", "feeling"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcomes_json"]);
-  ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]); // ADDED
+  ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]); 
+  ensureSheet(SHEET_NAMES.FEEDBACK, ["timestamp", "username", "displayName", "category", "message", "rating", "status"]); // ADDED FEEDBACK SHEET
   
-  return "Setup Complete (v20.9.1) - Ready for Production";
+  return "Setup Complete (v20.9.2) - Ready for Production";
 }

@@ -30,6 +30,7 @@ import Community from './components/Community';
 import XPHistory from './components/XPHistory'; 
 import RewardsRedemption from './components/RewardsRedemption';
 import MenuGridPage from './components/MenuGridPage';
+import FeedbackForm from './components/FeedbackForm';
 import { AppProvider, AppContext } from './context/AppContext';
 import { AppView, User, WaterHistoryEntry } from './types';
 import { HomeIcon, CameraIcon, SparklesIcon, MenuIcon, XIcon, SquaresIcon, UserCircleIcon, WaterDropIcon, HeartIcon, BellIcon, UserGroupIcon, PhoneIcon, BeakerIcon, BoltIcon, ExclamationTriangleIcon } from './components/icons';
@@ -258,6 +259,7 @@ const AppContent: React.FC = () => {
       case 'settings': return <Settings />;
       case 'hpHistory': return <XPHistory />; 
       case 'rewards': return <RewardsRedemption />;
+      case 'feedback': return <FeedbackForm />;
       case 'adminDashboard': return currentUser?.role === 'admin' ? <AdminDashboard /> : <HomeMenu />;
       case 'groupManagement': return currentUser?.role === 'admin' ? <GroupManagement /> : <HomeMenu />;
       default: return <HomeMenu />;

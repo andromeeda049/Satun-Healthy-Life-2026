@@ -185,6 +185,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const saveFeedback = (data: { category: string; message: string; rating: number }) => {
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, 'feedback', data, currentUser);
+      }
+  };
+
   const resetData = async (): Promise<boolean> => {
       if (!currentUser || !scriptUrl) return false;
       try {
@@ -442,7 +448,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       redemptionHistory, setRedemptionHistory,
       // Sync States
       isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData,
-      resetData
+      resetData,
+      saveFeedback
     }}>
       {children}
     </AppContext.Provider>
