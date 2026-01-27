@@ -1,6 +1,6 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9)
+ * Satun Smart Life - Backend Script (Production v20.9.1)
  * Features: 
  * - Leaderboard Category Aggregation Fix
  * - Detailed Group Member Info
@@ -8,6 +8,7 @@
  * - Dynamic Group XP Calculation
  * - Robust Data Reset & Factory Reset
  * - Fix: Allow Admins in Group Leaderboard
+ * - Fix: Ensure RedemptionHistory sheet setup
  */
 
 // --- 1. CONFIGURATION ---
@@ -91,7 +92,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.1 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -1038,13 +1039,14 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.TDEE, [...common, "value", "bmr"]);
   ensureSheet(SHEET_NAMES.FOOD, [...common, "description", "calories", "analysis_json"]);
   ensureSheet(SHEET_NAMES.WATER, [...common, "amount"]);
-  ensureSheet(SHEET_NAMES.CALORIE, [...common, "name", "calories"]);
-  ensureSheet(SHEET_NAMES.ACTIVITY, [...common, "name", "caloriesBurned"]);
+  ensureSheet(SHEET_NAMES.CALORIE, [...common, "name", "calories", "image", "imageHash"]);
+  ensureSheet(SHEET_NAMES.ACTIVITY, [...common, "name", "caloriesBurned", "duration", "distance", "image", "imageHash"]);
   ensureSheet(SHEET_NAMES.SLEEP, [...common, "bedTime", "wakeTime", "duration", "quality", "hygieneChecklist"]);
   ensureSheet(SHEET_NAMES.MOOD, [...common, "moodEmoji", "stressLevel", "gratitude"]);
   ensureSheet(SHEET_NAMES.HABIT, [...common, "type", "amount", "isClean"]);
   ensureSheet(SHEET_NAMES.SOCIAL, [...common, "interaction", "feeling"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcomes_json"]);
+  ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]); // ADDED
   
-  return "Setup Complete (v20.9) - Ready for Production";
+  return "Setup Complete (v20.9.1) - Ready for Production";
 }

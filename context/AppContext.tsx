@@ -129,19 +129,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Data clearing is now handled in 'login' if a DIFFERENT user logs in.
   };
 
-  const setBmiHistory = (val: any) => { _setBmiHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'BMI', val, currentUser); };
-  const setTdeeHistory = (val: any) => { _setTdeeHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'TDEE', val, currentUser); };
-  const setFoodHistory = (val: any) => { _setFoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'FOOD', val, currentUser); };
+  // Helper to handle functional updates before saving to sheet
+  // This ensures 'val' sent to saveDataToSheet is the actual array/object, not a function
+  const handleHistoryUpdate = (setter: any, currentVal: any, newVal: any, type: string) => {
+      const valueToSave = newVal instanceof Function ? newVal(currentVal) : newVal;
+      setter(valueToSave);
+      
+      // Save only if user is logged in and synced
+      // Note: We send the whole new array, backend will pick the first item (newest) based on logic
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, type, valueToSave, currentUser);
+      }
+  };
+
+  const setBmiHistory = (val: any) => handleHistoryUpdate(_setBmiHistory, bmiHistory, val, 'BMI');
+  const setTdeeHistory = (val: any) => handleHistoryUpdate(_setTdeeHistory, tdeeHistory, val, 'TDEE');
+  const setFoodHistory = (val: any) => handleHistoryUpdate(_setFoodHistory, foodHistory, val, 'FOOD');
   // Planner history setting wrapper - Not used directly for new items anymore, use savePlannerEntry
   const setPlannerHistory = (val: any) => { _setPlannerHistory(val); }; 
-  const setWaterHistory = (val: any) => { _setWaterHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'WATER', val, currentUser); };
-  const setCalorieHistory = (val: any) => { _setCalorieHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'CALORIE', val, currentUser); };
-  const setActivityHistory = (val: any) => { _setActivityHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'ACTIVITY', val, currentUser); };
-  const setSleepHistory = (val: any) => { _setSleepHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'SLEEP', val, currentUser); };
-  const setMoodHistory = (val: any) => { _setMoodHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'MOOD', val, currentUser); };
-  const setHabitHistory = (val: any) => { _setHabitHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'HABIT', val, currentUser); };
-  const setSocialHistory = (val: any) => { _setSocialHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'SOCIAL', val, currentUser); };
-  const setRedemptionHistory = (val: any) => { _setRedemptionHistory(val); if(currentUser && isDataSynced) saveDataToSheet(scriptUrl, 'REDEMPTION', val, currentUser); };
+  const setWaterHistory = (val: any) => handleHistoryUpdate(_setWaterHistory, waterHistory, val, 'WATER');
+  const setCalorieHistory = (val: any) => handleHistoryUpdate(_setCalorieHistory, calorieHistory, val, 'CALORIE');
+  const setActivityHistory = (val: any) => handleHistoryUpdate(_setActivityHistory, activityHistory, val, 'ACTIVITY');
+  const setSleepHistory = (val: any) => handleHistoryUpdate(_setSleepHistory, sleepHistory, val, 'SLEEP');
+  const setMoodHistory = (val: any) => handleHistoryUpdate(_setMoodHistory, moodHistory, val, 'MOOD');
+  const setHabitHistory = (val: any) => handleHistoryUpdate(_setHabitHistory, habitHistory, val, 'HABIT');
+  const setSocialHistory = (val: any) => handleHistoryUpdate(_setSocialHistory, socialHistory, val, 'SOCIAL');
+  const setRedemptionHistory = (val: any) => handleHistoryUpdate(_setRedemptionHistory, redemptionHistory, val, 'REDEMPTION');
   
   const setUserProfile = (profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
       const newProfile = { ...profileData };
