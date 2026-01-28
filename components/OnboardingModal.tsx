@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { UserCircleIcon, TargetIcon, ClipboardListIcon, TrophyIcon, ArrowLeftIcon, XIcon, SparklesIcon } from './icons';
+import { UserCircleIcon, TargetIcon, ClipboardListIcon, TrophyIcon, ArrowLeftIcon, XIcon, SparklesIcon, BookOpenIcon } from './icons';
 
 interface OnboardingModalProps {
     onClose: () => void;
@@ -38,6 +38,14 @@ const STEPS = [
         icon: <TrophyIcon className="w-24 h-24 text-orange-500" />,
         color: "bg-orange-50 dark:bg-orange-900/20",
         accent: "text-orange-600 dark:text-orange-400"
+    },
+    {
+        id: 5,
+        title: "5. ประเมินความรอบรู้",
+        desc: "ทดสอบและยกระดับความรอบรู้ทางสุขภาพ (Health Literacy) ผ่านแบบทดสอบ เพื่อการดูแลตนเองอย่างถูกต้อง",
+        icon: <BookOpenIcon className="w-24 h-24 text-purple-500" />,
+        color: "bg-purple-50 dark:bg-purple-900/20",
+        accent: "text-purple-600 dark:text-purple-400"
     }
 ];
 

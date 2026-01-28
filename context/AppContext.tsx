@@ -145,8 +145,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const setUserProfile = (profileData: UserProfile, accountData: { displayName: string; profilePicture: string; }) => {
       const newProfile = { ...profileData };
       _setUserProfile(newProfile);
+      
       if (currentUser && isDataSynced) {
-          const updatedUser = { ...currentUser, ...accountData, organization: newProfile.organization };
+          // CRITICAL FIX: Protect Super Admin 'all' organization
+          // If the user is originally a Super Admin, do NOT overwrite their session organization with the profile organization.
+          // This prevents Admins from losing their 'all' status when they update their personal health profile.
+          const isSuperAdmin = currentUser.organization === 'all' || currentUser.originalOrganization === 'all';
+          const orgToSet = isSuperAdmin ? 'all' : newProfile.organization;
+
+          const updatedUser = { 
+              ...currentUser, 
+              ...accountData, 
+              organization: orgToSet 
+          };
+          
           setCurrentUser(updatedUser);
           saveDataToSheet(scriptUrl, 'profile', newProfile, updatedUser);
       }
@@ -394,6 +406,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsDataSynced(true);
   };
 
+  // --- ADMIN SIMULATION MODE ---
+  const simulateUserMode = () => {
+      if (currentUser && currentUser.role === 'admin') {
+          const updatedUser: User = { 
+              ...currentUser, 
+              role: 'user', 
+              originalRole: 'admin',
+              originalOrganization: currentUser.organization // Backup Org
+          };
+          setCurrentUser(updatedUser);
+          setActiveView('home');
+          setNotification({ show: true, message: 'เข้าสู่โหมดจำลองผู้ใช้งาน (User View)', type: 'info' });
+      }
+  };
+
+  const exitSimulationMode = () => {
+      if (currentUser && currentUser.originalRole) {
+          // Restore Role
+          // Restore Organization (prefer backup, fallback to current)
+          const restoredOrg = currentUser.originalOrganization || currentUser.organization;
+          
+          const updatedUser: User = { 
+              ...currentUser, 
+              role: currentUser.originalRole as 'admin' | 'user' | 'guest',
+              organization: restoredOrg
+          };
+          
+          delete updatedUser.originalRole;
+          delete updatedUser.originalOrganization;
+          
+          setCurrentUser(updatedUser);
+          setNotification({ show: true, message: 'กลับสู่โหมดผู้ดูแลระบบ', type: 'success' });
+          setActiveView('settings'); // Go back to settings
+      }
+  };
+
   return (
     <AppContext.Provider value={{
       activeView, setActiveView, currentUser, login, logout, theme, setTheme,
@@ -413,7 +461,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       saveFeedback,
       // GOALS & CLINICAL EXPORTS
       goals, setGoals, saveGoal, deleteGoal,
-      clinicalHistory, setClinicalHistory, saveClinicalEntry
+      clinicalHistory, setClinicalHistory, saveClinicalEntry,
+      // SIMULATION
+      simulateUserMode, exitSimulationMode
     }}>
       {children}
     </AppContext.Provider>

@@ -43,6 +43,8 @@ export interface User {
   authProvider?: 'email' | 'google' | 'line' | 'telegram';
   organization?: string;
   adminSecret?: string; // Storing admin session key
+  originalRole?: 'admin' | 'user' | 'guest'; // For Simulation Mode
+  originalOrganization?: string; // Backup Org for Simulation Mode
 }
 
 export interface Organization {
@@ -420,4 +422,8 @@ export interface AppContextType {
   clinicalHistory: ClinicalHistoryEntry[];
   setClinicalHistory: React.Dispatch<React.SetStateAction<ClinicalHistoryEntry[]>>;
   saveClinicalEntry: (entry: ClinicalHistoryEntry) => void;
+
+  // --- ADMIN SIMULATION ---
+  simulateUserMode: () => void;
+  exitSimulationMode: () => void;
 }

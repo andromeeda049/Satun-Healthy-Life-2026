@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect, useRef, useMemo, Component, ErrorInfo } from 'react';
 import BMICalculator from './components/BMICalculator';
 import TDEECalculator from './components/TDEECalculator';
@@ -166,7 +167,7 @@ const DataSyncGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 };
 
 const AppContent: React.FC = () => {
-  const { activeView, setActiveView, theme, setTheme, currentUser, logout, userProfile, setUserProfile, waterHistory, calorieHistory, activityHistory, moodHistory, sleepHistory, setWaterHistory, gainXP, isSOSOpen, closeSOS, showLevelUp, closeLevelUpModal, isDataSynced } = useContext(AppContext);
+  const { activeView, setActiveView, theme, setTheme, currentUser, logout, userProfile, setUserProfile, waterHistory, calorieHistory, activityHistory, moodHistory, sleepHistory, setWaterHistory, gainXP, isSOSOpen, closeSOS, showLevelUp, closeLevelUpModal, isDataSynced, exitSimulationMode } = useContext(AppContext);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showPDPA, setShowPDPA] = useState(false);
@@ -301,6 +302,26 @@ const AppContent: React.FC = () => {
       );
   };
 
+  const SimulationBanner = () => {
+      if (!currentUser?.originalRole) return null;
+      return (
+          <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-[90%] max-w-sm animate-bounce-in">
+              <div className="bg-indigo-900/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between border-2 border-indigo-400/50">
+                  <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="text-xs font-bold">โหมดจำลอง (User View)</span>
+                  </div>
+                  <button 
+                      onClick={exitSimulationMode}
+                      className="bg-white text-indigo-900 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-indigo-50 transition-colors"
+                  >
+                      Exit Admin
+                  </button>
+              </div>
+          </div>
+      );
+  }
+
   const QuickActionModal = () => {
       if (!isQuickActionOpen) return null;
       return (
@@ -402,6 +423,7 @@ const AppContent: React.FC = () => {
             </header>
             <div className="h-20"></div>
             <main className={`p-4 mx-auto w-full pb-24 transition-all duration-300 ${activeView === 'adminDashboard' ? 'max-w-7xl' : 'max-w-3xl'}`}>{renderContent()}</main>
+            <SimulationBanner />
             <BottomNavigation />
             <ToastNotification />
             <QuickActionModal />

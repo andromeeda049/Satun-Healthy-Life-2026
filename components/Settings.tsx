@@ -1,12 +1,12 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
-import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
+import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon, TrashIcon, ExclamationTriangleIcon, EyeIcon } from './icons';
 import { sendTestNotification, systemFactoryReset } from '../services/googleSheetService';
 import PDPAModal from './PDPAModal';
 
 const Settings: React.FC = () => {
-    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout, resetData } = useContext(AppContext);
+    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout, resetData, simulateUserMode } = useContext(AppContext);
     
     const [currentScriptUrl, setCurrentScriptUrl] = useState(scriptUrl);
     const [saved, setSaved] = useState<'none' | 'sheets' | 'notifications' | 'ai'>('none');
@@ -133,6 +133,23 @@ const Settings: React.FC = () => {
                         </div>
                     </div>
                     
+                    {/* User Simulation Mode */}
+                    <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 mb-6">
+                        <div className="flex items-center gap-3 mb-3">
+                            <EyeIcon className="w-6 h-6 text-indigo-600" />
+                            <h3 className="font-bold text-indigo-700 dark:text-indigo-400 text-sm">User View Simulation</h3>
+                        </div>
+                        <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80 mb-4">
+                            จำลองหน้าจอการใช้งานในมุมมองของผู้ใช้ทั่วไป (User Role) เพื่อตรวจสอบความถูกต้องของฟีเจอร์
+                        </p>
+                        <button 
+                            onClick={simulateUserMode}
+                            className="w-full py-3 bg-indigo-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
+                        >
+                            👁️ ทดลองใช้งานในฐานะ User
+                        </button>
+                    </div>
+
                     <form onSubmit={handleSheetsSave} className="space-y-3 mb-6">
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400">Database URL</label>
                         <input 
