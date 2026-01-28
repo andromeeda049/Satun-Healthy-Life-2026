@@ -287,24 +287,29 @@ const PersonalHealthGrid: React.FC<{
     const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
     const isDeficit = calorieBalance >= 0;
 
-    // Latest Clinical Data
+    // Latest Clinical Data - IMPROVED FIND LOGIC
+    // Sort descending by date
     const sortedClinical = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const latestClinical = sortedClinical.length > 0 ? sortedClinical[0] : null;
+    
+    // Find latest NON-NULL values independently
+    const latestSystolic = sortedClinical.find(c => c.systolic > 0)?.systolic;
+    const latestDiastolic = sortedClinical.find(c => c.diastolic > 0)?.diastolic;
+    const latestFbs = sortedClinical.find(c => c.fbs > 0)?.fbs;
 
-    const displayBP = latestClinical && latestClinical.systolic && latestClinical.diastolic 
-        ? `${latestClinical.systolic}/${latestClinical.diastolic}` 
+    const displayBP = latestSystolic && latestDiastolic 
+        ? `${latestSystolic}/${latestDiastolic}` 
         : '-/-';
     
-    const displayFBS = latestClinical && latestClinical.fbs 
-        ? `${latestClinical.fbs}` 
+    const displayFBS = latestFbs 
+        ? `${latestFbs}` 
         : '-';
 
     // Evaluate Risk Status
     const riskStatus = evaluateNCDStatus(
         bmi, 
-        latestClinical?.systolic || 0, 
-        latestClinical?.diastolic || 0, 
-        latestClinical?.fbs || 0
+        latestSystolic || 0, 
+        latestDiastolic || 0, 
+        latestFbs || 0
     );
 
     return (
@@ -548,8 +553,8 @@ const Dashboard: React.FC = () => {
       activityHistory, 
       sleepHistory, 
       moodHistory, 
-      habitHistory,
-      socialHistory,
+      habitHistory, 
+      socialHistory, 
       waterGoal, 
       userProfile, 
       currentUser,

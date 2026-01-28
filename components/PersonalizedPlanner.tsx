@@ -3,11 +3,11 @@ import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { PLANNER_ACTIVITY_LEVELS, CARB_PERCENTAGES, CUISINE_TYPES, DIETARY_PREFERENCES, HEALTH_CONDITIONS, LIFESTYLE_GOALS, XP_VALUES } from '../constants';
 import { generateMealPlan } from '../services/geminiService';
 import { PlannerResults, MealPlan, PlannerHistoryEntry } from '../types';
-import { ArrowLeftIcon, SparklesIcon, UserCircleIcon, ScaleIcon, FireIcon, HeartIcon, ChartBarIcon, TrophyIcon, ExclamationTriangleIcon, ClipboardListIcon, TrashIcon, BookOpenIcon } from './icons';
+import { ArrowLeftIcon, SparklesIcon, UserCircleIcon, ScaleIcon, FireIcon, HeartIcon, ChartBarIcon, TrophyIcon, ExclamationTriangleIcon, ClipboardListIcon, TrashIcon, BookOpenIcon, WaterDropIcon } from './icons';
 import { AppContext } from '../context/AppContext';
 
 const PersonalizedPlanner: React.FC = () => {
-    const { userProfile, setPlannerHistory, savePlannerEntry, currentUser, foodHistory, gainXP, plannerHistory } = useContext(AppContext);
+    const { userProfile, setPlannerHistory, savePlannerEntry, currentUser, foodHistory, gainXP, plannerHistory, clinicalHistory } = useContext(AppContext);
     
     // Auto-populate from profile
     const [formData, setFormData] = useState({
@@ -84,14 +84,23 @@ const PersonalizedPlanner: React.FC = () => {
         
         const tdee = bmr * Number(formData.activityLevel);
 
+        // Get Latest Clinical Data (Independent Search)
+        const sortedClinical = [...(clinicalHistory || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        const latestSystolic = sortedClinical.find(c => c.systolic > 0)?.systolic;
+        const latestDiastolic = sortedClinical.find(c => c.diastolic > 0)?.diastolic;
+        const latestFbs = sortedClinical.find(c => c.fbs > 0)?.fbs;
+
         return {
             bmi: bmi.toFixed(1),
             tdee: Math.round(tdee).toLocaleString(),
             condition: formData.healthCondition,
             waist: formData.waist ? `${formData.waist} ซม.` : '-',
-            hip: formData.hip ? `${formData.hip} ซม.` : '-'
+            hip: formData.hip ? `${formData.hip} ซม.` : '-',
+            bp: latestSystolic && latestDiastolic ? `${latestSystolic}/${latestDiastolic}` : '-',
+            fbs: latestFbs ? `${latestFbs}` : '-'
         };
-    }, [formData]);
+    }, [formData, clinicalHistory]);
     
     const handleCalculateAndPlan = async () => {
         if (currentUser?.role === 'guest') return;
@@ -213,7 +222,7 @@ const PersonalizedPlanner: React.FC = () => {
                                             <span className="font-bold text-gray-800 dark:text-white">{previewStats.tdee}</span>
                                         </div>
                                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                            <HeartIcon className="w-5 h-5 text-rose-500 mb-1" />
+                                            <HeartIcon className="w-5 h-5 text-teal-500 mb-1" />
                                             <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">Condition</span>
                                             <span className="font-bold text-gray-800 dark:text-white text-xs leading-tight line-clamp-2">{previewStats.condition}</span>
                                         </div>
@@ -221,13 +230,24 @@ const PersonalizedPlanner: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
                                             <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบเอว</span>
-                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.waist}</span>
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">สัดส่วน (เอว/สะโพก)</span>
+                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.waist} / {previewStats.hip}</span>
                                         </div>
+                                        {/* Added BP and FBS */}
                                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-                                            <ChartBarIcon className="w-5 h-5 text-purple-500 mb-1" />
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold">รอบสะโพก</span>
-                                            <span className="font-bold text-gray-800 dark:text-white">{previewStats.hip}</span>
+                                            <div className="flex gap-2">
+                                                <div className="flex flex-col items-center">
+                                                    <HeartIcon className="w-4 h-4 text-pink-500 mb-0.5" />
+                                                    <span className="text-[8px] text-gray-400 font-bold uppercase">BP</span>
+                                                    <span className="font-bold text-gray-800 dark:text-white text-xs">{previewStats.bp}</span>
+                                                </div>
+                                                <div className="w-[1px] bg-gray-200 dark:bg-gray-600 h-full"></div>
+                                                <div className="flex flex-col items-center">
+                                                    <WaterDropIcon className="w-4 h-4 text-amber-500 mb-0.5" />
+                                                    <span className="text-[8px] text-gray-400 font-bold uppercase">FBS</span>
+                                                    <span className="font-bold text-gray-800 dark:text-white text-xs">{previewStats.fbs}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

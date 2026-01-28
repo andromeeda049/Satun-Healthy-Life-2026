@@ -130,6 +130,18 @@ const StatBar: React.FC<{ label: string, count: number, total: number, color: st
     );
 };
 
+interface DashboardStats {
+    totalN: number;
+    gender: { male: number; female: number; unspecified: number };
+    bmiStats: { under: number; normal: number; over: number; obese: number };
+    waistRiskDetail: { male: number; female: number };
+    whrRiskDetail: { male: number; female: number };
+    ncdCount: number;
+    ncdBreakdown: Record<string, number>;
+    ageGroups: Record<string, number>;
+    activeUsersCount: number;
+}
+
 // --- Macro View Logic ---
 
 const MacroOverview: React.FC<{ 
@@ -143,7 +155,7 @@ const MacroOverview: React.FC<{
 
     const { profiles, bmiHistory, groupMembers } = adminData as any;
 
-    const stats = useMemo(() => {
+    const stats: DashboardStats = useMemo(() => {
         const start = new Date(startDate);
         const end = new Date(endDate);
         end.setHours(23, 59, 59);
@@ -182,7 +194,7 @@ const MacroOverview: React.FC<{
         let ncdCount = 0; // Total people with NCDs
         let ncdBreakdown: Record<string, number> = {}; // Breakdown by disease type
         
-        let ageGroups = { 'ต่ำกว่า 18': 0, '18-29': 0, '30-39': 0, '40-49': 0, '50-59': 0, '60+': 0, 'ไม่ระบุ': 0 };
+        let ageGroups: Record<string, number> = { 'ต่ำกว่า 18': 0, '18-29': 0, '30-39': 0, '40-49': 0, '50-59': 0, '60+': 0, 'ไม่ระบุ': 0 };
         let activeUsersCount = 0;
 
         uniqueUsers.forEach((u: any) => {
@@ -569,7 +581,7 @@ const OutcomeAnalysis: React.FC<{
 
         const bmiStats = {
             totalUsers: totalBmiUsers,
-            successRate: totalBmiUsers > 0 ? ((successMigration + maintainedNormal) / totalBmiUsers) * 100 : 0,
+            successRate: totalBmiUsers > 0 ? ((Number(successMigration) + Number(maintainedNormal)) / Number(totalBmiUsers)) * 100 : 0,
             improvedCount: successMigration,
             maintainedCount: maintainedNormal,
             flows: migrationFlow.reduce((acc, curr) => {
@@ -710,7 +722,7 @@ const OutcomeAnalysis: React.FC<{
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                             {Object.entries(outcomes.bmiStats.flows).length > 0 ? (
                                 Object.entries(outcomes.bmiStats.flows)
-                                    .sort(([,a], [,b]) => b - a)
+                                    .sort(([,a]: any, [,b]: any) => (b as number) - (a as number))
                                     .map(([flow, count]) => (
                                     <div key={flow} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded shadow-sm border-l-4 border-green-500">
                                         <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{flow}</span>
