@@ -295,6 +295,12 @@ const PersonalHealthGrid: React.FC<{
     const latestSystolic = sortedClinical.find(c => c.systolic > 0)?.systolic;
     const latestDiastolic = sortedClinical.find(c => c.diastolic > 0)?.diastolic;
     const latestFbs = sortedClinical.find(c => c.fbs > 0)?.fbs;
+    
+    // New Metrics
+    const latestHba1c = sortedClinical.find(c => c.hba1c > 0)?.hba1c;
+    const latestVisceral = sortedClinical.find(c => c.visceral_fat > 0)?.visceral_fat;
+    const latestMuscle = sortedClinical.find(c => c.muscle_mass > 0)?.muscle_mass;
+    const latestLoggedBmr = sortedClinical.find(c => c.bmr > 0)?.bmr;
 
     const displayBP = latestSystolic && latestDiastolic 
         ? `${latestSystolic}/${latestDiastolic}` 
@@ -303,6 +309,11 @@ const PersonalHealthGrid: React.FC<{
     const displayFBS = latestFbs 
         ? `${latestFbs}` 
         : '-';
+
+    // Use logged BMR if available, else use calculated BMR
+    const finalDisplayBMR = latestLoggedBmr 
+        ? Math.round(latestLoggedBmr).toLocaleString() 
+        : displayBMR;
 
     // Evaluate Risk Status
     const riskStatus = evaluateNCDStatus(
@@ -347,7 +358,7 @@ const PersonalHealthGrid: React.FC<{
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TDEE</p>
                     <p className="text-2xl font-black text-slate-800 dark:text-white">{displayTDEE}</p>
-                    <p className="text-[9px] text-slate-500">BMR: {displayBMR}</p>
+                    <p className="text-[9px] text-slate-500">BMR: {finalDisplayBMR}</p>
                 </div>
 
                 {/* Waist/Hip Card */}
@@ -387,6 +398,36 @@ const PersonalHealthGrid: React.FC<{
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">น้ำตาล (FBS)</p>
                     <p className="text-2xl font-black text-slate-800 dark:text-white">{displayFBS}</p>
                     <p className="text-[9px] text-slate-500">mg/dL</p>
+                </div>
+
+                {/* HbA1c Card (NEW) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-900/30 rounded-full">
+                        <HeartIcon className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">น้ำตาลสะสม</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestHba1c || '-'}</p>
+                    <p className="text-[9px] text-slate-500">HbA1c (%)</p>
+                </div>
+
+                {/* Visceral Fat Card (NEW) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 rounded-full">
+                        <FireIcon className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ไขมันช่องท้อง</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestVisceral || '-'}</p>
+                    <p className="text-[9px] text-slate-500">Visceral Fat</p>
+                </div>
+
+                {/* Muscle Mass Card (NEW) */}
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
+                    <div className="mb-2 p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
+                        <BoltIcon className="w-5 h-5 text-indigo-500" />
+                    </div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">มวลกล้ามเนื้อ</p>
+                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestMuscle || '-'}</p>
+                    <p className="text-[9px] text-slate-500">Muscle (kg)</p>
                 </div>
 
                 {/* Condition Card */}

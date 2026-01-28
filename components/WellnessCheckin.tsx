@@ -1,10 +1,9 @@
 
-import React, { useState, useContext, useMemo, useEffect } from 'react';
+import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { MOOD_EMOJIS, SLEEP_HYGIENE_CHECKLIST, XP_VALUES } from '../constants';
-import { MoonIcon, FaceSmileIcon, NoSymbolIcon, UserGroupIcon, SparklesIcon, HeartIcon, XIcon, PhoneIcon, ClipboardCheckIcon } from './icons';
+import { MoonIcon, FaceSmileIcon, NoSymbolIcon, UserGroupIcon, HeartIcon } from './icons';
 import CrisisModal from './CrisisModal';
-import { GoogleGenAI } from "@google/genai";
 
 const WellnessCheckin: React.FC = () => {
     const { 
@@ -12,14 +11,11 @@ const WellnessCheckin: React.FC = () => {
         moodHistory, setMoodHistory, 
         habitHistory, setHabitHistory, 
         socialHistory, setSocialHistory,
-        gainXP, openSOS, userProfile, currentUser
+        gainXP, openSOS
     } = useContext(AppContext);
 
     const [activeTab, setActiveTab] = useState<'sleep' | 'mood' | 'habit' | 'social'>('sleep');
     const [showCrisisModal, setShowCrisisModal] = useState(false);
-    const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-    const [analyzing, setAnalyzing] = useState(false);
-    const [canAnalyze, setCanAnalyze] = useState(true);
 
     // --- Check if done today ---
     const isToday = (dateString: string) => {
@@ -34,26 +30,6 @@ const WellnessCheckin: React.FC = () => {
     const isMoodDone = useMemo(() => moodHistory.some(h => isToday(h.date)), [moodHistory]);
     const isHabitDone = useMemo(() => habitHistory.some(h => isToday(h.date)), [habitHistory]);
     const isSocialDone = useMemo(() => socialHistory.some(h => isToday(h.date)), [socialHistory]);
-
-    // Check Weekly Limit for Summary (1 time/7 days)
-    useEffect(() => {
-        if (currentUser) {
-            const lastAnalyzeStr = localStorage.getItem(`last_wellness_summary_${currentUser.username}`);
-            if (lastAnalyzeStr) {
-                const lastDate = new Date(lastAnalyzeStr);
-                const today = new Date();
-                
-                // Calculate difference in days
-                const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                
-                // If less than 7 days, disable
-                if (diffDays < 7) {
-                    setCanAnalyze(false);
-                }
-            }
-        }
-    }, [currentUser]);
 
     // --- State Management ---
     const [sleepData, setSleepData] = useState({ 
@@ -73,7 +49,7 @@ const WellnessCheckin: React.FC = () => {
         alcohol: 0, 
         smoking: 0, 
         chemicals: 0, 
-        accidents: 0,
+        accidents: 0, 
         isClean: false 
     });
     
@@ -152,41 +128,6 @@ const WellnessCheckin: React.FC = () => {
         setSocialData({...socialData, interaction: ''}); 
     };
 
-    const handleWellnessAnalyze = async () => {
-        if (!canAnalyze) return;
-        setAnalyzing(true);
-        try {
-            const prompt = `Analyze today's wellness: 
-            Sleep: ${calculateDuration(sleepData.bedTime, sleepData.wakeTime)} hrs, Quality ${sleepData.quality}/5. 
-            Mood: Stress ${moodData.stress}/10. 
-            Risk Habits: Alcohol ${habitData.alcohol}, Smoking ${habitData.smoking}. 
-            Social: ${socialData.interaction} (${socialData.feeling}).
-            Provide a short, encouraging summary in Thai.
-            IMPORTANT: ตอบเป็นรายการตัวเลข 1. 2. 3. ให้อ่านง่าย. ใช้ตัวอักษรธรรมดาเท่านั้น. ห้ามใช้ Markdown ### หรือ **.`;
-            
-            const config: any = {};
-            if (userProfile?.aiSystemInstruction) {
-                config.systemInstruction = userProfile.aiSystemInstruction;
-            }
-
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const response = await ai.models.generateContent({ 
-              model: 'gemini-3-flash-preview', 
-              contents: prompt,
-              config: config
-            });
-            setAiAnalysis(response.text || "ไม่สามารถสรุปข้อมูลได้");
-            const now = new Date();
-            localStorage.setItem(`last_wellness_summary_${currentUser?.username}`, now.toISOString());
-            setCanAnalyze(false);
-            
-        } catch (e) { 
-            console.error(e); 
-            setAiAnalysis("ฟีเจอร์ AI ใช้งานแบบจำกัด กรุณารอสักครู่");
-        }
-        finally { setAnalyzing(false); }
-    };
-
     const TabButton: React.FC<{ 
         id: typeof activeTab, 
         label: string, 
@@ -211,7 +152,7 @@ const WellnessCheckin: React.FC = () => {
     );
 
     return (
-        <div className="w-full space-y-6 animate-fade-in relative">
+        <div className="w-full space-y-6 animate-fade-in relative pb-10">
             {showCrisisModal && <CrisisModal onClose={() => setShowCrisisModal(false)} onOpenSOS={openSOS} onBreathing={() => {}} score={moodData.stress} />}
             
             <div className="text-center">
@@ -466,29 +407,6 @@ const WellnessCheckin: React.FC = () => {
                             )}
                         </button>
                     </div>
-                )}
-            </div>
-
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-4 text-white shadow-lg">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold flex items-center gap-2"><SparklesIcon className="w-5 h-5" /> AI Health Summary</h3>
-                    <button 
-                        onClick={handleWellnessAnalyze} 
-                        disabled={analyzing || !canAnalyze} 
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm transition-colors ${
-                            canAnalyze ? 'bg-white/20 hover:bg-white/30' : 'bg-gray-400/50 cursor-not-allowed'
-                        }`}
-                    >
-                        {analyzing ? 'กำลังวิเคราะห์...' : !canAnalyze ? 'สรุปผลแล้ววันนี้' : 'สรุปภาพรวมสุขภาพ'}
-                    </button>
-                </div>
-                {aiAnalysis && (
-                    <div className="bg-white/10 p-4 rounded-xl border border-white/20 animate-fade-in whitespace-pre-line">
-                        <p className="text-sm leading-relaxed font-medium">{aiAnalysis}</p>
-                    </div>
-                )}
-                {!canAnalyze && !aiAnalysis && (
-                    <p className="text-xs text-white/70 italic text-center">สามารถขอสรุปผลได้สัปดาห์ละ 1 ครั้ง</p>
                 )}
             </div>
         </div>

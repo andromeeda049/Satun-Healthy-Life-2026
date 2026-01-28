@@ -10,10 +10,12 @@ import {
 } from './icons';
 import ProactiveInsight from './ProactiveInsight';
 import { getWeekNumber } from '../constants';
+import OnboardingModal from './OnboardingModal';
 
 const HomeMenu: React.FC = () => {
   const { setActiveView, currentUser, userProfile, waterHistory, calorieHistory, activityHistory, moodHistory, sleepHistory, isDataSynced, foodHistory, quizHistory, myGroups, leaveGroup, refreshGroups } = useContext(AppContext);
   const [showProfileAlert, setShowProfileAlert] = useState(() => sessionStorage.getItem('dismiss_profile_alert') !== 'true');
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Force refresh groups on mount to ensure banner visibility
   useEffect(() => {
@@ -21,6 +23,21 @@ const HomeMenu: React.FC = () => {
           refreshGroups();
       }
   }, [currentUser, refreshGroups]);
+
+  // Check for Onboarding Status
+  useEffect(() => {
+      const hasSeenOnboarding = localStorage.getItem('has_seen_onboarding_v1');
+      if (!hasSeenOnboarding && currentUser) {
+          // Add a small delay for better UX (let the app load first)
+          const timer = setTimeout(() => setShowOnboarding(true), 1000);
+          return () => clearTimeout(timer);
+      }
+  }, [currentUser]);
+
+  const handleCloseOnboarding = () => {
+      localStorage.setItem('has_seen_onboarding_v1', 'true');
+      setShowOnboarding(false);
+  };
 
   const isProfileIncomplete = useMemo(() => {
       if (!userProfile) return true;
@@ -85,6 +102,8 @@ const HomeMenu: React.FC = () => {
 
   return (
     <div className="animate-fade-in space-y-4 pb-24">
+        {showOnboarding && <OnboardingModal onClose={handleCloseOnboarding} />}
+
         {isDataSynced && isProfileIncomplete && showProfileAlert && (
             <div className="p-4 rounded-xl border shadow-sm flex items-start gap-3 bg-white border-blue-400 dark:bg-blue-900/20 relative animate-bounce-in">
                 <div className="p-2 bg-blue-50 dark:bg-gray-800 rounded-lg text-blue-600 shadow-sm mt-0.5">
@@ -211,7 +230,7 @@ const HomeMenu: React.FC = () => {
                     <div className="p-2.5 rounded-lg mr-3 bg-emerald-50 text-emerald-600 group-hover:scale-105 transition-transform">
                         <ClipboardListIcon className="text-base" />
                     </div>
-                    <span className="text-sm font-semibold text-slate-700 dark:text-gray-200">แผนอาหารและกิจกรรม 7 วัน</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-gray-200">แผนส่งเสริมสุขภาพดี (Healthy Plan)</span>
                 </button>
                 <button onClick={() => setActiveView('dashboard')} className="flex items-center p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-gray-700 w-full group transition-all border-t border-slate-50 dark:border-gray-700">
                     <div className="p-2.5 rounded-lg mr-3 bg-sky-50 text-sky-600 group-hover:scale-105 transition-transform">

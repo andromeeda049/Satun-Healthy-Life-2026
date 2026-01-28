@@ -1,10 +1,10 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9.8)
+ * Satun Smart Life - Backend Script (Production v20.9.9)
  * Features: 
  * - Leaderboard Caching (Performance Fix)
  * - Admin Filtering on ALL Leaderboards
- * - Clinical History with Weight support
+ * - Clinical History with Weight support + New Metrics (HbA1c, V.Fat, Muscle, BMR)
  * - BMI / TDEE Calculation & History
  * - Group Management & Member Tracking
  * - Data Reset & Factory Reset
@@ -94,7 +94,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9.8 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.9 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -611,9 +611,14 @@ function handleSave(type, payload, user) {
     case SHEET_NAMES.FEEDBACK: newRow = [timestamp, user.username, user.displayName, item.category, item.message, item.rating, 'Pending']; break;
     case SHEET_NAMES.GOALS: newRow = [timestamp, user.username, item.id, item.type, item.startValue, item.targetValue, item.startDate, item.deadline || '', item.status]; break; // NEW
     case SHEET_NAMES.CLINICAL: 
-        // Updated Clean Schema with weight
-        // 0:time, 1:user, 2:sys, 3:dia, 4:fbs, 5:waist, 6:weight, 7:note
-        newRow = [timestamp, user.username, item.systolic || '', item.diastolic || '', item.fbs || '', item.waist || '', item.weight || '', item.note || '']; 
+        // Updated Clean Schema with weight + new metrics
+        // 0:time, 1:user, 2:sys, 3:dia, 4:fbs, 5:waist, 6:weight, 7:note, 8:hba1c, 9:visceral, 10:muscle, 11:bmr
+        newRow = [
+            timestamp, user.username, 
+            item.systolic || '', item.diastolic || '', item.fbs || '', item.waist || '', 
+            item.weight || '', item.note || '',
+            item.hba1c || '', item.visceral_fat || '', item.muscle_mass || '', item.bmr || ''
+        ]; 
         break; 
     default: newRow = [timestamp, user.username, JSON.stringify(item)];
   }
@@ -919,7 +924,11 @@ function getAllHistoryForUser(sheetName, username) {
         fbs: r[4], 
         waist: r[5], 
         weight: r[6], 
-        note: r[7]    
+        note: r[7],
+        hba1c: r[8],       // New
+        visceral_fat: r[9], // New
+        muscle_mass: r[10], // New
+        bmr: r[11]         // New
     })); 
     return [];
   } catch(e) { return []; }
@@ -1140,8 +1149,9 @@ function setupSheets() {
   // NEW SHEETS FOR GOALS & CLINICAL HISTORY
   ensureSheet(SHEET_NAMES.GOALS, ["timestamp", "username", "id", "type", "startValue", "targetValue", "startDate", "deadline", "status"]);
   
-  // Updated Clean Schema with weight
-  ensureSheet(SHEET_NAMES.CLINICAL, ["timestamp", "username", "systolic", "diastolic", "fbs", "waist", "weight", "note"]);
+  // Updated Clean Schema with weight + new metrics (12 cols)
+  // Ensure the script can write all columns
+  ensureSheet(SHEET_NAMES.CLINICAL, ["timestamp", "username", "systolic", "diastolic", "fbs", "waist", "weight", "note", "hba1c", "visceral_fat", "muscle_mass", "bmr"]);
 
-  return "Setup Complete (v20.9.8) - Ready for Production";
+  return "Setup Complete (v20.9.9) - Clinical Metrics Added";
 }

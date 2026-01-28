@@ -1,5 +1,4 @@
-
-import React, { useState, useContext, useEffect, useRef, useMemo, Component } from 'react';
+import React, { useState, useContext, useEffect, useRef, useMemo, Component, ErrorInfo } from 'react';
 import BMICalculator from './components/BMICalculator';
 import TDEECalculator from './components/TDEECalculator';
 import FoodAnalyzer from './components/FoodAnalyzer';

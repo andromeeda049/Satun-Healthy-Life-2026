@@ -227,7 +227,7 @@ export interface RedemptionHistoryEntry {
 // --- NEW TYPES FOR GOALS & CLINICAL ---
 export interface HealthGoal {
     id: string;
-    type: 'weight' | 'waist' | 'bp' | 'fbs' | 'other';
+    type: 'weight' | 'waist' | 'bp' | 'fbs' | 'hba1c' | 'visceral_fat' | 'muscle_mass' | 'bmr' | 'other';
     startValue: string;
     targetValue: string;
     startDate: string;
@@ -242,8 +242,12 @@ export interface ClinicalHistoryEntry {
     diastolic?: number;
     fbs?: number;
     waist?: number;
-    weight?: number; // Added weight to clinical history
+    weight?: number; 
     note?: string;
+    hba1c?: number; // Added
+    visceral_fat?: number; // Added
+    muscle_mass?: number; // Added
+    bmr?: number; // Added
 }
 
 export interface NotificationState {
@@ -271,11 +275,14 @@ export type SpecialistId = 'general' | 'nutritionist' | 'trainer' | 'psychologis
 
 export interface MealPlanDay {
     day: string;
-    breakfast: { menu: string; protein: number; carbohydrate: number; fat: number; calories: number; };
-    lunch: { menu: string; protein: number; carbohydrate: number; fat: number; calories: number; };
-    dinner: { menu: string; protein: number; carbohydrate: number; fat: number; calories: number; };
-    activities: { activity: string; duration: string; benefit: string; caloriesBurned: number; }[];
-    dailyTotal: { protein: number; carbohydrate: number; fat: number; calories: number; };
+    breakfast: { menu: string; calories: number; };
+    lunch: { menu: string; calories: number; };
+    dinner: { menu: string; calories: number; };
+    nutritionTip: string; // New: ลดหวานมันเค็ม
+    fruitVegGoal: string; // New: เพิ่มผักผลไม้
+    activity: { name: string; durationMinutes: number; intensity: string; }; // Updated
+    wellness: { sleep: string; stress: string; }; // New
+    avoidance: string; // New: งดเหล้าบุหรี่
 }
 
 export type MealPlan = MealPlanDay[];

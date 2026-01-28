@@ -2,7 +2,7 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { HealthGoal, ClinicalHistoryEntry, BMIHistoryEntry } from '../types';
-import { TargetIcon, ScaleIcon, HeartIcon, BoltIcon, ArrowLeftIcon, XIcon, StarIcon, ChartBarIcon, TrashIcon } from './icons';
+import { TargetIcon, ScaleIcon, HeartIcon, BoltIcon, ArrowLeftIcon, XIcon, StarIcon, ChartBarIcon, TrashIcon, FireIcon } from './icons';
 
 const GoalProgressCard: React.FC<{
     goal: HealthGoal;
@@ -23,13 +23,13 @@ const GoalProgressCard: React.FC<{
     // Logic: Is goal to Increase or Decrease?
     if (!isNaN(start) && !isNaN(target) && !isNaN(current)) {
         if (target < start) {
-            // Aiming to decrease (e.g. Weight)
+            // Aiming to decrease (e.g. Weight, HbA1c, Visceral Fat)
             const totalDiff = start - target;
             const currentDiff = start - current;
             progress = Math.max(0, Math.min(100, (currentDiff / totalDiff) * 100));
             if (current <= target) isAchieved = true;
         } else {
-            // Aiming to increase
+            // Aiming to increase (e.g. Muscle Mass, BMR)
             const totalDiff = target - start;
             const currentDiff = current - start;
             progress = Math.max(0, Math.min(100, (currentDiff / totalDiff) * 100));
@@ -41,14 +41,22 @@ const GoalProgressCard: React.FC<{
         weight: <ScaleIcon className="w-5 h-5 text-blue-500" />,
         bp: <HeartIcon className="w-5 h-5 text-red-500" />,
         fbs: <BoltIcon className="w-5 h-5 text-yellow-500" />,
-        waist: <ChartBarIcon className="w-5 h-5 text-purple-500" />
+        waist: <ChartBarIcon className="w-5 h-5 text-purple-500" />,
+        hba1c: <HeartIcon className="w-5 h-5 text-rose-500" />,
+        visceral_fat: <FireIcon className="w-5 h-5 text-orange-500" />,
+        muscle_mass: <BoltIcon className="w-5 h-5 text-indigo-500" />,
+        bmr: <FireIcon className="w-5 h-5 text-green-500" />
     };
 
     const typeLabels: Record<string, string> = {
         weight: 'ลดน้ำหนัก (Weight)',
         bp: 'ควบคุมความดัน (BP)',
         fbs: 'ควบคุมน้ำตาล (FBS)',
-        waist: 'ลดรอบเอว (Waist)'
+        waist: 'ลดรอบเอว (Waist)',
+        hba1c: 'น้ำตาลสะสม (HbA1c)',
+        visceral_fat: 'ไขมันในช่องท้อง (Visceral Fat)',
+        muscle_mass: 'เพิ่มมวลกล้ามเนื้อ (Muscle)',
+        bmr: 'อัตราเผาผลาญ (BMR)'
     };
 
     return (
@@ -110,7 +118,7 @@ const GoalProgressCard: React.FC<{
 };
 
 const AddGoalModal: React.FC<{ onClose: () => void; onSave: (goal: HealthGoal) => void }> = ({ onClose, onSave }) => {
-    const [type, setType] = useState<'weight' | 'waist' | 'bp' | 'fbs'>('weight');
+    const [type, setType] = useState<'weight' | 'waist' | 'bp' | 'fbs' | 'hba1c' | 'visceral_fat' | 'muscle_mass' | 'bmr'>('weight');
     const [startValue, setStartValue] = useState('');
     const [targetValue, setTargetValue] = useState('');
     const [deadline, setDeadline] = useState('');
@@ -149,7 +157,11 @@ const AddGoalModal: React.FC<{ onClose: () => void; onSave: (goal: HealthGoal) =
                             <option value="weight">ลดน้ำหนัก (Weight)</option>
                             <option value="waist">ลดรอบเอว (Waist)</option>
                             <option value="bp">ควบคุมความดัน (BP)</option>
-                            <option value="fbs">ควบคุมระดับน้ำตาล (FBS)</option>
+                            <option value="fbs">ควบคุมน้ำตาล (FBS)</option>
+                            <option value="hba1c">น้ำตาลสะสม (HbA1c)</option>
+                            <option value="visceral_fat">ไขมันในช่องท้อง (Visceral Fat)</option>
+                            <option value="muscle_mass">มวลกล้ามเนื้อ (Muscle Mass)</option>
+                            <option value="bmr">อัตราเผาผลาญ (BMR)</option>
                         </select>
                     </div>
                     
@@ -201,7 +213,6 @@ const UpdateProgressModal: React.FC<{
     onSave: (val: string, extra?: any) => void; 
 }> = ({ goal, onClose, onSave }) => {
     const [value, setValue] = useState('');
-    // For BP, separate sys/dia could be handled, but simple string input is easier for MVP
     const [sys, setSys] = useState('');
     const [dia, setDia] = useState('');
 
@@ -261,7 +272,6 @@ const HealthGoals: React.FC = () => {
         const sortedHistory = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         if (goal.type === 'weight') {
-            // Find latest weight in clinical history
             const entry = sortedHistory.find(c => c.weight !== undefined && c.weight !== null && c.weight > 0);
             return entry ? String(entry.weight) : goal.startValue;
         } else if (goal.type === 'bp') {
@@ -271,67 +281,76 @@ const HealthGoals: React.FC = () => {
             const entry = sortedHistory.find(c => c.fbs);
             return entry ? String(entry.fbs) : goal.startValue;
         } else if (goal.type === 'waist') {
-            // Check history first, else fallback to profile, else start
             const entry = sortedHistory.find(c => c.waist);
             return entry ? String(entry.waist) : (userProfile.waist || goal.startValue);
+        } else if (goal.type === 'hba1c') {
+            const entry = sortedHistory.find(c => c.hba1c);
+            return entry ? String(entry.hba1c) : goal.startValue;
+        } else if (goal.type === 'visceral_fat') {
+            const entry = sortedHistory.find(c => c.visceral_fat);
+            return entry ? String(entry.visceral_fat) : goal.startValue;
+        } else if (goal.type === 'muscle_mass') {
+            const entry = sortedHistory.find(c => c.muscle_mass);
+            return entry ? String(entry.muscle_mass) : goal.startValue;
+        } else if (goal.type === 'bmr') {
+            const entry = sortedHistory.find(c => c.bmr);
+            return entry ? String(entry.bmr) : goal.startValue;
         }
         return goal.startValue;
     };
 
     const getUnit = (type: string) => {
-        if (type === 'weight') return 'kg';
+        if (type === 'weight' || type === 'muscle_mass') return 'kg';
         if (type === 'waist') return 'cm';
         if (type === 'bp') return 'mmHg';
         if (type === 'fbs') return 'mg/dL';
+        if (type === 'hba1c') return '%';
+        if (type === 'visceral_fat') return 'Level';
+        if (type === 'bmr') return 'kcal';
         return '';
     };
 
     const handleSaveProgress = (val: string, extra?: any) => {
         if (!updatingGoal) return;
 
+        const numVal = parseFloat(val);
+        const entry: ClinicalHistoryEntry = {
+            id: Date.now().toString(),
+            date: new Date().toISOString()
+        };
+
         if (updatingGoal.type === 'weight') {
-            const weight = parseFloat(val);
-            // Calculate BMI
+            entry.weight = numVal;
+            // Also update BMI History
             const h = parseFloat(userProfile.height || '0') / 100;
-            const bmi = h > 0 ? weight / (h * h) : 0;
+            const bmi = h > 0 ? numVal / (h * h) : 0;
             const newEntry: BMIHistoryEntry = { value: bmi, category: 'Updated', date: new Date().toISOString() }; 
             setBmiHistory(prev => [newEntry, ...prev]);
             
-            // Update profile
             if (currentUser) {
                 setUserProfile({ ...userProfile, weight: val }, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
             }
-
-            // Save to Clinical History (Weight)
-            const clinicalEntry: ClinicalHistoryEntry = {
-                id: Date.now().toString(),
-                date: new Date().toISOString(),
-                weight: weight,
-                note: 'Weight Goal Update'
-            };
-            saveClinicalEntry(clinicalEntry);
-
-        } else {
-            // Save to Clinical History (Other Types)
-            const entry: ClinicalHistoryEntry = {
-                id: Date.now().toString(),
-                date: new Date().toISOString()
-            };
-            
-            if (updatingGoal.type === 'bp' && extra) {
-                entry.systolic = extra.systolic;
-                entry.diastolic = extra.diastolic;
-            } else if (updatingGoal.type === 'fbs') {
-                entry.fbs = parseFloat(val);
-            } else if (updatingGoal.type === 'waist') {
-                entry.waist = parseFloat(val);
-                // Also update profile
-                if (currentUser) {
-                    setUserProfile({ ...userProfile, waist: val }, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
-                }
+        } else if (updatingGoal.type === 'bp' && extra) {
+            entry.systolic = extra.systolic;
+            entry.diastolic = extra.diastolic;
+        } else if (updatingGoal.type === 'fbs') {
+            entry.fbs = numVal;
+        } else if (updatingGoal.type === 'waist') {
+            entry.waist = numVal;
+            if (currentUser) {
+                setUserProfile({ ...userProfile, waist: val }, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
             }
-            saveClinicalEntry(entry);
+        } else if (updatingGoal.type === 'hba1c') {
+            entry.hba1c = numVal;
+        } else if (updatingGoal.type === 'visceral_fat') {
+            entry.visceral_fat = numVal;
+        } else if (updatingGoal.type === 'muscle_mass') {
+            entry.muscle_mass = numVal;
+        } else if (updatingGoal.type === 'bmr') {
+            entry.bmr = numVal;
         }
+
+        saveClinicalEntry(entry);
     };
 
     return (
@@ -385,13 +404,17 @@ const HealthGoals: React.FC = () => {
                     <h3 className="text-sm font-bold text-gray-600 dark:text-gray-300 mb-2">ประวัติการบันทึก (Clinical Logs)</h3>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                         {clinicalHistory.map(h => (
-                            <div key={h.id} className="flex justify-between text-xs text-gray-500 bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700">
-                                <span>{new Date(h.date).toLocaleDateString('th-TH')}</span>
-                                <div className="flex gap-3">
+                            <div key={h.id} className="flex flex-col text-xs text-gray-500 bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700">
+                                <div className="font-bold mb-1">{new Date(h.date).toLocaleDateString('th-TH')} {new Date(h.date).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</div>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                                     {h.weight && <span>Wt: {h.weight} kg</span>}
                                     {h.systolic && <span>BP: {h.systolic}/{h.diastolic}</span>}
                                     {h.fbs && <span>FBS: {h.fbs}</span>}
                                     {h.waist && <span>Waist: {h.waist}</span>}
+                                    {h.hba1c && <span>HbA1c: {h.hba1c}%</span>}
+                                    {h.visceral_fat && <span>V.Fat: {h.visceral_fat}</span>}
+                                    {h.muscle_mass && <span>Muscle: {h.muscle_mass} kg</span>}
+                                    {h.bmr && <span>BMR: {h.bmr}</span>}
                                 </div>
                             </div>
                         ))}

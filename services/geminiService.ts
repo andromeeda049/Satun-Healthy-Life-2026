@@ -180,7 +180,6 @@ export const estimateExerciseCalories = async (activityName: string, durationMin
   }
 };
 
-// Fix: Added missing export extractHealthDataFromImage used in ActivityTracker.tsx
 export const extractHealthDataFromImage = async (base64Image: string, mimeType: string, type: 'activity' | 'food'): Promise<any> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const safeMimeType = validateMimeType(mimeType);
@@ -217,7 +216,6 @@ export const extractHealthDataFromImage = async (base64Image: string, mimeType: 
   }
 };
 
-// Fix: Added missing export getLocalFoodSuggestions used in FoodAnalyzer.tsx
 export const getLocalFoodSuggestions = async (lat: number, lng: number): Promise<LocalFoodSuggestion[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
@@ -248,7 +246,16 @@ export const getLocalFoodSuggestions = async (lat: number, lng: number): Promise
   }
 };
 
-export const generateMealPlan = async (results: any, cuisine: string, diet: string, healthCondition: string, lifestyleGoal: string, foodHistory: any[], systemInstruction?: string): Promise<any> => {
+export const generateMealPlan = async (
+    results: any, 
+    cuisine: string, 
+    diet: string, 
+    healthCondition: string, 
+    lifestyleGoal: string, 
+    userGoals: any[], // NEW: User defined goals
+    recentContext: any, // NEW: Summarized recent behavior
+    systemInstruction?: string
+): Promise<any> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const mealSchema = {
@@ -261,9 +268,6 @@ export const generateMealPlan = async (results: any, cuisine: string, diet: stri
           type: Type.OBJECT,
           properties: {
             menu: { type: Type.STRING },
-            protein: { type: Type.NUMBER },
-            carbohydrate: { type: Type.NUMBER },
-            fat: { type: Type.NUMBER },
             calories: { type: Type.NUMBER }
           },
           required: ['menu', 'calories']
@@ -272,9 +276,6 @@ export const generateMealPlan = async (results: any, cuisine: string, diet: stri
           type: Type.OBJECT,
           properties: {
             menu: { type: Type.STRING },
-            protein: { type: Type.NUMBER },
-            carbohydrate: { type: Type.NUMBER },
-            fat: { type: Type.NUMBER },
             calories: { type: Type.NUMBER }
           },
           required: ['menu', 'calories']
@@ -283,49 +284,63 @@ export const generateMealPlan = async (results: any, cuisine: string, diet: stri
           type: Type.OBJECT,
           properties: {
             menu: { type: Type.STRING },
-            protein: { type: Type.NUMBER },
-            carbohydrate: { type: Type.NUMBER },
-            fat: { type: Type.NUMBER },
             calories: { type: Type.NUMBER }
           },
           required: ['menu', 'calories']
         },
-        activities: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              activity: { type: Type.STRING },
-              duration: { type: Type.STRING },
-              benefit: { type: Type.STRING },
-              caloriesBurned: { type: Type.NUMBER }
-            }
-          }
+        nutritionTip: { type: Type.STRING, description: "คำแนะนำลดหวาน มัน เค็ม สำหรับวันนี้" },
+        fruitVegGoal: { type: Type.STRING, description: "เป้าหมายการกินผักผลไม้" },
+        activity: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            durationMinutes: { type: Type.NUMBER },
+            intensity: { type: Type.STRING }
+          },
+          required: ['name', 'durationMinutes', 'intensity']
         },
-        dailyTotal: {
+        wellness: {
             type: Type.OBJECT,
             properties: {
-                protein: { type: Type.NUMBER },
-                carbohydrate: { type: Type.NUMBER },
-                fat: { type: Type.NUMBER },
-                calories: { type: Type.NUMBER }
-            }
-        }
+                sleep: { type: Type.STRING },
+                stress: { type: Type.STRING }
+            },
+            required: ['sleep', 'stress']
+        },
+        avoidance: { type: Type.STRING, description: "สิ่งที่ควรงด (เหล้า/บุหรี่/พฤติกรรมเสี่ยง)" }
       },
-      required: ['day', 'breakfast', 'lunch', 'dinner', 'activities']
+      required: ['day', 'breakfast', 'lunch', 'dinner', 'nutritionTip', 'fruitVegGoal', 'activity', 'wellness', 'avoidance']
     }
   };
+
+  const goalsString = userGoals.map(g => `${g.type}: ${g.targetValue}`).join(", ");
+  const contextString = `
+    Recent Sleep Avg: ${recentContext.avgSleep || '-'} hrs
+    Recent Stress Avg: ${recentContext.avgStress || '-'}/10
+    Recent Activity Level: ${recentContext.activityStatus || 'Normal'}
+  `;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `สร้างแผนอาหาร 7 วัน สำหรับความต้องการ ${results.tdee} kcal.
-      ความชอบอาหาร: ${cuisine}
-      รูปแบบการกิน: ${diet}
-      เงื่อนไขสุขภาพ: ${healthCondition}
-      เป้าหมาย: ${lifestyleGoal}
+      contents: `สร้างแผนสุขภาพองค์รวม 7 วัน (Holistic Health Plan) โดยคำนวณจาก:
+      - พลังงานเป้าหมาย: ${results.tdee} kcal/day
+      - ความชอบอาหาร: ${cuisine}
+      - รูปแบบการกิน: ${diet}
+      - เงื่อนไขสุขภาพหลัก: ${healthCondition}
+      - เป้าหมายไลฟ์สไตล์: ${lifestyleGoal}
       
-      ให้จัดแผนอาหาร เช้า กลางวัน เย็น และกิจกรรมออกกำลังกาย ในรูปแบบ JSON ที่ถูกต้อง`,
+      *** ข้อมูลส่วนบุคคลเพิ่มเติม (สำคัญมาก):
+      - เป้าหมายของผู้ใช้ (User Goals): ${goalsString || "ไม่มี"}
+      - บริบทพฤติกรรมล่าสุด (Recent Context): ${contextString}
+
+      คำสั่งเฉพาะ (Specific Instructions):
+      1. อาหาร: ต้องสอดคล้องกับ "User Goals" (เช่น ถ้ามีเป้าหมายลดความดัน ให้จัดอาหาร DASH Diet ลดเค็ม, ถ้าคุมเบาหวาน ให้ลดแป้ง/น้ำตาล)
+      2. ปรับตามพฤติกรรม: ถ้า Recent Context แจ้งว่านอนน้อย ให้แนะนำการนอนเพิ่ม ถ้าเครียดสูง ให้แนะนำวิธีผ่อนคลายในช่อง wellness
+      3. หลักการพื้นฐาน: เน้น "ลดหวาน มัน เค็ม", "เพิ่มผักผลไม้", "งดแอลกอฮอล์/บุหรี่"
+      4. กิจกรรม: ระบุเวลา (นาที) ที่เหมาะสมกับสภาพร่างกายและเป้าหมาย
+      
+      ตอบกลับเป็น JSON Array 7 วัน`,
       config: { 
         responseMimeType: 'application/json',
         responseSchema: mealSchema

@@ -2,9 +2,10 @@
 import React, { useState, useContext, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { getHealthCoachingTip } from '../services/geminiService';
-import { SparklesIcon, PhoneIcon, UserCircleIcon, ChatBubbleLeftEllipsisIcon } from './icons';
+import { SparklesIcon, PhoneIcon, UserCircleIcon, ChatBubbleLeftEllipsisIcon, ChartBarIcon } from './icons';
 import { SPECIALIST_TEAM } from '../constants';
 import { SpecialistId } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 const AICoach: React.FC = () => {
   const [tip, setTip] = useState<string | null>(null);
@@ -14,7 +15,15 @@ const AICoach: React.FC = () => {
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [consultCount, setConsultCount] = useState(0);
   
-  const { bmiHistory, tdeeHistory, latestFoodAnalysis, currentUser, waterHistory, userProfile, openSOS } = useContext(AppContext);
+  // New State for Summary
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [canSummarize, setCanSummarize] = useState(true);
+  
+  const { 
+      bmiHistory, tdeeHistory, latestFoodAnalysis, currentUser, waterHistory, userProfile, openSOS,
+      sleepHistory, moodHistory, habitHistory, socialHistory // Added history
+  } = useContext(AppContext);
 
   const isGuest = currentUser?.role === 'guest';
   const isSuperAdmin = currentUser?.organization === 'all';
@@ -33,8 +42,72 @@ const AICoach: React.FC = () => {
           const key = `coach_usage_${currentUser.username}_${todayStr}`;
           const currentUsage = parseInt(localStorage.getItem(key) || '0');
           setConsultCount(currentUsage);
+          
+          // Check Summary Limit (1 per week) & Load Cache
+          const lastSummaryDate = localStorage.getItem(`last_coach_summary_${currentUser.username}`);
+          const storedSummaryText = localStorage.getItem(`last_coach_summary_text_${currentUser.username}`);
+          
+          if (storedSummaryText) setAiSummary(storedSummaryText);
+
+          if (lastSummaryDate) {
+              const lastDate = new Date(lastSummaryDate);
+              const diffTime = Math.abs(new Date().getTime() - lastDate.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              if (diffDays < 7) {
+                  setCanSummarize(false);
+              }
+          }
       }
   }, [currentUser, isGuest]);
+
+  const handleGenerateSummary = async () => {
+      if (!canSummarize && !aiSummary) return;
+      setIsSummarizing(true);
+      try {
+          const latestSleep = sleepHistory[0] || { duration: '-', quality: '-' };
+          const latestMood = moodHistory[0] || { stressLevel: '-' };
+          const latestHabit = habitHistory[0] || { isClean: 'N/A' };
+          
+          const prompt = `
+            Analyze User Health History for Overview:
+            - Latest BMI: ${bmiHistory[0]?.value?.toFixed(1) || '-'}
+            - Recent Sleep: ${latestSleep.duration} hrs (Quality ${latestSleep.quality}/5)
+            - Recent Stress: ${latestMood.stressLevel}/10
+            - Risk Habit: ${latestHabit.isClean ? 'Clean' : 'Risk detected'}
+            - Today Water: ${waterIntakeToday} ml
+            
+            Task: Provide a short, encouraging 3-point summary of their current health status in Thai.
+            Focus on what they are doing well and one thing to improve.
+            Format: Plain text with bullet points (1., 2., 3.). No markdown.
+          `;
+
+          const config: any = {};
+          if (userProfile?.aiSystemInstruction) {
+              config.systemInstruction = userProfile.aiSystemInstruction;
+          }
+
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const response = await ai.models.generateContent({ 
+            model: 'gemini-3-flash-preview', 
+            contents: prompt,
+            config: config
+          });
+          
+          const text = response.text || "ไม่สามารถสรุปข้อมูลได้ในขณะนี้";
+          setAiSummary(text);
+          
+          const now = new Date();
+          localStorage.setItem(`last_coach_summary_${currentUser?.username}`, now.toISOString());
+          localStorage.setItem(`last_coach_summary_text_${currentUser?.username}`, text);
+          setCanSummarize(false);
+
+      } catch (e) {
+          console.error("Summary Error", e);
+          setAiSummary("ระบบ AI กำลังทำงานหนัก กรุณาลองใหม่ภายหลัง");
+      } finally {
+          setIsSummarizing(false);
+      }
+  };
 
   const handleGetTip = async () => {
     if (isGuest) return;
@@ -89,7 +162,7 @@ const AICoach: React.FC = () => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full relative animate-fade-in">
+    <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full relative animate-fade-in pb-24">
       <button 
         onClick={openSOS}
         className="fixed bottom-24 right-4 z-40 bg-red-600 hover:bg-red-700 text-white p-4 rounded-full shadow-[0_4px_14px_rgba(220,38,38,0.5)] transition-all hover:scale-110 active:scale-95 animate-pulse border-2 border-white dark:border-gray-800 flex items-center justify-center gap-1"
@@ -99,10 +172,38 @@ const AICoach: React.FC = () => {
         <span className="text-xs font-bold mr-1">SOS</span>
       </button>
 
+      {/* AI Health Summary Section */}
+      <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg mb-8 relative overflow-hidden">
+          <div className="absolute right-0 top-0 p-4 opacity-20"><ChartBarIcon className="w-20 h-20" /></div>
+          <div className="relative z-10">
+              <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-lg flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-yellow-300" /> สรุปภาพรวมสุขภาพ (AI Summary)</h3>
+                  <button 
+                      onClick={handleGenerateSummary} 
+                      disabled={isSummarizing || !canSummarize} 
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm transition-colors border border-white/30 ${
+                          canSummarize ? 'bg-white/20 hover:bg-white/30' : 'bg-gray-400/50 cursor-not-allowed text-white/70'
+                      }`}
+                  >
+                      {isSummarizing ? 'กำลังวิเคราะห์...' : !canSummarize ? 'อัปเดตสัปดาห์หน้า' : 'กดเพื่อวิเคราะห์'}
+                  </button>
+              </div>
+              
+              {aiSummary ? (
+                  <div className="bg-white/10 p-4 rounded-xl border border-white/20 animate-fade-in whitespace-pre-line shadow-inner">
+                      <p className="text-sm leading-relaxed font-medium">{aiSummary}</p>
+                  </div>
+              ) : (
+                  <p className="text-sm text-indigo-100 font-medium bg-white/10 p-4 rounded-xl border border-white/10 border-dashed">
+                      กดปุ่มเพื่อดูสรุปจุดเด่นและจุดที่ควรปรับปรุง ก่อนเลือกปรึกษาผู้เชี่ยวชาญ
+                  </p>
+              )}
+          </div>
+      </div>
+
       <div className="text-center mb-6">
-        <SparklesIcon className="w-14 h-14 mx-auto text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-pink-500" />
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white mt-2">ทีมผู้เชี่ยวชาญ AI</h2>
-        <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest font-black">Hybrid Health Coach</p>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mt-2">ทีมผู้เชี่ยวชาญ AI</h2>
+        <p className="text-xs text-gray-500 mt-1 uppercase tracking-widest font-black">เลือกปรึกษาเฉพาะด้าน (Hybrid Health Coach)</p>
       </div>
 
       <div className="mb-6">
