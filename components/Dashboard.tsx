@@ -2,10 +2,159 @@
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { AppView, PillarScore } from '../types';
-import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon, StethoscopeIcon } from './icons';
+import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon, StethoscopeIcon, XIcon } from './icons';
 import { PILLAR_LABELS, LEVEL_THRESHOLDS } from '../constants';
 import GamificationCard from './GamificationCard';
 
+// --- Medical Summary Modal ---
+const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const { userProfile, clinicalHistory, bmiHistory, currentUser } = useContext(AppContext);
+
+    // Helpers
+    const getLatestClinical = (keys: string[]) => {
+        const sorted = [...(clinicalHistory || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        for (const entry of sorted) {
+            // Check if any of the requested keys exist and are valid in this entry
+            const hasData = keys.every(k => entry[k as keyof typeof entry] !== undefined && entry[k as keyof typeof entry] !== '' && entry[k as keyof typeof entry] !== 0);
+            if (hasData) return entry;
+        }
+        return null;
+    };
+
+    const latestBPLog = getLatestClinical(['systolic', 'diastolic']);
+    const latestFBSLog = getLatestClinical(['fbs']);
+    const latestWeightLog = getLatestClinical(['weight']);
+    const latestHba1cLog = getLatestClinical(['hba1c']);
+    
+    const latestBMI = bmiHistory.length > 0 ? bmiHistory[0] : null;
+
+    // Risk Mapping
+    const cvdRisk = userProfile.riskAssessment?.cvdRiskLevel || 'unknown';
+    const cvdConfig = {
+        low: { label: 'เสี่ยงต่ำ (<10%)', color: 'text-green-600', bg: 'bg-green-100' },
+        moderate: { label: 'เสี่ยงปานกลาง (10-20%)', color: 'text-yellow-700', bg: 'bg-yellow-100' },
+        high: { label: 'เสี่ยงสูง (20-30%)', color: 'text-orange-700', bg: 'bg-orange-100' },
+        very_high: { label: 'เสี่ยงสูงมาก (>30%)', color: 'text-red-700', bg: 'bg-red-100' },
+        unknown: { label: 'รอการประเมิน', color: 'text-gray-500', bg: 'bg-gray-100' }
+    }[cvdRisk];
+
+    const depressionRisk = userProfile.riskAssessment?.depressionRisk;
+    const depressionSeverity = userProfile.riskAssessment?.depressionSeverity;
+    const sleepRisk = userProfile.riskAssessment?.sleepApneaRisk;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/95 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative border-t-8 border-teal-600">
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-500 hover:text-gray-800 transition-colors z-10">
+                    <XIcon className="w-5 h-5" />
+                </button>
+
+                <div className="p-6 overflow-y-auto">
+                    {/* Header: Patient Info */}
+                    <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
+                        <div className="w-20 h-20 rounded-xl bg-gray-200 dark:bg-gray-700 overflow-hidden border-2 border-white dark:border-gray-600 shadow-md">
+                             {userProfile.profilePicture && (userProfile.profilePicture.startsWith('http') || userProfile.profilePicture.startsWith('data')) ? (
+                                <img src={userProfile.profilePicture} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-4xl">{userProfile.profilePicture || '👤'}</div>
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{currentUser?.displayName}</h2>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300 font-medium">
+                                    อายุ: {userProfile.age || '-'} ปี
+                                </span>
+                                <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300 font-medium">
+                                    เพศ: {userProfile.gender === 'male' ? 'ชาย' : 'หญิง'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-teal-600 dark:text-teal-400 mt-2 font-bold flex items-center gap-1">
+                                <StethoscopeIcon className="w-3 h-3" /> Satun Healthy Life Passport
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Section 1: Conditions */}
+                    <div className="mb-6">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">โรคประจำตัว (Conditions)</h3>
+                        <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-800 text-rose-800 dark:text-rose-200 font-bold text-sm">
+                            {userProfile.healthCondition || 'ไม่มีโรคประจำตัว'}
+                        </div>
+                    </div>
+
+                    {/* Section 2: Vital Signs Grid */}
+                    <div className="mb-6">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">สัญญาณชีพล่าสุด (Last Vitals)</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">ความดัน (BP)</p>
+                                <p className="text-lg font-black text-gray-800 dark:text-white">
+                                    {latestBPLog ? `${latestBPLog.systolic}/${latestBPLog.diastolic}` : '-/-'}
+                                </p>
+                                <p className="text-[9px] text-gray-400 text-right">{latestBPLog ? new Date(latestBPLog.date).toLocaleDateString('th-TH') : ''}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">น้ำตาล (FBS)</p>
+                                <p className="text-lg font-black text-gray-800 dark:text-white">
+                                    {latestFBSLog ? latestFBSLog.fbs : '-'} <span className="text-xs font-normal text-gray-500">mg/dL</span>
+                                </p>
+                                <p className="text-[9px] text-gray-400 text-right">{latestFBSLog ? new Date(latestFBSLog.date).toLocaleDateString('th-TH') : ''}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">น้ำหนัก (Weight)</p>
+                                <p className="text-lg font-black text-gray-800 dark:text-white">
+                                    {latestWeightLog ? latestWeightLog.weight : (userProfile.weight || '-')} <span className="text-xs font-normal text-gray-500">kg</span>
+                                </p>
+                            </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400">ดัชนีมวลกาย (BMI)</p>
+                                <p className="text-lg font-black text-gray-800 dark:text-white">
+                                    {latestBMI ? latestBMI.value.toFixed(1) : '-'}
+                                </p>
+                                <p className="text-[9px] text-gray-400 text-right truncate">{latestBMI ? latestBMI.category : ''}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section 3: Risk Assessment */}
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">ประเมินความเสี่ยง (Risk Assessment)</h3>
+                        <div className="space-y-2">
+                            <div className={`p-3 rounded-xl border flex justify-between items-center ${cvdConfig.bg} border-transparent`}>
+                                <span className="text-xs font-bold text-gray-700 dark:text-gray-800">Thai CVD Risk</span>
+                                <span className={`text-sm font-black ${cvdConfig.color}`}>{cvdConfig.label}</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className={`flex-1 p-3 rounded-xl border flex flex-col justify-center items-center text-center ${depressionRisk ? 'bg-orange-50 border-orange-100' : 'bg-green-50 border-green-100'}`}>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">สุขภาพจิต (2Q/9Q)</span>
+                                    <span className={`text-sm font-bold ${depressionRisk ? 'text-orange-600' : 'text-green-600'}`}>
+                                        {depressionRisk ? (depressionSeverity ? `เสี่ยง (${depressionSeverity})` : 'มีความเสี่ยง') : 'ปกติ'}
+                                    </span>
+                                </div>
+                                <div className={`flex-1 p-3 rounded-xl border flex flex-col justify-center items-center text-center ${sleepRisk === 'high' ? 'bg-orange-50 border-orange-100' : 'bg-blue-50 border-blue-100'}`}>
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">การนอน (STOP-BANG)</span>
+                                    <span className={`text-sm font-bold ${sleepRisk === 'high' ? 'text-orange-600' : 'text-blue-600'}`}>
+                                        {sleepRisk === 'high' ? 'เสี่ยงสูง' : 'เสี่ยงต่ำ'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-700 text-center">
+                    <p className="text-[10px] text-gray-400 mb-3">ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH', { dateStyle: 'long' })} {new Date().toLocaleTimeString('th-TH', { timeStyle: 'short' })}</p>
+                    <button onClick={onClose} className="w-full py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all">
+                        ปิดหน้าต่าง (Close)
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ... Helper Functions (getHealthStatus, getBmiCategory, extractSteps, calculateMetrics) ...
 const getHealthStatus = (score: number) => {
     if (score >= 80) return { level: 'สุขภาพดีเยี่ยม', sub: 'Excellent', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-300' };
     if (score >= 70) return { level: 'สุขภาพดี', sub: 'Good', color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-300' };
@@ -22,7 +171,6 @@ const getBmiCategory = (bmi: number): string => {
     return 'โรคอ้วนระดับที่ 2';
 };
 
-// Helper to extract steps from string
 const extractSteps = (name: string): number => {
     const match = name.match(/(\d{1,3}(,\d{3})*|\d+)\s*(ก้าว|steps)/i);
     if (match) {
@@ -59,90 +207,23 @@ const calculateMetrics = (profile: any) => {
     return { bmi, bmiCategory, bmr, tdee };
 };
 
-// --- NCDs Risk Evaluation Logic ---
-const evaluateNCDStatus = (bmi: number, sys: number, dia: number, fbs: number) => {
-    let status = 'normal';
-    const risks = [];
-
-    // 1. Diabetes Risk (FBS)
-    if (fbs > 0) {
-        if (fbs >= 126) { 
-            if(status !== 'sick') status = 'sick'; 
-            risks.push('น้ำตาลสูง (เบาหวาน)');
-        } else if (fbs >= 100) {
-            if(status === 'normal') status = 'risk';
-            risks.push('น้ำตาลเริ่มสูง');
-        }
-    }
-
-    // 2. Hypertension Risk (BP)
-    if (sys > 0 && dia > 0) {
-        if (sys >= 140 || dia >= 90) {
-            if(status !== 'sick') status = 'sick';
-            risks.push('ความดันสูง');
-        } else if (sys >= 120 || dia >= 80) {
-            if(status === 'normal') status = 'risk';
-            risks.push('ความดันเริ่มสูง');
-        }
-    }
-
-    // 3. Obesity Risk (BMI - Asian Criteria)
-    if (bmi > 0) {
-        if (bmi >= 25) { // Obese
-            if(status === 'normal') status = 'risk'; // Obesity alone is usually 'Risk' unless paired with others, but let's flagging as high risk
-            risks.push('โรคอ้วน');
-        } else if (bmi >= 23) { // Overweight
-            if(status === 'normal') status = 'risk';
-            risks.push('น้ำหนักเกิน');
-        }
-    }
-
-    // Return Display Config
-    if (status === 'sick') {
-        return { 
-            label: 'กลุ่มป่วย / สีแดง', 
-            desc: risks.join(', ') || 'ค่าสุขภาพเกินเกณฑ์อันตราย',
-            color: 'bg-red-500 text-white', 
-            icon: '🚨',
-            borderColor: 'border-red-200'
-        };
-    } else if (status === 'risk') {
-        return { 
-            label: 'กลุ่มเสี่ยง / สีเหลือง-ส้ม', 
-            desc: risks.join(', ') || 'ควรปรับพฤติกรรม',
-            color: 'bg-orange-500 text-white', 
-            icon: '⚠️',
-            borderColor: 'border-orange-200'
-        };
-    } else {
-        return { 
-            label: 'กลุ่มปกติ / สีเขียว', 
-            desc: 'สุขภาพอยู่ในเกณฑ์ดี',
-            color: 'bg-green-500 text-white', 
-            icon: '✅',
-            borderColor: 'border-green-200'
-        };
-    }
-};
-
-// --- CHART COMPONENTS ---
-
+// ... Chart Components (HealthTrendChart) ...
 type TimeFrame = 'daily' | 'weekly' | 'monthly';
 
 interface ChartDataPoint {
     label: string;
     value: number;
-    subValue?: number; // Optional secondary value (e.g., steps)
+    subValue?: number;
 }
 
 const HealthTrendChart: React.FC<{
     data: any[];
-    dataKey: string; // Key to sum up (e.g., 'calories', 'amount')
+    dataKey: string;
     dateKey: string;
     timeFrame: TimeFrame;
     color: string;
     unit: string;
-    secondaryDataKey?: string; // Optional key for secondary extraction (e.g. Steps from name)
+    secondaryDataKey?: string;
     secondaryExtractor?: (item: any) => number;
 }> = ({ data, dataKey, dateKey, timeFrame, color, unit, secondaryDataKey, secondaryExtractor }) => {
     
@@ -151,11 +232,9 @@ const HealthTrendChart: React.FC<{
         const now = new Date();
         const grouped: Record<string, { value: number, subValue: number }> = {};
 
-        // Helper to format keys
         const getGroupKey = (date: Date): string => {
             if (timeFrame === 'daily') return date.toLocaleDateString('th-TH', { weekday: 'short' });
             if (timeFrame === 'weekly') {
-                // Simple week grouping (Week -1, Week -2)
                 const diffTime = Math.abs(now.getTime() - date.getTime());
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
                 const weekNum = Math.ceil(diffDays / 7);
@@ -165,43 +244,35 @@ const HealthTrendChart: React.FC<{
             return '';
         };
 
-        // Filter range
         let daysLimit = 7;
-        if (timeFrame === 'weekly') daysLimit = 28; // 4 weeks
-        if (timeFrame === 'monthly') daysLimit = 180; // 6 months
+        if (timeFrame === 'weekly') daysLimit = 28;
+        if (timeFrame === 'monthly') daysLimit = 180;
 
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - daysLimit);
 
-        // Init Data Points Structure based on Timeframe to ensure order
         if (timeFrame === 'daily') {
             for (let i = 6; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 const key = d.toLocaleDateString('th-TH', { weekday: 'short' });
                 grouped[key] = { value: 0, subValue: 0 };
-                points.push({ label: key, value: 0 }); // Placeholder order
+                points.push({ label: key, value: 0 });
             }
         }
 
-        // Aggregate Data
         data.forEach(item => {
             const itemDate = new Date(item[dateKey]);
             if (itemDate >= cutoffDate) {
                 const key = getGroupKey(itemDate);
                 if (!grouped[key]) grouped[key] = { value: 0, subValue: 0 };
-                
-                // Sum Primary Value
                 grouped[key].value += (Number(item[dataKey]) || 0);
-                
-                // Sum Secondary Value (e.g. Steps)
                 if (secondaryExtractor) {
                     grouped[key].subValue += secondaryExtractor(item);
                 }
             }
         });
 
-        // Finalize Data Array
         if (timeFrame === 'daily') {
             return points.map(p => ({
                 label: p.label,
@@ -209,17 +280,14 @@ const HealthTrendChart: React.FC<{
                 subValue: grouped[p.label]?.subValue || 0
             }));
         } else {
-            // For weekly/monthly, sorting might be needed or just Object.entries
-            // Let's keep it simple: reverse chrono for keys that exist
             return Object.entries(grouped).map(([label, val]) => ({
                 label,
                 value: val.value,
                 subValue: val.subValue
-            })).reverse(); // Show recent first usually, but for chart left-to-right needs chronological
+            })).reverse();
         }
     }, [data, dataKey, dateKey, timeFrame, secondaryDataKey]);
 
-    // Normalize for Chart Height
     const maxValue = Math.max(1, ...chartData.map(d => d.value));
 
     return (
@@ -229,18 +297,13 @@ const HealthTrendChart: React.FC<{
                     const heightPercent = (d.value / maxValue) * 100;
                     return (
                         <div key={i} className="flex-1 flex flex-col items-center group relative">
-                            {/* Value Label on Hover/Top */}
                             <div className="text-[9px] text-gray-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full">
                                 {d.value.toLocaleString()}
                             </div>
-                            
-                            {/* Bar */}
                             <div 
                                 className={`w-full max-w-[20px] sm:max-w-[30px] rounded-t-md transition-all duration-500 hover:opacity-80 ${color}`}
                                 style={{ height: `${Math.max(5, heightPercent)}%` }}
                             ></div>
-                            
-                            {/* Axis Label */}
                             <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-2 truncate w-full text-center">
                                 {d.label}
                             </div>
@@ -257,7 +320,7 @@ const HealthTrendChart: React.FC<{
     );
 };
 
-// --- MAIN DASHBOARD COMPONENT ---
+// ... PersonalHealthGrid, HealthSummaryCard, HistoryList, Dashboard ...
 
 const PersonalHealthGrid: React.FC<{
     userProfile: any;
@@ -267,80 +330,83 @@ const PersonalHealthGrid: React.FC<{
     caloriesConsumed: number;
     caloriesBurned: number;
     stepsToday: number;
-}> = ({ userProfile, bmiHistory, tdeeHistory, clinicalHistory, caloriesConsumed, caloriesBurned, stepsToday }) => {
+    setActiveView: (v: AppView) => void;
+    onOpenMedicalCard: () => void; // Added prop
+}> = ({ userProfile, bmiHistory, tdeeHistory, clinicalHistory, caloriesConsumed, caloriesBurned, stepsToday, setActiveView, onOpenMedicalCard }) => {
+    // ... Existing logic ...
     const latestBmi = bmiHistory.length > 0 ? bmiHistory[0] : null;
     const latestTdee = tdeeHistory.length > 0 ? tdeeHistory[0] : null;
     
-    // Auto-calculate from profile
     const { bmi, bmiCategory, bmr, tdee } = calculateMetrics(userProfile);
 
-    // Prefer calculated values (live), fallback to history
     const displayBMI = bmi > 0 ? bmi.toFixed(1) : (latestBmi ? latestBmi.value.toFixed(1) : '-');
     const displayCategory = bmi > 0 ? bmiCategory : (latestBmi ? latestBmi.category : 'รอการคำนวณ');
     
     const displayTDEE = tdee > 0 ? Math.round(tdee).toLocaleString() : (latestTdee ? Math.round(latestTdee.value).toLocaleString() : '-');
     const displayBMR = bmr > 0 ? Math.round(bmr).toLocaleString() : (latestTdee ? Math.round(latestTdee.bmr).toLocaleString() : '-');
     
-    // Calculate Deficit (Calorie Balance)
-    // Goal (TDEE) + ActiveBurn - Intake
     const tdeeNum = tdee > 0 ? tdee : (latestTdee ? latestTdee.value : 2000);
     const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
     const isDeficit = calorieBalance >= 0;
 
-    // Latest Clinical Data - IMPROVED FIND LOGIC
-    // Sort descending by date
     const sortedClinical = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Find latest NON-NULL values independently
     const latestSystolic = sortedClinical.find(c => c.systolic > 0)?.systolic;
     const latestDiastolic = sortedClinical.find(c => c.diastolic > 0)?.diastolic;
     const latestFbs = sortedClinical.find(c => c.fbs > 0)?.fbs;
     
-    // New Metrics
-    const latestHba1c = sortedClinical.find(c => c.hba1c > 0)?.hba1c;
-    const latestVisceral = sortedClinical.find(c => c.visceral_fat > 0)?.visceral_fat;
-    const latestMuscle = sortedClinical.find(c => c.muscle_mass > 0)?.muscle_mass;
-    const latestLoggedBmr = sortedClinical.find(c => c.bmr > 0)?.bmr;
+    const displayBP = latestSystolic && latestDiastolic ? `${latestSystolic}/${latestDiastolic}` : '-/-';
+    const displayFBS = latestFbs ? `${latestFbs}` : '-';
 
-    const displayBP = latestSystolic && latestDiastolic 
-        ? `${latestSystolic}/${latestDiastolic}` 
-        : '-/-';
+    const cvdRisk = userProfile.riskAssessment?.cvdRiskLevel || 'unknown';
     
-    const displayFBS = latestFbs 
-        ? `${latestFbs}` 
-        : '-';
+    const getRiskConfig = (level: string) => {
+        switch(level) {
+            case 'low': return { label: 'เสี่ยงต่ำ', color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' };
+            case 'moderate': return { label: 'เสี่ยงปานกลาง', color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' };
+            case 'high': return { label: 'เสี่ยงสูง', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
+            case 'very_high': return { label: 'เสี่ยงสูงมาก', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' };
+            default: return { label: 'ยังไม่ประเมิน', color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' };
+        }
+    };
 
-    // Use logged BMR if available, else use calculated BMR
-    const finalDisplayBMR = latestLoggedBmr 
-        ? Math.round(latestLoggedBmr).toLocaleString() 
-        : displayBMR;
-
-    // Evaluate Risk Status
-    const riskStatus = evaluateNCDStatus(
-        bmi, 
-        latestSystolic || 0, 
-        latestDiastolic || 0, 
-        latestFbs || 0
-    );
+    const riskConfig = getRiskConfig(cvdRisk);
 
     return (
         <div className="space-y-4 mb-6">
-            {/* Health Group Assessment Banner */}
-            <div className={`p-4 rounded-2xl shadow-sm border flex items-center justify-between ${riskStatus.borderColor} bg-white dark:bg-gray-800`}>
-                <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md ${riskStatus.color}`}>
-                        {riskStatus.icon}
-                    </div>
+            {/* Quick Actions for Medical/Risk */}
+            <div className="grid grid-cols-2 gap-3">
+                {/* Health Risk Assessment Banner */}
+                <div 
+                    onClick={() => setActiveView('riskAssessment')}
+                    className={`p-3 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer transition-transform active:scale-95 ${riskConfig.bg} ${riskConfig.border} dark:bg-gray-800`}
+                >
                     <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide">ประเมินกลุ่มสุขภาพ</p>
-                        <h3 className="text-lg font-black text-gray-800 dark:text-white">{riskStatus.label}</h3>
-                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{riskStatus.desc}</p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide">Thai CVD Risk</p>
+                        <h3 className={`text-base font-black ${riskConfig.color}`}>{riskConfig.label}</h3>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white ${riskConfig.color}`}>
+                        <HeartIcon className="w-4 h-4" />
                     </div>
                 </div>
+
+                {/* New Medical Summary Button */}
+                <button 
+                    onClick={onOpenMedicalCard}
+                    className="p-3 rounded-2xl shadow-sm border border-teal-200 bg-teal-50 dark:bg-teal-900/20 dark:border-teal-800 flex items-center justify-between cursor-pointer transition-transform active:scale-95"
+                >
+                    <div className="text-left">
+                        <p className="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wide">Medical Card</p>
+                        <h3 className="text-base font-black text-teal-700 dark:text-teal-300">บัตรสุขภาพ</h3>
+                    </div>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white text-teal-600">
+                        <StethoscopeIcon className="w-4 h-4" />
+                    </div>
+                </button>
             </div>
 
             {/* Row 1: Key Body Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {/* ... existing metric cards ... */}
                 {/* BMI Card */}
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
                     <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/30 rounded-full">
@@ -358,7 +424,7 @@ const PersonalHealthGrid: React.FC<{
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TDEE</p>
                     <p className="text-2xl font-black text-slate-800 dark:text-white">{displayTDEE}</p>
-                    <p className="text-[9px] text-slate-500">BMR: {finalDisplayBMR}</p>
+                    <p className="text-[9px] text-slate-500">BMR: {displayBMR}</p>
                 </div>
 
                 {/* Waist/Hip Card */}
@@ -398,36 +464,6 @@ const PersonalHealthGrid: React.FC<{
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">น้ำตาล (FBS)</p>
                     <p className="text-2xl font-black text-slate-800 dark:text-white">{displayFBS}</p>
                     <p className="text-[9px] text-slate-500">mg/dL</p>
-                </div>
-
-                {/* HbA1c Card (NEW) */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <div className="mb-2 p-2 bg-rose-50 dark:bg-rose-900/30 rounded-full">
-                        <HeartIcon className="w-5 h-5 text-rose-500" />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">น้ำตาลสะสม</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestHba1c || '-'}</p>
-                    <p className="text-[9px] text-slate-500">HbA1c (%)</p>
-                </div>
-
-                {/* Visceral Fat Card (NEW) */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 rounded-full">
-                        <FireIcon className="w-5 h-5 text-yellow-600" />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ไขมันช่องท้อง</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestVisceral || '-'}</p>
-                    <p className="text-[9px] text-slate-500">Visceral Fat</p>
-                </div>
-
-                {/* Muscle Mass Card (NEW) */}
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 flex flex-col items-center justify-center text-center">
-                    <div className="mb-2 p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-full">
-                        <BoltIcon className="w-5 h-5 text-indigo-500" />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">มวลกล้ามเนื้อ</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{latestMuscle || '-'}</p>
-                    <p className="text-[9px] text-slate-500">Muscle (kg)</p>
                 </div>
 
                 {/* Condition Card */}
@@ -484,6 +520,7 @@ const PersonalHealthGrid: React.FC<{
 const HealthSummaryCard: React.FC<{ 
     userProfile: any, bmiHistory: any[], waterScore: number, activityScore: number, sleepScore: number, moodScore: number
 }> = ({ userProfile, bmiHistory, waterScore, activityScore, sleepScore, moodScore }) => {
+    // ... existing HealthSummaryCard content ...
     const pillarScores: PillarScore = userProfile.pillarScores || { nutrition: 5, activity: 5, sleep: 5, stress: 5, substance: 5, social: 5 };
     const indicators = [
         { id: 'nutrition', name: 'โภชนาการ', score: Math.max(pillarScores.nutrition * 10, waterScore), icon: '🥗' },
@@ -496,7 +533,6 @@ const HealthSummaryCard: React.FC<{
 
     const totalScore = indicators.reduce((sum, sub) => sum + sub.score, 0) / indicators.length;
     const overallStatus = getHealthStatus(totalScore);
-    const currentBmi = bmiHistory.length > 0 ? bmiHistory[0].value : 0;
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden border border-slate-100 dark:border-gray-700">
@@ -554,7 +590,7 @@ const HistoryList: React.FC<{
     renderItem: (item: any) => React.ReactNode, 
     icon: React.ReactNode,
     emptyMessage?: string,
-    extraContent?: React.ReactNode // Slot for charts
+    extraContent?: React.ReactNode
 }> = ({ title, data, renderItem, icon, emptyMessage = "ยังไม่มีประวัติการบันทึก", extraContent }) => (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 overflow-hidden">
         <div className="p-3 bg-slate-50 dark:bg-gray-700/50 border-b border-slate-100 dark:border-gray-700 flex items-center justify-between">
@@ -563,10 +599,7 @@ const HistoryList: React.FC<{
                 <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
             </div>
         </div>
-        
-        {/* Render Chart or Extra Content if available */}
         {extraContent}
-
         <div className="p-2">
             {data.length > 0 ? (
                 <div className="space-y-2">
@@ -599,21 +632,20 @@ const Dashboard: React.FC = () => {
       waterGoal, 
       userProfile, 
       currentUser,
-      clinicalHistory // Added clinicalHistory
+      clinicalHistory 
   } = useContext(AppContext);
 
-  // Expanded Tab State to include all requested categories
   const [activeTab, setActiveTab] = useState<'body' | 'food' | 'water' | 'activity' | 'sleep' | 'mood' | 'habit' | 'social'>('body');
   const [chartTimeFrame, setChartTimeFrame] = useState<TimeFrame>('daily');
+  const [showMedicalCard, setShowMedicalCard] = useState(false); // NEW STATE
 
+  // ... (Remaining calculation logic: isToday, waterToday, activityToday, stepsToday, caloriesConsumedToday, sleepToday, moodToday, combinedFoodLog, formatDate, TabButton, TimeFrameSelector) ...
   const isToday = (d: Date) => { const t = new Date(); return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear(); };
   
-  // Calculate Today's Stats
   const waterToday = useMemo(() => waterHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.amount, 0), [waterHistory]);
   
   const activityToday = useMemo(() => activityHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.caloriesBurned, 0), [activityHistory]);
   
-  // Parse Steps from Activity Name
   const stepsToday = useMemo(() => {
       return activityHistory.filter(e => isToday(new Date(e.date))).reduce((sum, e) => sum + extractSteps(e.name), 0);
   }, [activityHistory]);
@@ -623,7 +655,6 @@ const Dashboard: React.FC = () => {
   const sleepToday = useMemo(() => sleepHistory.find(e => isToday(new Date(e.date))), [sleepHistory]);
   const moodToday = useMemo(() => moodHistory.find(e => isToday(new Date(e.date))), [moodHistory]);
 
-  // Combine food and calorie logs for display
   const combinedFoodLog = useMemo(() => {
       const foods = foodHistory.map(f => ({ 
           date: f.date, 
@@ -648,7 +679,7 @@ const Dashboard: React.FC = () => {
 
   const TabButton: React.FC<{ id: typeof activeTab, label: string, colorClass: string }> = ({ id, label, colorClass }) => (
       <button 
-        onClick={() => { setActiveTab(id); setChartTimeFrame('daily'); }} // Reset chart on tab change
+        onClick={() => { setActiveTab(id); setChartTimeFrame('daily'); }} 
         className={`flex-shrink-0 py-2 px-4 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
             activeTab === id 
             ? `${colorClass} text-white shadow-sm` 
@@ -681,15 +712,16 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6 animate-fade-in relative pb-10">
         <GamificationCard />
         
-        {/* New Personal Health Stats Grid */}
         <PersonalHealthGrid 
             userProfile={userProfile}
             bmiHistory={bmiHistory}
             tdeeHistory={tdeeHistory}
-            clinicalHistory={clinicalHistory} // Pass clinical history
+            clinicalHistory={clinicalHistory} 
             caloriesConsumed={caloriesConsumedToday}
             caloriesBurned={activityToday}
             stepsToday={stepsToday}
+            setActiveView={setActiveView}
+            onOpenMedicalCard={() => setShowMedicalCard(true)}
         />
 
         <HealthSummaryCard 
@@ -717,7 +749,6 @@ const Dashboard: React.FC = () => {
                 </h3>
             </div>
 
-            {/* Scrollable Tabs */}
             <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar mb-2">
                 <TabButton id="body" label="ร่างกาย" colorClass="bg-blue-500" />
                 <TabButton id="food" label="โภชนาการ" colorClass="bg-orange-500" />
@@ -729,7 +760,6 @@ const Dashboard: React.FC = () => {
                 <TabButton id="social" label="สังคม" colorClass="bg-teal-600" />
             </div>
 
-            {/* Content Area */}
             <div className="animate-fade-in">
                 {activeTab === 'body' && (
                     <div className="space-y-4">
@@ -797,6 +827,7 @@ const Dashboard: React.FC = () => {
                     />
                 )}
 
+                {/* Other history lists (Water, Activity, Sleep, Mood, Habit, Social) kept similar... */}
                 {activeTab === 'water' && (
                     <HistoryList 
                         title="ประวัติการดื่มน้ำ" 
@@ -926,7 +957,7 @@ const Dashboard: React.FC = () => {
                                         <p className={`text-sm font-bold ${item.isClean ? 'text-green-600' : 'text-red-600'}`}>
                                             {item.isClean ? 'Clean Day (ลดละเลิก)' : `มีความเสี่ยง (${item.type})`}
                                         </p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
+                                        <p className="text-xs text-gray-500">{formatDate(item.date)}</p>
                                     </div>
                                 </div>
                                 {!item.isClean && <span className="text-xs font-bold text-red-500">{item.amount} ครั้ง/หน่วย</span>}
@@ -958,6 +989,9 @@ const Dashboard: React.FC = () => {
                 )}
             </div>
         </div>
+
+        {/* Modal for Medical Card */}
+        {showMedicalCard && <MedicalSummaryModal onClose={() => setShowMedicalCard(false)} />}
     </div>
   );
 };

@@ -2,7 +2,7 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { MOOD_EMOJIS, SLEEP_HYGIENE_CHECKLIST, XP_VALUES } from '../constants';
-import { MoonIcon, FaceSmileIcon, NoSymbolIcon, UserGroupIcon, HeartIcon } from './icons';
+import { MoonIcon, FaceSmileIcon, NoSymbolIcon, UserGroupIcon, HeartIcon, ExclamationTriangleIcon, BrainIcon } from './icons';
 import CrisisModal from './CrisisModal';
 
 const WellnessCheckin: React.FC = () => {
@@ -11,7 +11,7 @@ const WellnessCheckin: React.FC = () => {
         moodHistory, setMoodHistory, 
         habitHistory, setHabitHistory, 
         socialHistory, setSocialHistory,
-        gainXP, openSOS
+        gainXP, openSOS, setActiveView
     } = useContext(AppContext);
 
     const [activeTab, setActiveTab] = useState<'sleep' | 'mood' | 'habit' | 'social'>('sleep');
@@ -197,6 +197,25 @@ const WellnessCheckin: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* STOP-BANG Prompt */}
+                        {sleepData.quality > 0 && sleepData.quality <= 2 && (
+                            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-between animate-fade-in">
+                                <div className="flex items-center gap-2">
+                                    <ExclamationTriangleIcon className="w-5 h-5 text-indigo-500" />
+                                    <div>
+                                        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300">นอนหลับไม่สนิท?</p>
+                                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400">ลองประเมินความเสี่ยงหยุดหายใจขณะหลับ</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setActiveView('riskAssessment')}
+                                    className="text-[10px] bg-indigo-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                                >
+                                    ประเมิน STOP-BANG
+                                </button>
+                            </div>
+                        )}
+
                         <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl">
                             <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-2">Sleep Hygiene Checklist:</p>
                             <div className="grid grid-cols-1 gap-2">
@@ -271,6 +290,25 @@ const WellnessCheckin: React.FC = () => {
                                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500" 
                             />
                         </div>
+
+                        {/* 2Q Screening Prompt */}
+                        {moodData.stress >= 8 && (
+                            <div className="p-3 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center justify-between animate-fade-in">
+                                <div className="flex items-center gap-2">
+                                    <BrainIcon className="w-5 h-5 text-rose-500" />
+                                    <div>
+                                        <p className="text-xs font-bold text-rose-700 dark:text-rose-300">ความเครียดสูง?</p>
+                                        <p className="text-[10px] text-rose-600 dark:text-rose-400">ลองทำแบบคัดกรองภาวะซึมเศร้า (2Q)</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => setActiveView('riskAssessment')}
+                                    className="text-[10px] bg-rose-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-rose-700 transition-colors whitespace-nowrap"
+                                >
+                                    ทำแบบทดสอบ
+                                </button>
+                            </div>
+                        )}
 
                         <div>
                             <label className="block text-xs font-bold text-gray-500 mb-2">เรื่องดีๆ ของวันนี้ (Gratitude)</label>
