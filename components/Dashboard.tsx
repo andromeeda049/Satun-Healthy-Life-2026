@@ -1,10 +1,10 @@
 
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { AppView, PillarScore } from '../types';
-import { ScaleIcon, FireIcon, CameraIcon, ShareIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, BookOpenIcon, StarIcon, TrophyIcon, ClipboardCheckIcon, UserCircleIcon, UserGroupIcon, PrinterIcon, HeartIcon, MoonIcon, FaceSmileIcon, NoSymbolIcon, StethoscopeIcon, XIcon } from './icons';
-import { PILLAR_LABELS, LEVEL_THRESHOLDS } from '../constants';
+import { AppView } from '../types';
+import { ScaleIcon, FireIcon, WaterDropIcon, BeakerIcon, BoltIcon, ChartBarIcon, HeartIcon, StethoscopeIcon, XIcon, BrainIcon, MoonIcon, ClipboardListIcon, TargetIcon } from './icons';
 import GamificationCard from './GamificationCard';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // --- Medical Summary Modal ---
 const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -12,10 +12,20 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
     // Helpers
     const getLatestClinical = (keys: string[]) => {
-        const sorted = [...(clinicalHistory || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (!clinicalHistory) return null;
+        // Safe Sort Newest First
+        const sorted = [...(clinicalHistory || [])].sort((a, b) => {
+            const dateA = new Date(a.date).getTime();
+            const dateB = new Date(b.date).getTime();
+            return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+        });
+
         for (const entry of sorted) {
-            // Check if any of the requested keys exist and are valid in this entry
-            const hasData = keys.every(k => entry[k as keyof typeof entry] !== undefined && entry[k as keyof typeof entry] !== '' && entry[k as keyof typeof entry] !== 0);
+            const hasData = keys.every(k => {
+                // @ts-ignore
+                const val = entry[k];
+                return val !== undefined && val !== '' && val !== 0 && val !== null;
+            });
             if (hasData) return entry;
         }
         return null;
@@ -24,23 +34,30 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     const latestBPLog = getLatestClinical(['systolic', 'diastolic']);
     const latestFBSLog = getLatestClinical(['fbs']);
     const latestWeightLog = getLatestClinical(['weight']);
-    const latestHba1cLog = getLatestClinical(['hba1c']);
     
-    const latestBMI = bmiHistory.length > 0 ? bmiHistory[0] : null;
+    const latestBMI = (bmiHistory && bmiHistory.length > 0) ? bmiHistory[0] : null;
 
-    // Risk Mapping
-    const cvdRisk = userProfile.riskAssessment?.cvdRiskLevel || 'unknown';
-    const cvdConfig = {
+    const cvdRisk = userProfile?.riskAssessment?.cvdRiskLevel || 'unknown';
+    const riskMap: Record<string, { label: string; color: string; bg: string }> = {
         low: { label: 'เสี่ยงต่ำ (<10%)', color: 'text-green-600', bg: 'bg-green-100' },
         moderate: { label: 'เสี่ยงปานกลาง (10-20%)', color: 'text-yellow-700', bg: 'bg-yellow-100' },
         high: { label: 'เสี่ยงสูง (20-30%)', color: 'text-orange-700', bg: 'bg-orange-100' },
         very_high: { label: 'เสี่ยงสูงมาก (>30%)', color: 'text-red-700', bg: 'bg-red-100' },
         unknown: { label: 'รอการประเมิน', color: 'text-gray-500', bg: 'bg-gray-100' }
-    }[cvdRisk];
+    };
+    const cvdConfig = riskMap[cvdRisk] || riskMap['unknown'];
 
-    const depressionRisk = userProfile.riskAssessment?.depressionRisk;
-    const depressionSeverity = userProfile.riskAssessment?.depressionSeverity;
-    const sleepRisk = userProfile.riskAssessment?.sleepApneaRisk;
+    const depressionRisk = userProfile?.riskAssessment?.depressionRisk;
+    const depressionSeverity = userProfile?.riskAssessment?.depressionSeverity;
+    const sleepRisk = userProfile?.riskAssessment?.sleepApneaRisk;
+
+    const formatDateSafe = (dateStr: string) => {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            return isNaN(d.getTime()) ? '' : d.toLocaleDateString('th-TH');
+        } catch (e) { return ''; }
+    };
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/95 backdrop-blur-sm animate-fade-in">
@@ -53,20 +70,20 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     {/* Header: Patient Info */}
                     <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100 dark:border-gray-700">
                         <div className="w-20 h-20 rounded-xl bg-gray-200 dark:bg-gray-700 overflow-hidden border-2 border-white dark:border-gray-600 shadow-md">
-                             {userProfile.profilePicture && (userProfile.profilePicture.startsWith('http') || userProfile.profilePicture.startsWith('data')) ? (
+                             {userProfile?.profilePicture && (userProfile.profilePicture.startsWith('http') || userProfile.profilePicture.startsWith('data')) ? (
                                 <img src={userProfile.profilePicture} alt="Profile" className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-4xl">{userProfile.profilePicture || '👤'}</div>
+                                <div className="w-full h-full flex items-center justify-center text-4xl">{userProfile?.profilePicture || '👤'}</div>
                             )}
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{currentUser?.displayName}</h2>
                             <div className="flex flex-wrap gap-2 mt-1">
                                 <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300 font-medium">
-                                    อายุ: {userProfile.age || '-'} ปี
+                                    อายุ: {userProfile?.age || '-'} ปี
                                 </span>
                                 <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300 font-medium">
-                                    เพศ: {userProfile.gender === 'male' ? 'ชาย' : 'หญิง'}
+                                    เพศ: {userProfile?.gender === 'male' ? 'ชาย' : 'หญิง'}
                                 </span>
                             </div>
                             <p className="text-xs text-teal-600 dark:text-teal-400 mt-2 font-bold flex items-center gap-1">
@@ -79,7 +96,7 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     <div className="mb-6">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">โรคประจำตัว (Conditions)</h3>
                         <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-800 text-rose-800 dark:text-rose-200 font-bold text-sm">
-                            {userProfile.healthCondition || 'ไม่มีโรคประจำตัว'}
+                            {userProfile?.healthCondition || 'ไม่มีโรคประจำตัว'}
                         </div>
                     </div>
 
@@ -92,25 +109,25 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                                 <p className="text-lg font-black text-gray-800 dark:text-white">
                                     {latestBPLog ? `${latestBPLog.systolic}/${latestBPLog.diastolic}` : '-/-'}
                                 </p>
-                                <p className="text-[9px] text-gray-400 text-right">{latestBPLog ? new Date(latestBPLog.date).toLocaleDateString('th-TH') : ''}</p>
+                                <p className="text-[9px] text-gray-400 text-right">{latestBPLog ? formatDateSafe(latestBPLog.date) : ''}</p>
                             </div>
                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400">น้ำตาล (FBS)</p>
                                 <p className="text-lg font-black text-gray-800 dark:text-white">
                                     {latestFBSLog ? latestFBSLog.fbs : '-'} <span className="text-xs font-normal text-gray-500">mg/dL</span>
                                 </p>
-                                <p className="text-[9px] text-gray-400 text-right">{latestFBSLog ? new Date(latestFBSLog.date).toLocaleDateString('th-TH') : ''}</p>
+                                <p className="text-[9px] text-gray-400 text-right">{latestFBSLog ? formatDateSafe(latestFBSLog.date) : ''}</p>
                             </div>
                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400">น้ำหนัก (Weight)</p>
                                 <p className="text-lg font-black text-gray-800 dark:text-white">
-                                    {latestWeightLog ? latestWeightLog.weight : (userProfile.weight || '-')} <span className="text-xs font-normal text-gray-500">kg</span>
+                                    {latestWeightLog ? latestWeightLog.weight : (userProfile?.weight || '-')} <span className="text-xs font-normal text-gray-500">kg</span>
                                 </p>
                             </div>
                             <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-600">
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400">ดัชนีมวลกาย (BMI)</p>
                                 <p className="text-lg font-black text-gray-800 dark:text-white">
-                                    {latestBMI ? latestBMI.value.toFixed(1) : '-'}
+                                    {latestBMI?.value ? Number(latestBMI.value).toFixed(1) : '-'}
                                 </p>
                                 <p className="text-[9px] text-gray-400 text-right truncate">{latestBMI ? latestBMI.category : ''}</p>
                             </div>
@@ -122,7 +139,7 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">ประเมินความเสี่ยง (Risk Assessment)</h3>
                         <div className="space-y-2">
                             <div className={`p-3 rounded-xl border flex justify-between items-center ${cvdConfig.bg} border-transparent`}>
-                                <span className="text-xs font-bold text-gray-700 dark:text-gray-800">Thai CVD Risk</span>
+                                <span className="text-xs font-bold text-gray-700 dark:text-gray-800">Thai CV Risk</span>
                                 <span className={`text-sm font-black ${cvdConfig.color}`}>{cvdConfig.label}</span>
                             </div>
                             <div className="flex gap-2">
@@ -154,15 +171,7 @@ const MedicalSummaryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     );
 };
 
-// ... Helper Functions (getHealthStatus, getBmiCategory, extractSteps, calculateMetrics) ...
-const getHealthStatus = (score: number) => {
-    if (score >= 80) return { level: 'สุขภาพดีเยี่ยม', sub: 'Excellent', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-300' };
-    if (score >= 70) return { level: 'สุขภาพดี', sub: 'Good', color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-300' };
-    if (score >= 60) return { level: 'ความเสี่ยงปานกลาง', sub: 'Fair', color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-300' };
-    if (score >= 50) return { level: 'เริ่มมีความเสี่ยง', sub: 'Fair', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-300' };
-    return { level: 'ความเสี่ยงสูง', sub: 'High Risk', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-300' };
-};
-
+// ... Helper Functions ...
 const getBmiCategory = (bmi: number): string => {
     if (bmi < 18.5) return 'น้ำหนักน้อยกว่าเกณฑ์';
     if (bmi < 23) return 'สมส่วน';
@@ -180,6 +189,7 @@ const extractSteps = (name: string): number => {
 };
 
 const calculateMetrics = (profile: any) => {
+    if (!profile) return { bmi: 0, bmiCategory: 'รอข้อมูล', bmr: 0, tdee: 0 };
     const weight = parseFloat(profile.weight || '0');
     const height = parseFloat(profile.height || '0');
     const age = parseFloat(profile.age || '0');
@@ -207,120 +217,141 @@ const calculateMetrics = (profile: any) => {
     return { bmi, bmiCategory, bmr, tdee };
 };
 
-// ... Chart Components (HealthTrendChart) ...
-type TimeFrame = 'daily' | 'weekly' | 'monthly';
-
-interface ChartDataPoint {
-    label: string;
-    value: number;
-    subValue?: number;
-}
+// ... Interactive Recharts Component ...
+const CustomTooltip = ({ active, payload, label, unit }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-gray-400 mb-1">{label}</p>
+                <p className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                    {payload[0].value} <span className="text-[10px] font-normal text-gray-500">{unit}</span>
+                </p>
+                {payload[0].payload.subValue && (
+                    <p className="text-[10px] text-gray-500 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
+                        {payload[0].payload.subValue}
+                    </p>
+                )}
+            </div>
+        );
+    }
+    return null;
+};
 
 const HealthTrendChart: React.FC<{
     data: any[];
     dataKey: string;
     dateKey: string;
-    timeFrame: TimeFrame;
-    color: string;
+    colorHex: string;
     unit: string;
-    secondaryDataKey?: string;
-    secondaryExtractor?: (item: any) => number;
-}> = ({ data, dataKey, dateKey, timeFrame, color, unit, secondaryDataKey, secondaryExtractor }) => {
+    targetValue?: number;
+}> = ({ data, dataKey, dateKey, colorHex, unit, targetValue }) => {
     
-    const chartData: ChartDataPoint[] = useMemo(() => {
-        const points: ChartDataPoint[] = [];
-        const now = new Date();
-        const grouped: Record<string, { value: number, subValue: number }> = {};
+    const chartData = useMemo(() => {
+        // Safe mapping with strict Number conversion
+        const mappedData = data.map(item => ({
+            ...item,
+            value: item[dataKey] !== undefined && item[dataKey] !== '' ? Number(item[dataKey]) : NaN,
+            dateObj: new Date(item[dateKey]),
+            displayDate: new Date(item[dateKey]).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })
+        }));
 
-        const getGroupKey = (date: Date): string => {
-            if (timeFrame === 'daily') return date.toLocaleDateString('th-TH', { weekday: 'short' });
-            if (timeFrame === 'weekly') {
-                const diffTime = Math.abs(now.getTime() - date.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                const weekNum = Math.ceil(diffDays / 7);
-                return weekNum === 1 ? 'สัปดาห์นี้' : `-${weekNum-1} สัปดาห์`;
-            }
-            if (timeFrame === 'monthly') return date.toLocaleDateString('th-TH', { month: 'short' });
-            return '';
-        };
+        // Filter valid
+        const validData = mappedData.filter(item => 
+            !isNaN(item.value) && 
+            item.value > 0 && 
+            !isNaN(item.dateObj.getTime())
+        );
 
-        let daysLimit = 7;
-        if (timeFrame === 'weekly') daysLimit = 28;
-        if (timeFrame === 'monthly') daysLimit = 180;
+        // Sort oldest to newest
+        validData.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - daysLimit);
+        // Slice last 14 points for better readability on mobile
+        return validData.slice(-14);
+    }, [data, dataKey, dateKey]);
 
-        if (timeFrame === 'daily') {
-            for (let i = 6; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                const key = d.toLocaleDateString('th-TH', { weekday: 'short' });
-                grouped[key] = { value: 0, subValue: 0 };
-                points.push({ label: key, value: 0 });
-            }
-        }
+    if (chartData.length === 0) {
+        return (
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm mb-4 text-center">
+                <div className="bg-gray-100 dark:bg-gray-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <ChartBarIcon className="w-8 h-8 text-gray-300 dark:text-gray-500" />
+                </div>
+                <p className="text-sm font-bold text-gray-500 dark:text-gray-400">ยังไม่มีข้อมูล {unit}</p>
+                <p className="text-xs text-gray-400">เริ่มบันทึกข้อมูลเพื่อดูแนวโน้มสุขภาพ</p>
+            </div>
+        );
+    }
 
-        data.forEach(item => {
-            const itemDate = new Date(item[dateKey]);
-            if (itemDate >= cutoffDate) {
-                const key = getGroupKey(itemDate);
-                if (!grouped[key]) grouped[key] = { value: 0, subValue: 0 };
-                grouped[key].value += (Number(item[dataKey]) || 0);
-                if (secondaryExtractor) {
-                    grouped[key].subValue += secondaryExtractor(item);
-                }
-            }
-        });
-
-        if (timeFrame === 'daily') {
-            return points.map(p => ({
-                label: p.label,
-                value: grouped[p.label]?.value || 0,
-                subValue: grouped[p.label]?.subValue || 0
-            }));
-        } else {
-            return Object.entries(grouped).map(([label, val]) => ({
-                label,
-                value: val.value,
-                subValue: val.subValue
-            })).reverse();
-        }
-    }, [data, dataKey, dateKey, timeFrame, secondaryDataKey]);
-
-    const maxValue = Math.max(1, ...chartData.map(d => d.value));
+    // Calculate domain padding
+    const minVal = Math.min(...chartData.map(d => d.value), targetValue || Infinity);
+    const maxVal = Math.max(...chartData.map(d => d.value), targetValue || -Infinity);
+    const domainPadding = (maxVal - minVal) * 0.2; // 20% padding
 
     return (
         <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
-            <div className="flex items-end justify-between h-32 gap-2 mt-2">
-                {chartData.map((d, i) => {
-                    const heightPercent = (d.value / maxValue) * 100;
-                    return (
-                        <div key={i} className="flex-1 flex flex-col items-center group relative">
-                            <div className="text-[9px] text-gray-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full">
-                                {d.value.toLocaleString()}
-                            </div>
-                            <div 
-                                className={`w-full max-w-[20px] sm:max-w-[30px] rounded-t-md transition-all duration-500 hover:opacity-80 ${color}`}
-                                style={{ height: `${Math.max(5, heightPercent)}%` }}
-                            ></div>
-                            <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-2 truncate w-full text-center">
-                                {d.label}
-                            </div>
-                        </div>
-                    )
-                })}
+            <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                        data={chartData}
+                        margin={{ top: 20, right: 10, left: -20, bottom: 0 }}
+                    >
+                        <defs>
+                            <linearGradient id={`color-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor={colorHex} stopOpacity={0.4}/>
+                                <stop offset="95%" stopColor={colorHex} stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis 
+                            dataKey="displayDate" 
+                            tick={{fontSize: 10, fill: '#9ca3af'}} 
+                            axisLine={false}
+                            tickLine={false}
+                            interval="preserveStartEnd"
+                        />
+                        <YAxis 
+                            tick={{fontSize: 10, fill: '#9ca3af'}} 
+                            axisLine={false}
+                            tickLine={false}
+                            domain={[
+                                Math.max(0, Math.floor(minVal - domainPadding)), 
+                                Math.ceil(maxVal + domainPadding)
+                            ]}
+                        />
+                        <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ stroke: colorHex, strokeWidth: 1, strokeDasharray: '3 3' }} />
+                        
+                        {targetValue && (
+                            <ReferenceLine 
+                                y={targetValue} 
+                                stroke="#9ca3af" 
+                                strokeDasharray="3 3"
+                                label={{ 
+                                    value: `Target: ${targetValue}`, 
+                                    position: 'right', 
+                                    fill: '#9ca3af', 
+                                    fontSize: 10 
+                                }} 
+                            />
+                        )}
+
+                        <Area 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke={colorHex} 
+                            strokeWidth={3}
+                            fill={`url(#color-${dataKey})`} 
+                            activeDot={{ r: 6, strokeWidth: 0, fill: colorHex }}
+                        />
+                    </AreaChart>
+                </ResponsiveContainer>
             </div>
             <div className="text-center mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">
-                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-                    แนวโน้ม {unit} ({timeFrame === 'daily' ? 'รายวัน' : timeFrame === 'weekly' ? 'รายสัปดาห์' : 'รายเดือน'})
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    แนวโน้ม {unit} (ล่าสุด)
                 </p>
             </div>
         </div>
     );
 };
-
-// ... PersonalHealthGrid, HealthSummaryCard, HistoryList, Dashboard ...
 
 const PersonalHealthGrid: React.FC<{
     userProfile: any;
@@ -331,15 +362,15 @@ const PersonalHealthGrid: React.FC<{
     caloriesBurned: number;
     stepsToday: number;
     setActiveView: (v: AppView) => void;
-    onOpenMedicalCard: () => void; // Added prop
+    onOpenMedicalCard: () => void;
 }> = ({ userProfile, bmiHistory, tdeeHistory, clinicalHistory, caloriesConsumed, caloriesBurned, stepsToday, setActiveView, onOpenMedicalCard }) => {
-    // ... Existing logic ...
-    const latestBmi = bmiHistory.length > 0 ? bmiHistory[0] : null;
-    const latestTdee = tdeeHistory.length > 0 ? tdeeHistory[0] : null;
+    // ... existing logic ...
+    const latestBmi = bmiHistory && bmiHistory.length > 0 ? bmiHistory[0] : null;
+    const latestTdee = tdeeHistory && tdeeHistory.length > 0 ? tdeeHistory[0] : null;
     
     const { bmi, bmiCategory, bmr, tdee } = calculateMetrics(userProfile);
 
-    const displayBMI = bmi > 0 ? bmi.toFixed(1) : (latestBmi ? latestBmi.value.toFixed(1) : '-');
+    const displayBMI = bmi > 0 ? bmi.toFixed(1) : (latestBmi ? Number(latestBmi.value).toFixed(1) : '-');
     const displayCategory = bmi > 0 ? bmiCategory : (latestBmi ? latestBmi.category : 'รอการคำนวณ');
     
     const displayTDEE = tdee > 0 ? Math.round(tdee).toLocaleString() : (latestTdee ? Math.round(latestTdee.value).toLocaleString() : '-');
@@ -349,7 +380,10 @@ const PersonalHealthGrid: React.FC<{
     const calorieBalance = (tdeeNum + caloriesBurned) - caloriesConsumed;
     const isDeficit = calorieBalance >= 0;
 
-    const sortedClinical = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sortedClinical = [...(clinicalHistory || [])].sort((a, b) => {
+        return (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0);
+    });
+
     const latestSystolic = sortedClinical.find(c => c.systolic > 0)?.systolic;
     const latestDiastolic = sortedClinical.find(c => c.diastolic > 0)?.diastolic;
     const latestFbs = sortedClinical.find(c => c.fbs > 0)?.fbs;
@@ -357,7 +391,7 @@ const PersonalHealthGrid: React.FC<{
     const displayBP = latestSystolic && latestDiastolic ? `${latestSystolic}/${latestDiastolic}` : '-/-';
     const displayFBS = latestFbs ? `${latestFbs}` : '-';
 
-    const cvdRisk = userProfile.riskAssessment?.cvdRiskLevel || 'unknown';
+    const cvdRisk = userProfile?.riskAssessment?.cvdRiskLevel || 'unknown';
     
     const getRiskConfig = (level: string) => {
         switch(level) {
@@ -369,27 +403,45 @@ const PersonalHealthGrid: React.FC<{
         }
     };
 
+    const depressionRisk = userProfile?.riskAssessment?.depressionRisk;
+    const depressionSeverity = userProfile?.riskAssessment?.depressionSeverity;
+    const sleepRisk = userProfile?.riskAssessment?.sleepApneaRisk;
+
+    const getMentalConfig = () => {
+        if (depressionRisk === undefined) return { label: 'ยังไม่ประเมิน', color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' };
+        if (!depressionRisk) return { label: 'ปกติ', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' };
+        
+        if (!depressionSeverity || depressionSeverity === 'normal') return { label: 'เสี่ยงซึมเศร้า', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' };
+        
+        const map: any = {
+            'mild': 'ซึมเศร้า (น้อย)',
+            'moderate': 'ซึมเศร้า (ปานกลาง)',
+            'severe': 'ซึมเศร้า (รุนแรง)'
+        };
+        
+        return { 
+            label: map[depressionSeverity] || 'เสี่ยงซึมเศร้า', 
+            color: depressionSeverity === 'severe' ? 'text-red-600' : 'text-orange-600', 
+            bg: depressionSeverity === 'severe' ? 'bg-red-50' : 'bg-orange-50',
+            border: depressionSeverity === 'severe' ? 'border-red-200' : 'border-orange-200'
+        };
+    };
+
+    const getSleepConfig = () => {
+        if (!sleepRisk) return { label: 'ยังไม่ประเมิน', color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' };
+        if (sleepRisk === 'low') return { label: 'ความเสี่ยงต่ำ', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' };
+        return { label: 'เสี่ยงสูง (OSA)', color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' };
+    };
+
     const riskConfig = getRiskConfig(cvdRisk);
+    const mentalConfig = getMentalConfig();
+    const sleepConfig = getSleepConfig();
 
     return (
         <div className="space-y-4 mb-6">
             {/* Quick Actions for Medical/Risk */}
             <div className="grid grid-cols-2 gap-3">
-                {/* Health Risk Assessment Banner */}
-                <div 
-                    onClick={() => setActiveView('riskAssessment')}
-                    className={`p-3 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer transition-transform active:scale-95 ${riskConfig.bg} ${riskConfig.border} dark:bg-gray-800`}
-                >
-                    <div>
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide">Thai CVD Risk</p>
-                        <h3 className={`text-base font-black ${riskConfig.color}`}>{riskConfig.label}</h3>
-                    </div>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white ${riskConfig.color}`}>
-                        <HeartIcon className="w-4 h-4" />
-                    </div>
-                </div>
-
-                {/* New Medical Summary Button */}
+                {/* 1. New Medical Summary Button (Medical Card) - MOVED TO FIRST */}
                 <button 
                     onClick={onOpenMedicalCard}
                     className="p-3 rounded-2xl shadow-sm border border-teal-200 bg-teal-50 dark:bg-teal-900/20 dark:border-teal-800 flex items-center justify-between cursor-pointer transition-transform active:scale-95"
@@ -402,6 +454,45 @@ const PersonalHealthGrid: React.FC<{
                         <StethoscopeIcon className="w-4 h-4" />
                     </div>
                 </button>
+
+                {/* 2. Health Risk Assessment Banner (Thai CVD Risk) - MOVED TO SECOND */}
+                <div 
+                    onClick={() => setActiveView('riskAssessment')}
+                    className={`p-3 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer transition-transform active:scale-95 ${riskConfig.bg} ${riskConfig.border} dark:bg-gray-800`}
+                >
+                    <div>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide">Thai CVD Risk</p>
+                        <h3 className={`text-base font-black ${riskConfig.color}`}>{riskConfig.label}</h3>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white ${riskConfig.color}`}>
+                        <HeartIcon className="w-4 h-4" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Risk Assessment Row 2: Mental & Sleep */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
+                 <div 
+                    onClick={() => setActiveView('riskAssessment')}
+                    className={`p-3 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer transition-transform active:scale-95 ${mentalConfig.bg} ${mentalConfig.border} dark:bg-gray-800 dark:border-gray-700`}
+                >
+                    <div className="min-w-0">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide truncate">สุขภาพจิต (2Q/9Q)</p>
+                        <h3 className={`text-sm font-black ${mentalConfig.color} truncate`}>{mentalConfig.label}</h3>
+                    </div>
+                    <BrainIcon className={`w-5 h-5 ${mentalConfig.color}`} />
+                 </div>
+                 
+                 <div 
+                    onClick={() => setActiveView('riskAssessment')}
+                    className={`p-3 rounded-2xl shadow-sm border flex items-center justify-between cursor-pointer transition-transform active:scale-95 ${sleepConfig.bg} ${sleepConfig.border} dark:bg-gray-800 dark:border-gray-700`}
+                >
+                    <div className="min-w-0">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wide truncate">การนอน (STOP-BANG)</p>
+                        <h3 className={`text-sm font-black ${sleepConfig.color} truncate`}>{sleepConfig.label}</h3>
+                    </div>
+                    <MoonIcon className={`w-5 h-5 ${sleepConfig.color}`} />
+                 </div>
             </div>
 
             {/* Row 1: Key Body Metrics */}
@@ -436,12 +527,12 @@ const PersonalHealthGrid: React.FC<{
                     <div className="flex gap-3 mt-1">
                         <div>
                             <span className="text-[9px] text-slate-400 block">เอว</span>
-                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile.waist || '-'}</span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile?.waist || '-'}</span>
                         </div>
                         <div className="w-[1px] bg-slate-200 dark:bg-gray-600"></div>
                         <div>
                             <span className="text-[9px] text-slate-400 block">สะโพก</span>
-                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile.hip || '-'}</span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-white">{userProfile?.hip || '-'}</span>
                         </div>
                     </div>
                 </div>
@@ -473,7 +564,7 @@ const PersonalHealthGrid: React.FC<{
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">โรคประจำตัว</p>
                     <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2 leading-tight mt-1">
-                        {userProfile.healthCondition || 'ไม่มี'}
+                        {userProfile?.healthCondition || 'ไม่มี'}
                     </p>
                 </div>
             </div>
@@ -517,483 +608,238 @@ const PersonalHealthGrid: React.FC<{
     );
 };
 
-const HealthSummaryCard: React.FC<{ 
-    userProfile: any, bmiHistory: any[], waterScore: number, activityScore: number, sleepScore: number, moodScore: number
-}> = ({ userProfile, bmiHistory, waterScore, activityScore, sleepScore, moodScore }) => {
-    // ... existing HealthSummaryCard content ...
-    const pillarScores: PillarScore = userProfile.pillarScores || { nutrition: 5, activity: 5, sleep: 5, stress: 5, substance: 5, social: 5 };
-    const indicators = [
-        { id: 'nutrition', name: 'โภชนาการ', score: Math.max(pillarScores.nutrition * 10, waterScore), icon: '🥗' },
-        { id: 'activity', name: 'กิจกรรม', score: Math.max(pillarScores.activity * 10, activityScore), icon: '💪' }, 
-        { id: 'sleep', name: 'การนอน', score: sleepScore > 0 ? sleepScore : pillarScores.sleep * 10, icon: '😴' },
-        { id: 'stress', name: 'จิตใจ', score: moodScore > 0 ? moodScore : pillarScores.stress * 10, icon: '🧠' },
-        { id: 'risk', name: 'ลดความเสี่ยง', score: pillarScores.substance * 10, icon: '🚫' },
-        { id: 'social', name: 'ความสัมพันธ์', score: pillarScores.social * 10, icon: '🤝' },
+const Dashboard: React.FC = () => {
+    const { 
+        userProfile, bmiHistory, tdeeHistory, clinicalHistory, 
+        calorieHistory, activityHistory, setActiveView, goals
+    } = useContext(AppContext);
+
+    const [showMedicalCard, setShowMedicalCard] = useState(false);
+    const [activeChartTab, setActiveChartTab] = useState('weight');
+
+    // Calculate Daily Stats
+    const today = new Date().toDateString();
+    
+    const caloriesConsumed = useMemo(() => 
+        calorieHistory
+            .filter(c => new Date(c.date).toDateString() === today)
+            .reduce((sum, c) => sum + c.calories, 0)
+    , [calorieHistory, today]);
+
+    const caloriesBurned = useMemo(() => 
+        activityHistory
+            .filter(a => new Date(a.date).toDateString() === today)
+            .reduce((sum, a) => sum + a.caloriesBurned, 0)
+    , [activityHistory, today]);
+
+    const stepsToday = useMemo(() => {
+        let steps = 0;
+        activityHistory
+            .filter(a => new Date(a.date).toDateString() === today)
+            .forEach(a => {
+                const s = extractSteps(a.name);
+                if (s > 0) steps += s;
+            });
+        return steps;
+    }, [activityHistory, today]);
+
+    // Determine target value for active chart
+    const targetValue = useMemo(() => {
+        // 1. BMI: Use Standard (23 for Asians)
+        if (activeChartTab === 'bmi') return 23;
+
+        // 2. Map Tab ID to Goal Type
+        let searchType = activeChartTab;
+        if (activeChartTab === 'systolic') searchType = 'bp';
+
+        // 3. Find Goal
+        const goal = goals.find(g => g.type === searchType && g.status === 'active');
+
+        if (goal) {
+            // Special handling for BP string "120/80"
+            if (searchType === 'bp') {
+                const parts = goal.targetValue.split('/');
+                return parts.length > 0 ? parseFloat(parts[0]) : undefined;
+            }
+            return parseFloat(goal.targetValue);
+        }
+        return undefined;
+    }, [goals, activeChartTab]);
+
+    // Chart Tabs Data - Expanded
+    const chartTabs = [
+        { id: 'weight', label: 'น้ำหนัก', icon: <ScaleIcon className="w-3 h-3" />, colorHex: '#8b5cf6', unit: 'kg' },
+        { id: 'bmi', label: 'BMI', icon: <ChartBarIcon className="w-3 h-3" />, colorHex: '#3b82f6', unit: '' },
+        { id: 'systolic', label: 'ความดัน (บน)', icon: <HeartIcon className="w-3 h-3" />, colorHex: '#f43f5e', unit: 'mmHg' },
+        { id: 'fbs', label: 'น้ำตาล (FBS)', icon: <WaterDropIcon className="w-3 h-3" />, colorHex: '#f59e0b', unit: 'mg/dL' },
+        { id: 'hba1c', label: 'น้ำตาลสะสม', icon: <BeakerIcon className="w-3 h-3" />, colorHex: '#ef4444', unit: '%' },
+        { id: 'waist', label: 'รอบเอว', icon: <ClipboardListIcon className="w-3 h-3" />, colorHex: '#14b8a6', unit: 'cm' },
+        { id: 'visceral_fat', label: 'ไขมันช่องท้อง', icon: <FireIcon className="w-3 h-3" />, colorHex: '#f97316', unit: 'Lv' },
+        { id: 'muscle_mass', label: 'มวลกล้ามเนื้อ', icon: <BoltIcon className="w-3 h-3" />, colorHex: '#6366f1', unit: 'kg' },
+        { id: 'bmr', label: 'BMR', icon: <FireIcon className="w-3 h-3" />, colorHex: '#22c55e', unit: 'kcal' },
     ];
 
-    const totalScore = indicators.reduce((sum, sub) => sum + sub.score, 0) / indicators.length;
-    const overallStatus = getHealthStatus(totalScore);
+    const currentTabInfo = chartTabs.find(t => t.id === activeChartTab);
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden border border-slate-100 dark:border-gray-700">
-            <div className="bg-gradient-to-r from-teal-600 to-emerald-600 p-4 text-white">
-                <h2 className="text-base font-bold flex items-center gap-2"><ClipboardCheckIcon className="w-5 h-5" /> รายงานคะแนนสุขภาพ (Wellness Score)</h2>
-            </div>
-
-            <div className="p-4 space-y-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-center bg-slate-50 dark:bg-gray-700/30 p-4 rounded-xl">
-                    <div className="relative w-20 h-20 flex-shrink-0">
-                        <svg className="w-full h-full transform -rotate-90">
-                            <circle cx="50%" cy="50%" r="35" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-200 dark:text-gray-600" />
-                            <circle cx="50%" cy="50%" r="35" stroke="currentColor" strokeWidth="4" fill="transparent" 
-                                strokeDasharray={2 * Math.PI * 35} strokeDashoffset={(2 * Math.PI * 35) * (1 - totalScore / 100)} 
-                                className={`${overallStatus.color.replace('text', 'stroke')} transition-all`} strokeLinecap="round"
-                            />
-                        </svg>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center"><span className={`text-xl font-bold ${overallStatus.color}`}>{totalScore.toFixed(0)}</span></div>
-                    </div>
-                    <div className="text-center sm:text-left">
-                        <h2 className={`text-base font-bold ${overallStatus.color}`}>{overallStatus.level}</h2>
-                        <div className="flex gap-2 mt-2">
-                            <div className="bg-white dark:bg-gray-800 px-3 py-1 rounded-lg border border-slate-100 dark:border-gray-600 text-[10px]"><span className="font-bold text-slate-500">ID:</span> <span className="font-semibold">{userProfile.researchId || '-'}</span></div>
-                        </div>
-                    </div>
+        <div className="pb-24 animate-fade-in space-y-6">
+            <div className="flex items-center justify-between px-1">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Dashboard</h1>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">ภาพรวมสุขภาพของคุณ</p>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {indicators.map((ind) => {
-                        const status = getHealthStatus(ind.score);
-                        return (
-                            <div key={ind.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-50 dark:border-gray-700 bg-slate-50/30 dark:bg-gray-700/50">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-base">{ind.icon}</span>
-                                    <div>
-                                        <p className="font-semibold text-slate-700 dark:text-gray-200 text-[11px]">{ind.name}</p>
-                                        <div className="w-16 h-1 bg-slate-100 dark:bg-gray-600 rounded-full mt-0.5 overflow-hidden">
-                                            <div className={`h-full ${status.color.replace('text', 'bg')}`} style={{ width: `${ind.score}%` }}></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <span className={`text-[10px] font-bold ${status.color}`}>{ind.score.toFixed(0)}%</span>
-                            </div>
-                        );
-                    })}
+                <div className="text-right">
+                    <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-1 rounded font-bold dark:bg-teal-900 dark:text-teal-300">
+                        {new Date().toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' })}
+                    </span>
                 </div>
             </div>
-        </div>
-    );
-};
 
-const HistoryList: React.FC<{ 
-    title: string, 
-    data: any[], 
-    renderItem: (item: any) => React.ReactNode, 
-    icon: React.ReactNode,
-    emptyMessage?: string,
-    extraContent?: React.ReactNode
-}> = ({ title, data, renderItem, icon, emptyMessage = "ยังไม่มีประวัติการบันทึก", extraContent }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-slate-100 dark:border-gray-700 overflow-hidden">
-        <div className="p-3 bg-slate-50 dark:bg-gray-700/50 border-b border-slate-100 dark:border-gray-700 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <span className="text-gray-500 dark:text-gray-400">{icon}</span>
-                <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{title}</h3>
-            </div>
-        </div>
-        {extraContent}
-        <div className="p-2">
-            {data.length > 0 ? (
-                <div className="space-y-2">
-                    {data.slice(0, 5).map((item, idx) => (
-                        <div key={idx} className="p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-gray-700/30 transition-colors">
-                            {renderItem(item)}
-                        </div>
+            <GamificationCard />
+
+            <PersonalHealthGrid 
+                userProfile={userProfile}
+                bmiHistory={bmiHistory}
+                tdeeHistory={tdeeHistory}
+                clinicalHistory={clinicalHistory}
+                caloriesConsumed={caloriesConsumed}
+                caloriesBurned={caloriesBurned}
+                stepsToday={stepsToday}
+                setActiveView={setActiveView}
+                onOpenMedicalCard={() => setShowMedicalCard(true)}
+            />
+
+            {/* Charts Section with Tabs */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <ChartBarIcon className="w-5 h-5 text-indigo-500" /> แนวโน้มสุขภาพ
+                    </h3>
+                    <button 
+                        onClick={() => setActiveView('history')}
+                        className="text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                    >
+                        <ClipboardListIcon className="w-3.5 h-3.5" />
+                        ดูประวัติทั้งหมด
+                    </button>
+                </div>
+
+                {/* Tabs Selector */}
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    {chartTabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveChartTab(tab.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                                activeChartTab === tab.id
+                                ? `bg-gray-800 text-white dark:bg-white dark:text-gray-900 shadow-sm`
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200'
+                            }`}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
                     ))}
                 </div>
-            ) : (
-                <p className="text-center text-xs text-gray-400 py-4">{emptyMessage}</p>
-            )}
-        </div>
-    </div>
-);
 
-const Dashboard: React.FC = () => {
-  const { 
-      setActiveView, 
-      bmiHistory, 
-      tdeeHistory,
-      waterHistory, 
-      foodHistory,
-      calorieHistory,
-      activityHistory, 
-      sleepHistory, 
-      moodHistory, 
-      habitHistory, 
-      socialHistory, 
-      waterGoal, 
-      userProfile, 
-      currentUser,
-      clinicalHistory 
-  } = useContext(AppContext);
-
-  const [activeTab, setActiveTab] = useState<'body' | 'food' | 'water' | 'activity' | 'sleep' | 'mood' | 'habit' | 'social'>('body');
-  const [chartTimeFrame, setChartTimeFrame] = useState<TimeFrame>('daily');
-  const [showMedicalCard, setShowMedicalCard] = useState(false); // NEW STATE
-
-  // ... (Remaining calculation logic: isToday, waterToday, activityToday, stepsToday, caloriesConsumedToday, sleepToday, moodToday, combinedFoodLog, formatDate, TabButton, TimeFrameSelector) ...
-  const isToday = (d: Date) => { const t = new Date(); return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear(); };
-  
-  const waterToday = useMemo(() => waterHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.amount, 0), [waterHistory]);
-  
-  const activityToday = useMemo(() => activityHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.caloriesBurned, 0), [activityHistory]);
-  
-  const stepsToday = useMemo(() => {
-      return activityHistory.filter(e => isToday(new Date(e.date))).reduce((sum, e) => sum + extractSteps(e.name), 0);
-  }, [activityHistory]);
-
-  const caloriesConsumedToday = useMemo(() => calorieHistory.filter(e => isToday(new Date(e.date))).reduce((s, e) => s + e.calories, 0), [calorieHistory]);
-
-  const sleepToday = useMemo(() => sleepHistory.find(e => isToday(new Date(e.date))), [sleepHistory]);
-  const moodToday = useMemo(() => moodHistory.find(e => isToday(new Date(e.date))), [moodHistory]);
-
-  const combinedFoodLog = useMemo(() => {
-      const foods = foodHistory.map(f => ({ 
-          date: f.date, 
-          name: f.analysis.description, 
-          calories: f.analysis.calories,
-          type: 'AI Scan'
-      }));
-      const cals = calorieHistory.map(c => ({
-          date: c.date,
-          name: c.name,
-          calories: c.calories,
-          type: 'Manual'
-      }));
-      return [...foods, ...cals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [foodHistory, calorieHistory]);
-
-  const formatDate = (dateStr: string) => {
-      return new Date(dateStr).toLocaleDateString('th-TH', { 
-          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
-      });
-  };
-
-  const TabButton: React.FC<{ id: typeof activeTab, label: string, colorClass: string }> = ({ id, label, colorClass }) => (
-      <button 
-        onClick={() => { setActiveTab(id); setChartTimeFrame('daily'); }} 
-        className={`flex-shrink-0 py-2 px-4 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === id 
-            ? `${colorClass} text-white shadow-sm` 
-            : 'bg-white dark:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400'
-        }`}
-      >
-          {label}
-      </button>
-  );
-
-  const TimeFrameSelector = () => (
-      <div className="flex justify-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg mx-2 my-2 border border-gray-100 dark:border-gray-600">
-          {(['daily', 'weekly', 'monthly'] as const).map(tf => (
-              <button 
-                key={tf}
-                onClick={() => setChartTimeFrame(tf)}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
-                    chartTimeFrame === tf 
-                    ? 'bg-white dark:bg-gray-600 shadow-sm text-indigo-600 dark:text-white' 
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                }`}
-              >
-                  {tf === 'daily' ? 'รายวัน' : tf === 'weekly' ? 'รายสัปดาห์' : 'รายเดือน'}
-              </button>
-          ))}
-      </div>
-  );
-
-  return (
-    <div className="space-y-6 animate-fade-in relative pb-10">
-        <GamificationCard />
-        
-        <PersonalHealthGrid 
-            userProfile={userProfile}
-            bmiHistory={bmiHistory}
-            tdeeHistory={tdeeHistory}
-            clinicalHistory={clinicalHistory} 
-            caloriesConsumed={caloriesConsumedToday}
-            caloriesBurned={activityToday}
-            stepsToday={stepsToday}
-            setActiveView={setActiveView}
-            onOpenMedicalCard={() => setShowMedicalCard(true)}
-        />
-
-        <HealthSummaryCard 
-            userProfile={userProfile} 
-            bmiHistory={bmiHistory} 
-            waterScore={Math.min(100, (waterToday / waterGoal) * 100)}
-            activityScore={Math.min(100, (activityToday / 300) * 100)}
-            sleepScore={sleepToday ? (sleepToday.quality * 20) : 0}
-            moodScore={moodToday ? (11 - moodToday.stressLevel) * 10 : 0}
-        />
-
-        <div className="flex justify-center gap-3">
-            <button onClick={() => setActiveView('assessment')} className="flex items-center gap-2 bg-teal-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-xl hover:bg-teal-600 transition-all text-xs uppercase tracking-wider transform hover:-translate-y-1 w-full sm:w-auto justify-center">
-                <ClipboardCheckIcon className="w-4 h-4" />
-                ทำแบบประเมินสุขภาพใหม่
-            </button>
-        </div>
-
-        {/* --- Health Data Logs Section --- */}
-        <div>
-            <div className="flex items-center justify-between mb-4 px-1">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                    <BookOpenIcon className="w-5 h-5 text-teal-500" />
-                    บันทึกข้อมูลล่าสุด
-                </h3>
-            </div>
-
-            <div className="flex gap-2 pb-2 overflow-x-auto no-scrollbar mb-2">
-                <TabButton id="body" label="ร่างกาย" colorClass="bg-blue-500" />
-                <TabButton id="food" label="โภชนาการ" colorClass="bg-orange-500" />
-                <TabButton id="water" label="น้ำดื่ม" colorClass="bg-sky-500" />
-                <TabButton id="activity" label="กิจกรรม" colorClass="bg-yellow-500" />
-                <TabButton id="sleep" label="การนอน" colorClass="bg-indigo-600" />
-                <TabButton id="mood" label="อารมณ์" colorClass="bg-rose-500" />
-                <TabButton id="habit" label="ความเสี่ยง" colorClass="bg-red-500" />
-                <TabButton id="social" label="สังคม" colorClass="bg-teal-600" />
-            </div>
-
-            <div className="animate-fade-in">
-                {activeTab === 'body' && (
-                    <div className="space-y-4">
-                        <HistoryList 
-                            title="ดัชนีมวลกาย (BMI)" 
-                            icon={<ScaleIcon className="w-4 h-4 text-blue-500" />}
-                            data={bmiHistory}
-                            renderItem={(item) => (
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.value.toFixed(2)}</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                    <span className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">{item.category}</span>
-                                </div>
-                            )}
+                {/* Dynamic Chart Area */}
+                <div>
+                    {activeChartTab === 'bmi' && (
+                        <HealthTrendChart 
+                            data={bmiHistory} 
+                            dataKey="value" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#3b82f6'} 
+                            unit="BMI" 
+                            targetValue={targetValue}
                         />
-                        <HistoryList 
-                            title="การเผาผลาญ (TDEE)" 
-                            icon={<FireIcon className="w-4 h-4 text-orange-500" />}
-                            data={tdeeHistory}
-                            renderItem={(item) => (
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{Math.round(item.value).toLocaleString()} kcal</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                    <span className="text-xs text-gray-400">BMR: {Math.round(item.bmr)}</span>
-                                </div>
-                            )}
+                    )}
+                    {activeChartTab === 'weight' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="weight" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#8b5cf6'} 
+                            unit="Weight (kg)" 
+                            targetValue={targetValue}
                         />
-                    </div>
-                )}
-
-                {activeTab === 'food' && (
-                    <HistoryList 
-                        title="รายการอาหารล่าสุด" 
-                        icon={<BeakerIcon className="w-4 h-4 text-orange-500" />}
-                        data={combinedFoodLog}
-                        extraContent={
-                            <div>
-                                <TimeFrameSelector />
-                                <HealthTrendChart 
-                                    data={combinedFoodLog} 
-                                    dataKey="calories" 
-                                    dateKey="date"
-                                    timeFrame={chartTimeFrame} 
-                                    color="bg-orange-400"
-                                    unit="Kcal"
-                                />
-                            </div>
-                        }
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-lg">🍽️</div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)} • {item.type}</p>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{item.calories} kcal</span>
-                            </div>
-                        )}
-                    />
-                )}
-
-                {/* Other history lists (Water, Activity, Sleep, Mood, Habit, Social) kept similar... */}
-                {activeTab === 'water' && (
-                    <HistoryList 
-                        title="ประวัติการดื่มน้ำ" 
-                        icon={<WaterDropIcon className="w-4 h-4 text-sky-500" />}
-                        data={waterHistory}
-                        extraContent={
-                            <div>
-                                <TimeFrameSelector />
-                                <HealthTrendChart 
-                                    data={waterHistory} 
-                                    dataKey="amount" 
-                                    dateKey="date"
-                                    timeFrame={chartTimeFrame} 
-                                    color="bg-sky-400"
-                                    unit="ml"
-                                />
-                            </div>
-                        }
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-lg">💧</div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.amount} มล.</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    />
-                )}
-
-                {activeTab === 'activity' && (
-                    <HistoryList 
-                        title="กิจกรรมการเคลื่อนไหว" 
-                        icon={<BoltIcon className="w-4 h-4 text-yellow-500" />}
-                        data={activityHistory}
-                        extraContent={
-                            <div>
-                                <TimeFrameSelector />
-                                <HealthTrendChart 
-                                    data={activityHistory} 
-                                    dataKey="caloriesBurned" 
-                                    dateKey="date"
-                                    timeFrame={chartTimeFrame} 
-                                    color="bg-yellow-400"
-                                    unit="Kcal"
-                                    secondaryDataKey="name"
-                                    secondaryExtractor={(item) => extractSteps(item.name)}
-                                />
-                            </div>
-                        }
-                        renderItem={(item) => {
-                            const steps = extractSteps(item.name);
-                            return (
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-lg">🏃</div>
-                                        <div>
-                                            <p className="text-sm font-bold text-gray-800 dark:text-gray-200 line-clamp-1">{item.name}</p>
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                                {steps > 0 && <span className="text-[9px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded-full font-bold">{steps.toLocaleString()} ก้าว</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{item.caloriesBurned} kcal</span>
-                                </div>
-                            );
-                        }}
-                    />
-                )}
-
-                {activeTab === 'sleep' && (
-                    <HistoryList 
-                        title="บันทึกการนอนหลับ" 
-                        icon={<MoonIcon className="w-4 h-4 text-indigo-500" />}
-                        data={sleepHistory}
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-lg">😴</div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.duration.toFixed(1)} ชั่วโมง</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-1">
-                                    {[...Array(item.quality)].map((_, i) => <span key={i} className="text-xs text-yellow-400">★</span>)}
-                                </div>
-                            </div>
-                        )}
-                    />
-                )}
-
-                {activeTab === 'mood' && (
-                    <HistoryList 
-                        title="บันทึกอารมณ์" 
-                        icon={<FaceSmileIcon className="w-4 h-4 text-rose-500" />}
-                        data={moodHistory}
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-2xl">{item.moodEmoji}</span>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">ความเครียด {item.stressLevel}/10</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    />
-                )}
-
-                {activeTab === 'habit' && (
-                    <HistoryList 
-                        title="พฤติกรรมเสี่ยง" 
-                        icon={<NoSymbolIcon className="w-4 h-4 text-red-500" />}
-                        data={habitHistory}
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg ${item.isClean ? 'bg-green-100' : 'bg-red-100'}`}>
-                                        {item.isClean ? '🌿' : '🚬'}
-                                    </div>
-                                    <div>
-                                        <p className={`text-sm font-bold ${item.isClean ? 'text-green-600' : 'text-red-600'}`}>
-                                            {item.isClean ? 'Clean Day (ลดละเลิก)' : `มีความเสี่ยง (${item.type})`}
-                                        </p>
-                                        <p className="text-xs text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                </div>
-                                {!item.isClean && <span className="text-xs font-bold text-red-500">{item.amount} ครั้ง/หน่วย</span>}
-                            </div>
-                        )}
-                    />
-                )}
-
-                {activeTab === 'social' && (
-                    <HistoryList 
-                        title="กิจกรรมทางสังคม" 
-                        icon={<UserGroupIcon className="w-4 h-4 text-teal-500" />}
-                        data={socialHistory}
-                        renderItem={(item) => (
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-lg">🤝</div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{item.interaction}</p>
-                                        <p className="text-[10px] text-gray-500">{formatDate(item.date)}</p>
-                                    </div>
-                                </div>
-                                <span className={`text-xs px-2 py-1 rounded-full ${item.feeling === 'energized' ? 'bg-green-100 text-green-700' : item.feeling === 'drained' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
-                                    {item.feeling}
-                                </span>
-                            </div>
-                        )}
-                    />
-                )}
+                    )}
+                    {activeChartTab === 'systolic' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="systolic" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#f43f5e'} 
+                            unit="BP (Systolic)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'fbs' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="fbs" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#f59e0b'} 
+                            unit="FBS (mg/dL)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'hba1c' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="hba1c" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#ef4444'} 
+                            unit="HbA1c (%)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'waist' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="waist" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#14b8a6'} 
+                            unit="Waist (cm)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'visceral_fat' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="visceral_fat" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#f97316'} 
+                            unit="Visceral Fat (Lv)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'muscle_mass' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="muscle_mass" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#6366f1'} 
+                            unit="Muscle (kg)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                    {activeChartTab === 'bmr' && (
+                        <HealthTrendChart 
+                            data={clinicalHistory} 
+                            dataKey="bmr" 
+                            dateKey="date" 
+                            colorHex={currentTabInfo?.colorHex || '#22c55e'} 
+                            unit="BMR (kcal)" 
+                            targetValue={targetValue}
+                        />
+                    )}
+                </div>
             </div>
-        </div>
 
-        {/* Modal for Medical Card */}
-        {showMedicalCard && <MedicalSummaryModal onClose={() => setShowMedicalCard(false)} />}
-    </div>
-  );
+            {showMedicalCard && <MedicalSummaryModal onClose={() => setShowMedicalCard(false)} />}
+        </div>
+    );
 };
 
 export default Dashboard;

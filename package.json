@@ -19,7 +19,8 @@
     "path": "^0.12.7",
     "@vitejs/plugin-react": "^5.1.2",
     "vite": "^7.3.0",
-    "html2canvas": "1.4.1"
+    "html2canvas": "1.4.1",
+    "recharts": "2.12.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

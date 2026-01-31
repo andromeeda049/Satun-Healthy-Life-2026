@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { fetchAllAdminDataFromSheet, resetUserData, AllAdminData } from '../services/googleSheetService';
-import { ChartBarIcon, UserGroupIcon, FireIcon, HeartIcon, ScaleIcon, SquaresIcon, ClipboardListIcon, ExclamationTriangleIcon, SearchIcon, ArrowLeftIcon, ClipboardCheckIcon, BoltIcon, TrophyIcon, StarIcon, BookOpenIcon } from './icons';
+import { ChartBarIcon, UserGroupIcon, FireIcon, HeartIcon, ScaleIcon, SquaresIcon, ClipboardListIcon, ExclamationTriangleIcon, SearchIcon, ArrowLeftIcon, ClipboardCheckIcon, BoltIcon, TrophyIcon, StarIcon, BookOpenIcon, BeakerIcon, InformationCircleIcon } from './icons';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // --- Helper Components ---
 
@@ -12,6 +13,25 @@ const Spinner: React.FC = () => (
         <p className="text-teal-600 dark:text-teal-400 font-medium">กำลังประมวลผลข้อมูล...</p>
     </div>
 );
+
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 text-xs">
+                <p className="font-bold text-gray-700 dark:text-gray-200 mb-1">{label || payload[0].name}</p>
+                <p className="text-indigo-600 dark:text-indigo-400 font-black">
+                    {payload[0].value.toLocaleString()} คน
+                </p>
+                {payload[0].payload.percent && (
+                    <p className="text-gray-500 text-[10px]">
+                        {(payload[0].payload.percent * 100).toFixed(1)}%
+                    </p>
+                )}
+            </div>
+        );
+    }
+    return null;
+};
 
 const FilterBar: React.FC<{
     orgs: any[],
@@ -55,7 +75,12 @@ const FilterBar: React.FC<{
                             className="w-full p-2.5 pl-9 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                         >
                             <option value="all">ทั้งหมด (All Groups)</option>
-                            {groups && groups.map((g, i) => <option key={i} value={g.id}>{g.name}</option>)}
+                            {groups && groups.map((g, i) => {
+                                // Support raw data keys (GroupId/Name) or app keys (id/name)
+                                const gid = g.id || g.GroupId || g.groupId;
+                                const gname = g.name || g.Name;
+                                return <option key={i} value={gid}>{gname}</option>;
+                            })}
                         </select>
                         <SquaresIcon className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
                     </div>
@@ -115,21 +140,6 @@ const KPICard: React.FC<{ title: string, value: string, subValue?: string, chang
     </div>
 );
 
-const StatBar: React.FC<{ label: string, count: number, total: number, color: string }> = ({ label, count, total, color }) => {
-    const percent = total > 0 ? (count / total) * 100 : 0;
-    return (
-        <div className="mb-3">
-            <div className="flex justify-between text-xs font-medium mb-1">
-                <span className="text-gray-600 dark:text-gray-300">{label}</span>
-                <span className="text-gray-800 dark:text-white font-bold">{count} ({percent.toFixed(1)}%)</span>
-            </div>
-            <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                <div className={`h-full ${color}`} style={{ width: `${percent}%` }}></div>
-            </div>
-        </div>
-    );
-};
-
 interface DashboardStats {
     totalN: number;
     gender: { male: number; female: number; unspecified: number };
@@ -140,6 +150,9 @@ interface DashboardStats {
     ncdBreakdown: Record<string, number>;
     ageGroups: Record<string, number>;
     activeUsersCount: number;
+    orgStats: Record<string, number>;
+    groupStats: Record<string, number>;
+    activityStats: Record<string, number>;
 }
 
 // --- Macro View Logic ---
@@ -151,20 +164,32 @@ const MacroOverview: React.FC<{
     startDate: string, 
     endDate: string 
 }> = ({ adminData, filterOrg, filterGroup, startDate, endDate }) => {
+    const { organizations } = useContext(AppContext);
+    
     if (!adminData) return <div className="text-center py-10 text-gray-400">No Data Loaded</div>;
 
-    const { profiles, bmiHistory, groupMembers } = adminData as any;
+    const { profiles, bmiHistory, groupMembers, groups } = adminData as any;
 
     const stats: DashboardStats = useMemo(() => {
         const start = new Date(startDate);
         const end = new Date(endDate);
         end.setHours(23, 59, 59);
 
+        // Pre-process Group Lookups
         const validUsernamesInGroup = new Set();
-        if (filterGroup && filterGroup !== 'all' && groupMembers) {
+        const userGroupsMap = new Map<string, string[]>();
+        
+        if (groupMembers) {
             groupMembers.forEach((m: any) => {
-                if (m.GroupId === filterGroup || m.groupId === filterGroup) {
-                    validUsernamesInGroup.add(m.Username || m.username);
+                const u = m.Username || m.username;
+                const g = m.GroupId || m.groupId;
+                if (!userGroupsMap.has(u)) userGroupsMap.set(u, []);
+                userGroupsMap.get(u)?.push(g);
+
+                if (filterGroup && filterGroup !== 'all') {
+                    if (g === filterGroup) {
+                        validUsernamesInGroup.add(u);
+                    }
                 }
             });
         }
@@ -186,25 +211,32 @@ const MacroOverview: React.FC<{
         // Counters
         let gender = { male: 0, female: 0, unspecified: 0 };
         let bmiStats = { under: 0, normal: 0, over: 0, obese: 0 };
-        
-        // Waist & WHR separated by gender
-        let waistRiskDetail = { male: 0, female: 0 }; // Male > 90, Female > 80
-        let whrRiskDetail = { male: 0, female: 0 }; // Male >= 0.90, Female >= 0.85
-        
-        let ncdCount = 0; // Total people with NCDs
-        let ncdBreakdown: Record<string, number> = {}; // Breakdown by disease type
-        
+        let waistRiskDetail = { male: 0, female: 0 }; 
+        let whrRiskDetail = { male: 0, female: 0 }; 
+        let ncdCount = 0; 
+        let ncdBreakdown: Record<string, number> = {}; 
         let ageGroups: Record<string, number> = { 'ต่ำกว่า 18': 0, '18-29': 0, '30-39': 0, '40-49': 0, '50-59': 0, '60+': 0, 'ไม่ระบุ': 0 };
         let activeUsersCount = 0;
+        
+        let orgStats: Record<string, number> = {};
+        let groupStats: Record<string, number> = {};
+        let activityStats: Record<string, number> = {};
+
+        const getActivityLabel = (val: any) => {
+            const v = parseFloat(val);
+            if (v <= 1.2) return 'ไม่ออกกำลังกาย';
+            if (v <= 1.375) return 'เล็กน้อย';
+            if (v <= 1.55) return 'ปานกลาง';
+            if (v <= 1.725) return 'หนัก';
+            return 'หนักมาก';
+        };
 
         uniqueUsers.forEach((u: any) => {
-            // 1. Gender Logic
             const sex = u.gender ? u.gender.toLowerCase() : 'unknown';
             if (sex === 'male') gender.male++;
             else if (sex === 'female') gender.female++;
             else gender.unspecified++;
 
-            // 2. Age Logic
             const age = parseInt(u.age);
             if (isNaN(age) || age <= 0) ageGroups['ไม่ระบุ']++;
             else if (age < 18) ageGroups['ต่ำกว่า 18']++;
@@ -214,7 +246,6 @@ const MacroOverview: React.FC<{
             else if (age >= 50 && age <= 59) ageGroups['50-59']++;
             else ageGroups['60+']++;
 
-            // 3. BMI Logic
             const weight = parseFloat(u.weight);
             const height = parseFloat(u.height);
             if (weight > 0 && height > 0) {
@@ -226,22 +257,18 @@ const MacroOverview: React.FC<{
                 else bmiStats.obese++;
             }
 
-            // 4. Waist & WHR Risk Logic (Gender Specific)
             const waist = parseFloat(u.waist);
             const hip = parseFloat(u.hip);
-            
             if (waist > 0) {
                 if (sex === 'male' && waist > 90) waistRiskDetail.male++;
                 if (sex === 'female' && waist > 80) waistRiskDetail.female++;
             }
-
             if (waist > 0 && hip > 0) {
                 const whr = waist / hip;
                 if (sex === 'male' && whr >= 0.90) whrRiskDetail.male++;
                 if (sex === 'female' && whr >= 0.85) whrRiskDetail.female++;
             }
 
-            // 5. NCDs Breakdown
             const condition = u.healthCondition;
             if (condition && condition !== 'ไม่มีโรคประจำตัว' && condition !== 'N/A' && condition !== '-') {
                 ncdCount++;
@@ -249,24 +276,71 @@ const MacroOverview: React.FC<{
                 ncdBreakdown[disease] = (ncdBreakdown[disease] || 0) + 1;
             }
 
-            // Check Activity Log overlap
+            const orgId = u.organization || 'general';
+            orgStats[orgId] = (orgStats[orgId] || 0) + 1;
+
+            const actLabel = getActivityLabel(u.activityLevel);
+            activityStats[actLabel] = (activityStats[actLabel] || 0) + 1;
+
+            const userGs = userGroupsMap.get(u.username);
+            if (userGs && userGs.length > 0) {
+                userGs.forEach(gid => {
+                    groupStats[gid] = (groupStats[gid] || 0) + 1;
+                });
+            } else {
+                groupStats['no_group'] = (groupStats['no_group'] || 0) + 1;
+            }
+
             const userLogs = (bmiHistory || []).filter((b: any) => b.username === u.username);
             if (userLogs.length > 0) activeUsersCount++;
         });
 
         return { 
-            totalN, 
-            gender, 
-            bmiStats, 
-            waistRiskDetail, 
-            whrRiskDetail, 
-            ncdCount, 
-            ncdBreakdown, 
-            ageGroups, 
-            activeUsersCount
+            totalN, gender, bmiStats, waistRiskDetail, whrRiskDetail, 
+            ncdCount, ncdBreakdown, ageGroups, activeUsersCount,
+            orgStats, groupStats, activityStats
         };
 
     }, [profiles, bmiHistory, groupMembers, filterOrg, filterGroup, startDate, endDate]);
+
+    const genderData = [
+        { name: 'ชาย', value: stats.gender.male },
+        { name: 'หญิง', value: stats.gender.female },
+        { name: 'ไม่ระบุ', value: stats.gender.unspecified }
+    ].filter(d => d.value > 0);
+    const GENDER_COLORS = ['#3B82F6', '#EC4899', '#9CA3AF'];
+
+    const ageData = Object.entries(stats.ageGroups).map(([name, value]) => ({ name, value }));
+
+    const bmiData = [
+        { name: 'ผอม', value: stats.bmiStats.under },
+        { name: 'สมส่วน', value: stats.bmiStats.normal },
+        { name: 'ท้วม', value: stats.bmiStats.over },
+        { name: 'อ้วน', value: stats.bmiStats.obese }
+    ].filter(d => d.value > 0);
+    const BMI_COLORS = ['#60A5FA', '#22C55E', '#FACC15', '#EF4444'];
+
+    const ncdData = Object.entries(stats.ncdBreakdown)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+    const orgNameMap = (organizations || []).reduce((acc: any, o: any) => { acc[o.id] = o.name; return acc; }, {});
+    const orgData = Object.entries(stats.orgStats)
+        .map(([id, value]) => ({ name: orgNameMap[id] || id, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 15);
+
+    const groupNameMap = (groups || []).reduce((acc: any, g: any) => { 
+        const id = g.id || g.GroupId || g.groupId;
+        const name = g.name || g.Name;
+        if (id) acc[String(id)] = name; 
+        return acc; 
+    }, {});
+    const groupData = Object.entries(stats.groupStats)
+        .map(([id, value]) => ({ name: groupNameMap[String(id)] || (String(id) === 'no_group' ? 'ไม่มีกลุ่ม' : String(id)), value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 15);
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -275,161 +349,102 @@ const MacroOverview: React.FC<{
                 <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">สถิติและผลลัพธ์สุขภาพ (Statistics & Outcomes)</h2>
             </div>
 
-            {/* KPI Cards Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard 
-                    title="กลุ่มตัวอย่าง (N)" 
-                    value={stats.totalN.toLocaleString()} 
-                    subValue={`ชาย ${stats.gender.male} | หญิง ${stats.gender.female}`} 
-                    icon={<UserGroupIcon />} 
-                    color="text-blue-600" 
-                />
-                <KPICard 
-                    title="กลุ่มเสี่ยงโรค (NCDs)" 
-                    value={stats.ncdCount.toLocaleString()} 
-                    subValue={`คิดเป็น ${stats.totalN > 0 ? ((stats.ncdCount/stats.totalN)*100).toFixed(1) : 0}%`} 
-                    icon={<HeartIcon />} 
-                    color="text-rose-500" 
-                />
-                <KPICard 
-                    title="เสี่ยงรอบเอว (รวม)" 
-                    value={(stats.waistRiskDetail.male + stats.waistRiskDetail.female).toLocaleString()} 
-                    subValue={`ชาย ${stats.waistRiskDetail.male} | หญิง ${stats.waistRiskDetail.female}`} 
-                    icon={<ScaleIcon />} 
-                    color="text-orange-500" 
-                />
-                <KPICard 
-                    title="เสี่ยง WHR (รวม)" 
-                    value={(stats.whrRiskDetail.male + stats.whrRiskDetail.female).toLocaleString()} 
-                    subValue={`อัตราส่วนสะโพกเกินเกณฑ์`} 
-                    icon={<ExclamationTriangleIcon />} 
-                    color="text-red-600" 
-                />
+                <KPICard title="กลุ่มตัวอย่าง (N)" value={stats.totalN.toLocaleString()} subValue={`ชาย ${stats.gender.male} | หญิง ${stats.gender.female}`} icon={<UserGroupIcon />} color="text-blue-600" />
+                <KPICard title="กลุ่มเสี่ยงโรค (NCDs)" value={stats.ncdCount.toLocaleString()} subValue={`คิดเป็น ${stats.totalN > 0 ? ((stats.ncdCount/stats.totalN)*100).toFixed(1) : 0}%`} icon={<HeartIcon />} color="text-rose-500" />
+                <KPICard title="เสี่ยงรอบเอว (รวม)" value={(stats.waistRiskDetail.male + stats.waistRiskDetail.female).toLocaleString()} subValue={`ชาย ${stats.waistRiskDetail.male} | หญิง ${stats.waistRiskDetail.female}`} icon={<ScaleIcon />} color="text-orange-500" />
+                <KPICard title="เสี่ยง WHR (รวม)" value={(stats.whrRiskDetail.male + stats.whrRiskDetail.female).toLocaleString()} subValue={`อัตราส่วนสะโพกเกินเกณฑ์`} icon={<ExclamationTriangleIcon />} color="text-red-600" />
             </div>
 
-            {/* Detailed Stats Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* 1. Demographics (Gender & Age) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
-                    <div>
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                            <UserGroupIcon className="w-5 h-5 text-blue-500"/> 
-                            ประชากรศาสตร์ (Demographics)
-                        </h3>
-                        <div className="space-y-1">
-                            <StatBar label="ชาย (Male)" count={stats.gender.male} total={stats.totalN} color="bg-blue-500" />
-                            <StatBar label="หญิง (Female)" count={stats.gender.female} total={stats.totalN} color="bg-pink-500" />
-                            <StatBar label="ไม่ระบุ (Unspecified)" count={stats.gender.unspecified} total={stats.totalN} color="bg-gray-400" />
-                        </div>
-                    </div>
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">ช่วงอายุ (Age Groups)</h4>
-                        <div className="space-y-2">
-                            {Object.entries(stats.ageGroups).map(([range, count]) => {
-                                if (count === 0) return null;
-                                return (
-                                    <div key={range} className="flex items-center justify-between">
-                                        <span className="text-xs text-gray-600 dark:text-gray-300">{range} ปี</span>
-                                        <span className="text-xs font-bold text-gray-800 dark:text-white">{count} คน</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-96 flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><UserGroupIcon className="w-5 h-5 text-blue-500"/> ประชากรศาสตร์ (Gender)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={genderData} cx="50%" cy="50%" outerRadius={100} fill="#8884d8" dataKey="value" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                    {genderData.map((entry, index) => <Cell key={`cell-${index}`} fill={GENDER_COLORS[index % GENDER_COLORS.length]} />)}
+                                </Pie>
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
-
-                {/* 2. Health Status (BMI & NCDs) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-6">
-                    <div>
-                        <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                            <ScaleIcon className="w-5 h-5 text-teal-500"/> 
-                            ภาวะโภชนาการ (BMI)
-                        </h3>
-                        <div className="space-y-1">
-                            <StatBar label="ผอม (Underweight)" count={stats.bmiStats.under} total={stats.totalN} color="bg-blue-400" />
-                            <StatBar label="สมส่วน (Normal)" count={stats.bmiStats.normal} total={stats.totalN} color="bg-green-500" />
-                            <StatBar label="ท้วม (Overweight)" count={stats.bmiStats.over} total={stats.totalN} color="bg-yellow-400" />
-                            <StatBar label="โรคอ้วน (Obese)" count={stats.bmiStats.obese} total={stats.totalN} color="bg-red-500" />
-                        </div>
-                    </div>
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase">โรคประจำตัว (NCDs Breakdown)</h4>
-                        {Object.keys(stats.ncdBreakdown).length > 0 ? (
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                                {Object.entries(stats.ncdBreakdown)
-                                    .sort(([,a], [,b]) => b - a)
-                                    .map(([disease, count]) => (
-                                    <div key={disease} className="flex items-center justify-between p-2 bg-rose-50 dark:bg-rose-900/20 rounded-lg">
-                                        <span className="text-xs font-medium text-rose-800 dark:text-rose-200 truncate max-w-[70%]">{disease}</span>
-                                        <div className="text-xs font-bold text-rose-600 dark:text-rose-300">
-                                            {count} <span className="opacity-70 text-[9px]">({((count/stats.totalN)*100).toFixed(1)}%)</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-xs text-gray-400 text-center py-2">ไม่มีข้อมูลกลุ่มเสี่ยง</p>
-                        )}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-96 flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><ChartBarIcon className="w-5 h-5 text-indigo-500"/> ช่วงอายุ (Age Groups)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={ageData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                <YAxis allowDecimals={false} />
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Bar dataKey="value" fill="#6366F1" radius={[4, 4, 0, 0]} name="จำนวน (คน)" />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
+            </div>
 
-                {/* 3. Metabolic Risk (Waist & WHR) */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                        <BoltIcon className="w-5 h-5 text-indigo-500"/> 
-                        ความเสี่ยงเมตาบอลิก (Metabolic Risk)
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800">
-                            <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">รอบเอวเกินเกณฑ์ (Waist Risk)</p>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-600 dark:text-gray-300">ชาย (&gt;90 ซม.)</span>
-                                    <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
-                                        {stats.waistRiskDetail.male} <span className="text-[10px] opacity-70">({stats.gender.male > 0 ? ((stats.waistRiskDetail.male/stats.gender.male)*100).toFixed(1) : 0}%)</span>
-                                    </span>
-                                </div>
-                                <div className="w-full bg-orange-200 dark:bg-orange-900 rounded-full h-1.5">
-                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${stats.gender.male > 0 ? (stats.waistRiskDetail.male/stats.gender.male)*100 : 0}%` }}></div>
-                                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-96 flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><ScaleIcon className="w-5 h-5 text-teal-500"/> ภาวะโภชนาการ (BMI)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={bmiData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value">
+                                    {bmiData.map((entry, index) => <Cell key={`cell-${index}`} fill={BMI_COLORS[index % BMI_COLORS.length]} />)}
+                                </Pie>
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Legend layout="vertical" verticalAlign="middle" align="right" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-96 flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><HeartIcon className="w-5 h-5 text-rose-500"/> โรคประจำตัว (Top NCDs)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={ncdData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                                <XAxis type="number" allowDecimals={false} />
+                                <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Bar dataKey="value" fill="#F43F5E" radius={[0, 4, 4, 0]} name="จำนวน (คน)" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
 
-                                <div className="flex justify-between items-center mt-3">
-                                    <span className="text-xs text-gray-600 dark:text-gray-300">หญิง (&gt;80 ซม.)</span>
-                                    <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
-                                        {stats.waistRiskDetail.female} <span className="text-[10px] opacity-70">({stats.gender.female > 0 ? ((stats.waistRiskDetail.female/stats.gender.female)*100).toFixed(1) : 0}%)</span>
-                                    </span>
-                                </div>
-                                <div className="w-full bg-orange-200 dark:bg-orange-900 rounded-full h-1.5">
-                                    <div className="h-full bg-orange-500 rounded-full" style={{ width: `${stats.gender.female > 0 ? (stats.waistRiskDetail.female/stats.gender.female)*100 : 0}%` }}></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-800">
-                            <p className="text-xs font-bold text-red-600 dark:text-red-400 uppercase mb-2">WHR เกินเกณฑ์ (Waist-Hip Ratio)</p>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-600 dark:text-gray-300">ชาย (&ge; 0.90)</span>
-                                    <span className="text-sm font-bold text-red-700 dark:text-red-300">
-                                        {stats.whrRiskDetail.male} <span className="text-[10px] opacity-70">({stats.gender.male > 0 ? ((stats.whrRiskDetail.male/stats.gender.male)*100).toFixed(1) : 0}%)</span>
-                                    </span>
-                                </div>
-                                <div className="w-full bg-red-200 dark:bg-red-900 rounded-full h-1.5">
-                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${stats.gender.male > 0 ? (stats.whrRiskDetail.male/stats.gender.male)*100 : 0}%` }}></div>
-                                </div>
-
-                                <div className="flex justify-between items-center mt-3">
-                                    <span className="text-xs text-gray-600 dark:text-gray-300">หญิง (&ge; 0.85)</span>
-                                    <span className="text-sm font-bold text-red-700 dark:text-red-300">
-                                        {stats.whrRiskDetail.female} <span className="text-[10px] opacity-70">({stats.gender.female > 0 ? ((stats.whrRiskDetail.female/stats.gender.female)*100).toFixed(1) : 0}%)</span>
-                                    </span>
-                                </div>
-                                <div className="w-full bg-red-200 dark:bg-red-900 rounded-full h-1.5">
-                                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${stats.gender.female > 0 ? (stats.whrRiskDetail.female/stats.gender.female)*100 : 0}%` }}></div>
-                                </div>
-                            </div>
-                        </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-[500px] flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><ClipboardListIcon className="w-5 h-5 text-indigo-500"/> แยกตามหน่วยงาน (Organizations)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={orgData} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                                <XAxis type="number" allowDecimals={false} />
+                                <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Bar dataKey="value" fill="#6366F1" radius={[0, 4, 4, 0]} name="จำนวน (คน)" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 h-[500px] flex flex-col">
+                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2"><UserGroupIcon className="w-5 h-5 text-orange-500"/> แยกตามกลุ่ม (Groups)</h3>
+                    <div className="flex-1 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={groupData} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                                <XAxis type="number" allowDecimals={false} />
+                                <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10 }} />
+                                <RechartsTooltip content={<CustomChartTooltip />} />
+                                <Bar dataKey="value" fill="#F97316" radius={[0, 4, 4, 0]} name="จำนวน (คน)" />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
@@ -437,7 +452,7 @@ const MacroOverview: React.FC<{
     );
 };
 
-// --- Outcome Analysis Component ---
+// --- Outcome Analysis Component (UPDATED FIX) ---
 
 const OutcomeAnalysis: React.FC<{ 
     adminData: AllAdminData | null, 
@@ -448,7 +463,7 @@ const OutcomeAnalysis: React.FC<{
 }> = ({ adminData, filterOrg, filterGroup, startDate, endDate }) => {
     if (!adminData) return <div className="text-center py-10 text-gray-400">No Data Loaded</div>;
 
-    const { profiles, bmiHistory, quizHistory, groupMembers } = adminData as any;
+    const { profiles, bmiHistory, quizHistory, groupMembers, clinicalHistory, evaluationHistory } = adminData as any;
 
     const outcomes = useMemo(() => {
         const start = new Date(startDate);
@@ -473,15 +488,177 @@ const OutcomeAnalysis: React.FC<{
             validUsernames.add(p.username);
         });
 
-        // 2. Health Literacy Outcome (Separated Pre & Post)
+        // --- Aggregated Clinical Progression Table ---
+        const metrics = [
+            { key: 'weight', label: 'น้ำหนัก (Weight)', unit: 'kg', goal: 'ลดลง', dir: 'desc' },
+            { key: 'bmi', label: 'ดัชนีมวลกาย (BMI)', unit: 'kg/m²', goal: '18.5-22.9', dir: 'desc' },
+            { key: 'systolic', label: 'ความดันตัวบน (SBP)', unit: 'mmHg', goal: '< 120', dir: 'desc' },
+            { key: 'diastolic', label: 'ความดันตัวล่าง (DBP)', unit: 'mmHg', goal: '< 80', dir: 'desc' },
+            { key: 'fbs', label: 'น้ำตาล (FBS)', unit: 'mg/dL', goal: '< 100', dir: 'desc' },
+            { key: 'hba1c', label: 'น้ำตาลสะสม (HbA1c)', unit: '%', goal: '< 6.5', dir: 'desc' },
+            { key: 'waist', label: 'รอบเอว (Waist)', unit: 'cm', goal: 'M<90, F<80', dir: 'desc' },
+            { key: 'visceral_fat', label: 'ไขมันช่องท้อง', unit: 'Lv', goal: '< 10', dir: 'desc' },
+            { key: 'muscle_mass', label: 'มวลกล้ามเนื้อ', unit: 'kg', goal: 'เพิ่มขึ้น', dir: 'asc' },
+        ];
+
+        const aggStats: Record<string, { 
+            baseline: { sum: number, count: number },
+            latest: { sum: number, count: number },
+            comparison: { improved: number, worsened: number, same: number, total: number } 
+        }> = {};
+
+        metrics.forEach(m => {
+            aggStats[m.key] = {
+                baseline: { sum: 0, count: 0 },
+                latest: { sum: 0, count: 0 },
+                comparison: { improved: 0, worsened: 0, same: 0, total: 0 }
+            };
+        });
+
+        validUsernames.forEach(username => {
+            const userBmiLogs = (bmiHistory || [])
+                .filter((b: any) => b.username === username)
+                .map((b: any) => ({ ...b, type: 'bmi' }));
+            
+            const userClinicalLogs = (clinicalHistory || [])
+                .filter((c: any) => c.username === username)
+                .map((c: any) => ({ ...c, type: 'clinical' }));
+
+            const allLogs = [...userBmiLogs, ...userClinicalLogs].sort((a, b) => new Date(a.date || a.timestamp).getTime() - new Date(b.date || b.timestamp).getTime());
+
+            if (allLogs.length === 0) return;
+
+            metrics.forEach(m => {
+                const getValue = (log: any) => {
+                    if (!log) return null;
+                    if (m.key === 'bmi' && log.value) return parseFloat(log.value);
+                    if (log[m.key]) return parseFloat(log[m.key]);
+                    return null;
+                };
+
+                const validMetricLogs = allLogs.filter(l => getValue(l) !== null);
+                
+                if (validMetricLogs.length > 0) {
+                    const firstLog = validMetricLogs[0];
+                    const lastLog = validMetricLogs[validMetricLogs.length - 1];
+                    const firstVal = getValue(firstLog);
+                    const lastVal = getValue(lastLog);
+
+                    if (firstVal !== null) {
+                        aggStats[m.key].baseline.sum += firstVal;
+                        aggStats[m.key].baseline.count++;
+                    }
+                    if (lastVal !== null) {
+                        aggStats[m.key].latest.sum += lastVal;
+                        aggStats[m.key].latest.count++;
+                    }
+
+                    if (validMetricLogs.length >= 2 && firstVal !== null && lastVal !== null) {
+                        aggStats[m.key].comparison.total++;
+                        if (firstVal === lastVal) {
+                            aggStats[m.key].comparison.same++;
+                        } else if (m.dir === 'asc') {
+                            if (lastVal > firstVal) aggStats[m.key].comparison.improved++;
+                            else aggStats[m.key].comparison.worsened++;
+                        } else {
+                            if (lastVal < firstVal) aggStats[m.key].comparison.improved++;
+                            else aggStats[m.key].comparison.worsened++;
+                        }
+                    }
+                }
+            });
+        });
+
+        const clinicalTableData = metrics.map(m => {
+            const s = aggStats[m.key];
+            const avg = (d: {sum:number, count:number}) => d.count > 0 ? (d.sum / d.count).toFixed(1) : '-';
+            const totalComp = s.comparison.total;
+            const impPct = totalComp > 0 ? ((s.comparison.improved / totalComp) * 100).toFixed(0) : '0';
+            const worPct = totalComp > 0 ? ((s.comparison.worsened / totalComp) * 100).toFixed(0) : '0';
+            const samePct = totalComp > 0 ? ((s.comparison.same / totalComp) * 100).toFixed(0) : '0';
+
+            return {
+                label: m.label,
+                unit: m.unit,
+                goal: m.goal,
+                baseline: { val: avg(s.baseline), n: s.baseline.count },
+                latest: { val: avg(s.latest), n: s.latest.count },
+                comparison: {
+                    improved: { n: s.comparison.improved, pct: impPct },
+                    worsened: { n: s.comparison.worsened, pct: worPct },
+                    same: { n: s.comparison.same, pct: samePct },
+                    total: totalComp
+                }
+            };
+        });
+
+        // --- Evaluation (Satisfaction & Outcomes) Analysis ---
+        const validEvaluations = (evaluationHistory || []).filter((e: any) => {
+            if (!validUsernames.has(e.username)) return false;
+            const eDate = new Date(e.timestamp || e.date);
+            return eDate >= start && eDate <= end;
+        });
+
+        const totalEvals = validEvaluations.length;
+        const satKeys = ['usability', 'features', 'benefit', 'overall', 'recommend'];
+        const satSums: Record<string, number> = {};
+        satKeys.forEach(k => satSums[k] = 0);
+
+        const outKeys = ['nutrition', 'activity', 'sleep', 'stress', 'risk', 'overall'];
+        const outCounts: Record<string, { improved: number, same: number, worse: number }> = {};
+        outKeys.forEach(k => outCounts[k] = { improved: 0, same: 0, worse: 0 });
+
+        validEvaluations.forEach((e: any) => {
+            let sat = e.satisfaction_json || e.satisfaction;
+            if (typeof sat === 'string') { try { sat = JSON.parse(sat); } catch(err) { sat = {}; } }
+            if (sat) {
+                satKeys.forEach(k => {
+                    const val = parseFloat(sat[k]);
+                    if (!isNaN(val)) satSums[k] += val;
+                });
+            }
+
+            let out = e.outcomes_json || e.outcomes;
+            if (typeof out === 'string') { try { out = JSON.parse(out); } catch(err) { out = {}; } }
+            if (out) {
+                outKeys.forEach(k => {
+                    const val = out[k];
+                    if (val === 'much_better' || val === 'better') outCounts[k].improved++;
+                    else if (val === 'same') outCounts[k].same++;
+                    else if (val === 'worse') outCounts[k].worse++;
+                });
+            }
+        });
+
+        const satAverages = satKeys.map(k => ({
+            key: k,
+            avg: totalEvals > 0 ? (satSums[k] / totalEvals).toFixed(2) : '0.00'
+        }));
+
+        const outPercentages = outKeys.map(k => ({
+            key: k,
+            improved: totalEvals > 0 ? ((outCounts[k].improved / totalEvals) * 100).toFixed(1) : '0',
+            same: totalEvals > 0 ? ((outCounts[k].same / totalEvals) * 100).toFixed(1) : '0',
+            worse: totalEvals > 0 ? ((outCounts[k].worse / totalEvals) * 100).toFixed(1) : '0',
+            n: totalEvals
+        }));
+
+        const evaluationStats = { totalEvals, satAverages, outPercentages };
+
+        // ... (Literacy & BMI Migration Logic) ...
         const preScores: number[] = [];
         const postScores: number[] = [];
-        
         const userQuizMap: Record<string, { pre: number | null, post: number | null }> = {};
 
         (quizHistory || []).forEach((q: any) => {
             if (!validUsernames.has(q.username)) return;
-            const qDate = new Date(q.date);
+            
+            // Fix: Use 'timestamp' if 'date' is undefined (Admin data vs User data structure)
+            const dateStr = q.timestamp || q.date;
+            if (!dateStr) return;
+
+            const qDate = new Date(dateStr);
+            if (isNaN(qDate.getTime())) return;
             if (qDate < start || qDate > end) return;
 
             if (q.type === 'pre-test') preScores.push(q.score);
@@ -517,20 +694,18 @@ const OutcomeAnalysis: React.FC<{
             return { n, pass, passPct, avg, max, min };
         };
 
-        const detailedStats = {
-            pre: calculateStats(preScores),
-            post: calculateStats(postScores)
-        };
-
         const literacyStats = {
             totalPairs,
             avgImprovement: totalPairs > 0 ? (totalImprovement / totalPairs).toFixed(1) : 0,
             improvedPct: totalPairs > 0 ? (countImproved / totalPairs) * 100 : 0,
-            detailed: detailedStats
+            detailed: {
+                pre: calculateStats(preScores),
+                post: calculateStats(postScores)
+            }
         };
 
-        // 3. Clinical Outcome (BMI Migration)
-        const getBmiScore = (cat: string) => {
+        // BMI Migration
+        const getBmiScoreForFlow = (cat: string) => {
             if (!cat) return -1;
             if (cat.includes('ผอม') || cat.includes('Under')) return 0;
             if (cat.includes('สมส่วน') || cat.includes('Normal')) return 1;
@@ -558,41 +733,44 @@ const OutcomeAnalysis: React.FC<{
             }
         });
 
-        let successMigration = 0;
-        let maintainedNormal = 0;
-        let totalBmiUsers = 0;
         const migrationFlow: string[] = [];
-
         Object.values(bmiUserMap).forEach(({ start, end }) => {
             if (start && end && start !== end) {
-                const startScore = getBmiScore(start.category);
-                const endScore = getBmiScore(end.category);
+                const startScore = getBmiScoreForFlow(start.category);
+                const endScore = getBmiScoreForFlow(end.category);
                 if (startScore !== -1 && endScore !== -1) {
-                    totalBmiUsers++;
                     if (endScore < startScore && startScore > 1) {
-                        successMigration++;
                         migrationFlow.push(`${start.category} -> ${end.category}`);
-                    } else if (startScore === 1 && endScore === 1) {
-                        maintainedNormal++;
                     }
                 }
             }
         });
 
-        const bmiStats = {
-            totalUsers: totalBmiUsers,
-            successRate: totalBmiUsers > 0 ? ((Number(successMigration) + Number(maintainedNormal)) / Number(totalBmiUsers)) * 100 : 0,
-            improvedCount: successMigration,
-            maintainedCount: maintainedNormal,
-            flows: migrationFlow.reduce((acc, curr) => {
-                acc[curr] = (acc[curr] || 0) + 1;
-                return acc;
-            }, {} as Record<string, number>)
-        };
+        const migrationFlows = migrationFlow.reduce((acc, curr) => {
+            acc[curr] = (acc[curr] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
 
-        return { literacyStats, bmiStats };
+        return { literacyStats, migrationFlows, clinicalTableData, evaluationStats };
 
-    }, [profiles, quizHistory, bmiHistory, groupMembers, filterOrg, filterGroup, startDate, endDate]);
+    }, [profiles, quizHistory, bmiHistory, groupMembers, clinicalHistory, evaluationHistory, filterOrg, filterGroup, startDate, endDate]);
+
+    const satLabels: Record<string, string> = {
+        usability: 'ความง่ายในการใช้งาน',
+        features: 'ความครบถ้วนของฟีเจอร์',
+        benefit: 'ประโยชน์ที่ได้รับ',
+        overall: 'ความพึงพอใจโดยรวม',
+        recommend: 'การแนะนำบอกต่อ'
+    };
+
+    const outLabels: Record<string, string> = {
+        nutrition: 'พฤติกรรมการกิน',
+        activity: 'การเคลื่อนไหว',
+        sleep: 'คุณภาพการนอน',
+        stress: 'การจัดการความเครียด',
+        risk: 'การลดพฤติกรรมเสี่ยง',
+        overall: 'สุขภาพโดยรวม'
+    };
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -602,19 +780,69 @@ const OutcomeAnalysis: React.FC<{
                 <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">ผลลัพธ์และการเปลี่ยนแปลง (Impact Analysis)</h2>
             </div>
 
-            {/* 1. Health Literacy Section */}
+            {/* 1. Clinical Outcomes Section */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                        <BeakerIcon className="w-6 h-6 text-orange-500" />
+                        1. ผลลัพธ์ทางคลินิกเฉลี่ย (Average Clinical Progression)
+                    </h3>
+                </div>
+
+                {/* Methodology Explanation */}
+                <div className="mb-6 bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                    <h4 className="text-sm font-bold text-indigo-700 dark:text-indigo-300 mb-2 flex items-center gap-2">
+                        <InformationCircleIcon className="w-4 h-4" /> วิธีการคำนวณ (Methodology):
+                    </h4>
+                    <ul className="text-xs text-indigo-600 dark:text-indigo-300 list-disc pl-5 space-y-1">
+                        <li><strong>การประเมินผล:</strong> เปรียบเทียบค่า <em>"ครั้งแรกสุด (First)"</em> กับ <em>"ครั้งล่าสุด (Latest)"</em> ของผู้ใช้งานแต่ละคนที่มีข้อมูลอย่างน้อย 2 ครั้ง</li>
+                        <li><strong>ดีขึ้น (Improved):</strong> ค่ามีการเปลี่ยนแปลงไปในทิศทางที่ดีขึ้นตามเป้าหมายทางการแพทย์</li>
+                        <li><strong>แย่ลง (Worsened):</strong> ค่ามีการเปลี่ยนแปลงไปในทิศทางตรงกันข้ามกับเป้าหมาย</li>
+                    </ul>
+                </div>
+
+                <div className="overflow-x-auto bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 text-xs uppercase font-bold">
+                            <tr>
+                                <th className="p-4 rounded-tl-xl w-1/5 whitespace-nowrap">ตัวชี้วัด (Indicator)</th>
+                                <th className="p-4 text-center">เฉลี่ยเริ่มต้น (Avg Start)</th>
+                                <th className="p-4 text-center">เฉลี่ยล่าสุด (Avg Latest)</th>
+                                <th className="p-4 text-center bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-300">ดีขึ้น (Improved)</th>
+                                <th className="p-4 text-center bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-300">แย่ลง (Worsened)</th>
+                                <th className="p-4 text-center text-gray-500">คงที่ (Same)</th>
+                                <th className="p-4 text-center text-blue-600 dark:text-blue-400 rounded-tr-xl">เป้าหมาย (Goal)</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
+                            {outcomes.clinicalTableData.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td className="p-4 font-bold text-gray-700 dark:text-gray-300 whitespace-nowrap">{row.label}</td>
+                                    <td className="p-4 text-center"><div className="font-bold text-gray-800 dark:text-white">{row.baseline.val}</div><div className="text-[9px] text-gray-400">N={row.baseline.n}</div></td>
+                                    <td className="p-4 text-center"><div className={`font-bold ${row.latest.val !== '-' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}`}>{row.latest.val}</div><div className="text-[9px] text-gray-400">N={row.latest.n}</div></td>
+                                    <td className="p-4 text-center bg-green-50/50 dark:bg-green-900/10"><div className="font-bold text-green-600 dark:text-green-400">{row.comparison.improved.n}</div><div className="text-[9px] text-green-500">({row.comparison.improved.pct}%)</div></td>
+                                    <td className="p-4 text-center bg-red-50/50 dark:bg-red-900/10"><div className="font-bold text-red-600 dark:text-red-400">{row.comparison.worsened.n}</div><div className="text-[9px] text-red-500">({row.comparison.worsened.pct}%)</div></td>
+                                    <td className="p-4 text-center"><div className="font-bold text-gray-500 dark:text-gray-400">{row.comparison.same.n}</div><div className="text-[9px] text-gray-400">({row.comparison.same.pct}%)</div></td>
+                                    <td className="p-4 text-center"><span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded text-xs font-bold border border-blue-200 dark:border-blue-800 whitespace-nowrap">{row.goal}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* 2. Health Literacy Section */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
                         <BookOpenIcon className="w-6 h-6 text-teal-500" />
-                        ความรอบรู้ทางสุขภาพ (Health Literacy Outcome)
+                        2. ความรอบรู้ทางสุขภาพ (Health Literacy Outcome)
                     </h3>
                     <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
                         Pairs N = {outcomes.literacyStats.totalPairs}
                     </span>
                 </div>
 
-                {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-100 dark:border-teal-800 flex items-center justify-between">
                         <div>
@@ -632,7 +860,6 @@ const OutcomeAnalysis: React.FC<{
                     </div>
                 </div>
 
-                {/* Detailed Comparison Table */}
                 <div className="overflow-x-auto bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 text-xs uppercase font-bold">
@@ -644,94 +871,114 @@ const OutcomeAnalysis: React.FC<{
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-600">
                             <tr>
-                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">จำนวนผู้ทำแบบทดสอบ (N)</td>
-                                <td className="p-4 text-center font-bold text-gray-800 dark:text-white">{outcomes.literacyStats.detailed.pre.n}</td>
-                                <td className="p-4 text-center font-bold text-gray-800 dark:text-white">{outcomes.literacyStats.detailed.post.n}</td>
-                            </tr>
-                            <tr>
-                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">จำนวนผู้ที่ผ่านเกณฑ์ (≥ 80%)</td>
-                                <td className="p-4 text-center text-gray-600 dark:text-gray-300">
-                                    {outcomes.literacyStats.detailed.pre.pass} 
-                                    <span className="text-xs ml-1 text-gray-400">({outcomes.literacyStats.detailed.pre.passPct.toFixed(1)}%)</span>
-                                </td>
-                                <td className="p-4 text-center font-bold text-teal-600 dark:text-teal-400">
-                                    {outcomes.literacyStats.detailed.post.pass} 
-                                    <span className="text-xs ml-1">({outcomes.literacyStats.detailed.post.passPct.toFixed(1)}%)</span>
-                                </td>
-                            </tr>
-                            <tr>
                                 <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนเฉลี่ย (Mean Score)</td>
                                 <td className="p-4 text-center font-mono text-gray-600 dark:text-gray-300">{outcomes.literacyStats.detailed.pre.avg.toFixed(2)}</td>
                                 <td className="p-4 text-center font-mono font-bold text-teal-600 dark:text-teal-400">{outcomes.literacyStats.detailed.post.avg.toFixed(2)}</td>
                             </tr>
                             <tr>
-                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนสูงสุด / ต่ำสุด (Max/Min)</td>
-                                <td className="p-4 text-center text-xs text-gray-500">
-                                    Max: {outcomes.literacyStats.detailed.pre.max} / Min: {outcomes.literacyStats.detailed.pre.min}
-                                </td>
-                                <td className="p-4 text-center text-xs text-gray-500">
-                                    Max: {outcomes.literacyStats.detailed.post.max} / Min: {outcomes.literacyStats.detailed.post.min}
-                                </td>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">ผ่านเกณฑ์ (≥ 80%)</td>
+                                <td className="p-4 text-center text-gray-600 dark:text-gray-300">{outcomes.literacyStats.detailed.pre.passPct.toFixed(1)}%</td>
+                                <td className="p-4 text-center font-bold text-teal-600 dark:text-teal-400">{outcomes.literacyStats.detailed.post.passPct.toFixed(1)}%</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนสูงสุด (Max Score)</td>
+                                <td className="p-4 text-center text-gray-600 dark:text-gray-300">{outcomes.literacyStats.detailed.pre.max.toFixed(0)}</td>
+                                <td className="p-4 text-center font-bold text-teal-600 dark:text-teal-400">{outcomes.literacyStats.detailed.post.max.toFixed(0)}</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-medium text-gray-700 dark:text-gray-300">คะแนนต่ำสุด (Min Score)</td>
+                                <td className="p-4 text-center text-gray-600 dark:text-gray-300">{outcomes.literacyStats.detailed.pre.min.toFixed(0)}</td>
+                                <td className="p-4 text-center font-bold text-teal-600 dark:text-teal-400">{outcomes.literacyStats.detailed.post.min.toFixed(0)}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* 2. Clinical Outcomes Section (BMI) */}
+            {/* 3. BMI Migration Flow */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+                    <BoltIcon className="w-4 h-4 text-yellow-500" />
+                    3. การเคลื่อนย้ายกลุ่ม BMI (Migration Flow)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                    {Object.entries(outcomes.migrationFlows).length > 0 ? (
+                        Object.entries(outcomes.migrationFlows)
+                            .sort(([,a]: any, [,b]: any) => (b as number) - (a as number))
+                            .map(([flow, count]) => (
+                            <div key={flow} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded shadow-sm border-l-4 border-green-500">
+                                <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{flow}</span>
+                                <span className="text-xs font-black text-green-600 dark:text-green-400">+{count} คน</span>
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-xs text-gray-400 text-center py-4 col-span-full">ยังไม่มีข้อมูลการเปลี่ยนแปลงกลุ่ม BMI ในช่วงเวลานี้</p>
+                    )}
+                </div>
+            </div>
+
+            {/* 4. User Evaluation Analysis (NEW SECTION) */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                        <ScaleIcon className="w-6 h-6 text-orange-500" />
-                        ผลลัพธ์ทางคลินิก: BMI Migration
+                        <HeartIcon className="w-6 h-6 text-pink-500" />
+                        4. ผลประเมินความพึงพอใจและผลลัพธ์ (User Evaluation)
                     </h3>
                     <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
-                        N = {outcomes.bmiStats.totalUsers} คน (ที่มีการเปลี่ยนแปลง)
+                        N = {outcomes.evaluationStats.totalEvals}
                     </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left: Summary KPIs */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* 4.1 Satisfaction Scores */}
                     <div className="space-y-4">
-                        <div className="flex gap-4">
-                            <div className="flex-1 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800 text-center">
-                                <TrophyIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                <p className="text-3xl font-black text-gray-800 dark:text-white">{outcomes.bmiStats.successRate.toFixed(1)}%</p>
-                                <p className="text-xs font-bold text-green-700 dark:text-green-300 uppercase mt-1">Success Rate</p>
-                                <p className="text-[10px] text-gray-500 mt-1">ลดระดับความเสี่ยง หรือ รักษาสมส่วน</p>
-                            </div>
-                            <div className="flex-1 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800 text-center flex flex-col justify-center">
-                                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{outcomes.bmiStats.improvedCount}</p>
-                                <p className="text-xs text-gray-500">คน ที่ลดระดับความอ้วนได้</p>
-                                <div className="h-[1px] bg-orange-200 w-full my-2"></div>
-                                <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">{outcomes.bmiStats.maintainedCount}</p>
-                                <p className="text-xs text-gray-500">คน ที่รักษารูปร่างสมส่วนไว้ได้</p>
-                            </div>
-                        </div>
-                        <div className="text-xs text-gray-400 italic">
-                            * Success Rate คำนวณจากผู้ที่ลดระดับ BMI ลงมาสู่เกณฑ์ที่ดีขึ้น (เช่น อ้วน &rarr; ท้วม) หรือผู้ที่รักษาระดับสมส่วนไว้ได้
+                        <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 border-b pb-2 dark:border-gray-600">
+                            ความพึงพอใจ (Satisfaction Score 1-5)
+                        </h4>
+                        <div className="space-y-3">
+                            {outcomes.evaluationStats.satAverages.map((item) => (
+                                <div key={item.key} className="flex flex-col gap-1">
+                                    <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400">
+                                        <span>{satLabels[item.key] || item.key}</span>
+                                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{item.avg} / 5.00</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2">
+                                        <div 
+                                            className="bg-indigo-500 h-2 rounded-full" 
+                                            style={{ width: `${(parseFloat(item.avg as string) / 5) * 100}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Right: Migration Flow List */}
-                    <div className="bg-gray-50 dark:bg-gray-700/30 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
-                        <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                            <BoltIcon className="w-4 h-4 text-yellow-500" />
-                            การเคลื่อนย้ายกลุ่ม (Migration Flow)
+                    {/* 4.2 Self-reported Outcomes */}
+                    <div className="space-y-4">
+                        <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 border-b pb-2 dark:border-gray-600">
+                            ผลลัพธ์สุขภาพที่รายงานเอง (Self-Reported)
                         </h4>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                            {Object.entries(outcomes.bmiStats.flows).length > 0 ? (
-                                Object.entries(outcomes.bmiStats.flows)
-                                    .sort(([,a]: any, [,b]: any) => (b as number) - (a as number))
-                                    .map(([flow, count]) => (
-                                    <div key={flow} className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded shadow-sm border-l-4 border-green-500">
-                                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300">{flow}</span>
-                                        <span className="text-xs font-black text-green-600 dark:text-green-400">+{count} คน</span>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-xs text-gray-400 text-center py-4">ยังไม่มีข้อมูลการเปลี่ยนแปลงกลุ่ม BMI ในช่วงเวลานี้</p>
-                            )}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left">
+                                <thead className="text-gray-500 dark:text-gray-400 border-b dark:border-gray-600">
+                                    <tr>
+                                        <th className="py-2">ด้าน (Aspect)</th>
+                                        <th className="py-2 text-center text-green-600">ดีขึ้น</th>
+                                        <th className="py-2 text-center text-gray-500">เท่าเดิม</th>
+                                        <th className="py-2 text-center text-red-500">แย่ลง</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                    {outcomes.evaluationStats.outPercentages.map((item) => (
+                                        <tr key={item.key}>
+                                            <td className="py-2 font-medium text-gray-700 dark:text-gray-300">{outLabels[item.key] || item.key}</td>
+                                            <td className="py-2 text-center font-bold text-green-600">{item.improved}%</td>
+                                            <td className="py-2 text-center text-gray-500">{item.same}%</td>
+                                            <td className="py-2 text-center text-red-500">{item.worse}%</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -740,7 +987,9 @@ const OutcomeAnalysis: React.FC<{
     );
 };
 
+// ... DataManagementTab Component (unchanged) ...
 const DataManagementTab: React.FC<{ adminData: AllAdminData | null }> = ({ adminData }) => {
+    // ... [Same as before] ...
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTable, setActiveTable] = useState('profiles');
     const { scriptUrl, currentUser } = useContext(AppContext);
@@ -899,8 +1148,6 @@ const DataManagementTab: React.FC<{ adminData: AllAdminData | null }> = ({ admin
         </div>
     );
 };
-
-// --- Main Dashboard Container ---
 
 const AdminDashboard: React.FC = () => {
     const { scriptUrl, currentUser, organizations, setActiveView } = useContext(AppContext);

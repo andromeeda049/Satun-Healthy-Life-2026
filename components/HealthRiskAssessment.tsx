@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { HeartIcon, BrainIcon, MoonIcon, ClipboardCheckIcon, ArrowLeftIcon, ExclamationTriangleIcon, ScaleIcon, BoltIcon, FireIcon } from './icons';
-import { UserProfile } from '../types';
+import { UserProfile, RiskHistoryEntry } from '../types';
 
 // --- Types & Constants ---
 type RiskLevel = 'low' | 'moderate' | 'high' | 'very_high';
@@ -21,7 +21,7 @@ const QUESTIONS_9Q = [
 ];
 
 const HealthRiskAssessment: React.FC = () => {
-    const { userProfile, setUserProfile, currentUser, clinicalHistory, habitHistory, setActiveView } = useContext(AppContext);
+    const { userProfile, setUserProfile, currentUser, clinicalHistory, habitHistory, setActiveView, saveRiskEntry } = useContext(AppContext);
     
     const [step, setStep] = useState<'menu' | 'cvd' | '2q' | '9q' | 'stopbang'>('menu');
     
@@ -122,6 +122,8 @@ const HealthRiskAssessment: React.FC = () => {
 
     const handleSaveRisk = (result: any) => {
         if (!currentUser) return;
+        
+        // 1. Update Profile (Local & Quick Access)
         const updatedProfile = { 
             ...userProfile, 
             riskAssessment: {
@@ -131,6 +133,20 @@ const HealthRiskAssessment: React.FC = () => {
             }
         };
         setUserProfile(updatedProfile, { displayName: currentUser.displayName, profilePicture: currentUser.profilePicture });
+
+        // 2. Save to Risk History (Backend Log)
+        const historyEntry: RiskHistoryEntry = {
+            id: Date.now().toString(),
+            date: new Date().toISOString(),
+            // Map incoming partial result to entry
+            cvdRiskLevel: result.cvdRiskLevel,
+            cvdScore: result.cvdScore,
+            depressionRisk: result.depressionRisk,
+            depressionScore: result.depressionScore,
+            depressionSeverity: result.depressionSeverity,
+            sleepApneaRisk: result.sleepApneaRisk
+        };
+        saveRiskEntry(historyEntry);
     };
 
     const renderMenu = () => (
@@ -268,7 +284,7 @@ const HealthRiskAssessment: React.FC = () => {
                     <button 
                         onClick={() => {
                             // Calculate Score based on current inputs (approx score for logic)
-                            handleSaveRisk({ cvdRiskLevel: cvdResult.level, cvdScore: cvdResult.pct }); // pct is just visual here, logic can be refined
+                            handleSaveRisk({ cvdRiskLevel: cvdResult.level, cvdScore: cvdResult.pct }); 
                             setStep('menu');
                         }}
                         className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all active:scale-95"

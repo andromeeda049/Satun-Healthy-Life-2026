@@ -31,7 +31,7 @@ export interface NutrientInfo {
   items: FoodItem[];
 }
 
-export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards' | 'feedback' | 'goals' | 'riskAssessment';
+export type AppView = 'home' | 'menu' | 'profile' | 'dashboard' | 'community' | 'bmi' | 'tdee' | 'food' | 'coach' | 'planner' | 'literacy' | 'settings' | 'adminDashboard' | 'groupManagement' | 'water' | 'assessment' | 'calorieTracker' | 'activityTracker' | 'wellness' | 'gamificationRules' | 'about' | 'evaluation' | 'quiz' | 'weeklyQuiz' | 'dailyQuiz' | 'hpHistory' | 'rewards' | 'feedback' | 'goals' | 'riskAssessment' | 'history';
 export type Theme = 'light' | 'dark';
 
 export interface User {
@@ -82,12 +82,12 @@ export interface Achievement {
 }
 
 export interface RiskAssessmentResult {
-    cvdRiskLevel: 'low' | 'moderate' | 'high' | 'very_high';
-    cvdScore: number;
-    depressionRisk: boolean; // 2Q Positive
+    cvdRiskLevel?: 'low' | 'moderate' | 'high' | 'very_high';
+    cvdScore?: number;
+    depressionRisk?: boolean; // 2Q Positive
     depressionScore?: number; // 9Q Score
     depressionSeverity?: 'normal' | 'mild' | 'moderate' | 'severe'; // 9Q Result
-    sleepApneaRisk: 'low' | 'high'; // STOP-BANG
+    sleepApneaRisk?: 'low' | 'high'; // STOP-BANG
     lastAssessmentDate: string;
 }
 
@@ -263,6 +263,17 @@ export interface ClinicalHistoryEntry {
     bmr?: number; // Added
 }
 
+export interface RiskHistoryEntry {
+    id: string;
+    date: string;
+    cvdRiskLevel?: string;
+    cvdScore?: number;
+    depressionRisk?: boolean;
+    depressionScore?: number;
+    depressionSeverity?: string;
+    sleepApneaRisk?: string;
+}
+
 export interface NotificationState {
     show: boolean;
     message: string;
@@ -433,6 +444,10 @@ export interface AppContextType {
   clinicalHistory: ClinicalHistoryEntry[];
   setClinicalHistory: React.Dispatch<React.SetStateAction<ClinicalHistoryEntry[]>>;
   saveClinicalEntry: (entry: ClinicalHistoryEntry) => void;
+
+  // --- RISK ASSESSMENT ---
+  riskHistory: RiskHistoryEntry[];
+  saveRiskEntry: (entry: RiskHistoryEntry) => void;
 
   // --- ADMIN SIMULATION ---
   simulateUserMode: () => void;

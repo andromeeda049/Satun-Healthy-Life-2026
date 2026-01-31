@@ -1,13 +1,34 @@
 
 import React, { useState, useEffect, useContext, useRef, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { createGroup, getAdminGroups, fetchGroupMembers } from '../services/googleSheetService';
-import { UserGroupIcon, SquaresIcon, CameraIcon, ClipboardListIcon, LineIcon, ArrowLeftIcon, UserCircleIcon, TrophyIcon, SearchIcon, XIcon, ScaleIcon, FireIcon, ChartBarIcon, HeartIcon } from './icons';
+import { createGroup, getAdminGroups, fetchGroupMembers, fetchUserDataByAdmin } from '../services/googleSheetService';
+import { UserGroupIcon, SquaresIcon, CameraIcon, ClipboardListIcon, LineIcon, ArrowLeftIcon, UserCircleIcon, TrophyIcon, SearchIcon, XIcon, ScaleIcon, FireIcon, ChartBarIcon, HeartIcon, StethoscopeIcon, WaterDropIcon, BrainIcon, MoonIcon } from './icons';
 
 const MemberDetailModal: React.FC<{ member: any; onClose: () => void }> = ({ member, onClose }) => {
+    const { scriptUrl, currentUser } = useContext(AppContext);
+    const [fullData, setFullData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch detailed data when modal opens
+    useEffect(() => {
+        const loadDetails = async () => {
+            if (scriptUrl && currentUser && member.username) {
+                setLoading(true);
+                try {
+                    const data = await fetchUserDataByAdmin(scriptUrl, currentUser, member.username);
+                    setFullData(data);
+                } catch (e) {
+                    console.error("Failed to load member details", e);
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+        loadDetails();
+    }, [scriptUrl, currentUser, member.username]);
     
-    // Calculate Metrics on the fly
-    const metrics = useMemo(() => {
+    // Calculate Basic Metrics from basic member info (fallback)
+    const basicMetrics = useMemo(() => {
         const weight = parseFloat(member.weight || '0');
         const height = parseFloat(member.height || '0');
         const age = parseFloat(member.age || '0');
@@ -42,91 +63,183 @@ const MemberDetailModal: React.FC<{ member: any; onClose: () => void }> = ({ mem
         };
     }, [member]);
 
+    // Extract Latest Clinical & Risk Data
+    const advancedMetrics = useMemo(() => {
+        if (!fullData) return null;
+
+        // Helper to sort by date desc
+        const sortByDate = (arr: any[]) => [...(arr || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const latestClinical = sortByDate(fullData.clinicalHistory)[0] || {};
+        const latestRisk = sortByDate(fullData.riskHistory)[0] || {};
+        const latestStats = fullData.profile || {}; // Sometimes updated profile has latest
+
+        return {
+            bp: latestClinical.systolic ? `${latestClinical.systolic}/${latestClinical.diastolic}` : '-',
+            fbs: latestClinical.fbs ? `${latestClinical.fbs}` : '-',
+            cvd: latestRisk.cvdRiskLevel || '-',
+            depression: latestRisk.depressionSeverity || (latestRisk.depressionRisk ? 'Positive' : 'Normal'),
+            sleep: latestRisk.sleepApneaRisk || '-',
+            // Fallback to basic member if not found in fullData
+            waist: latestClinical.waist || member.waist || '-',
+            hip: member.hip || '-'
+        };
+    }, [fullData, member]);
+
+    const getRiskColor = (level: string) => {
+        if (['very_high', 'high', 'severe'].includes(level)) return 'text-red-600 bg-red-50 border-red-200';
+        if (['moderate'].includes(level)) return 'text-orange-600 bg-orange-50 border-orange-200';
+        if (['mild', 'low'].includes(level)) return 'text-green-600 bg-green-50 border-green-200';
+        return 'text-gray-600 bg-gray-50 border-gray-200';
+    };
+
+    const getCvdLabel = (level: string) => {
+        const map: any = { low: 'เสี่ยงต่ำ', moderate: 'ปานกลาง', high: 'สูง', very_high: 'สูงมาก' };
+        return map[level] || level;
+    };
+
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl p-6 relative animate-bounce-in max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-1 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-500 dark:text-gray-400 transition-colors z-10">
-                    <XIcon className="w-5 h-5" />
-                </button>
+            <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-2xl p-0 relative animate-bounce-in max-h-[90vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
                 
-                <div className="flex flex-col items-center">
-                    <div className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-700 shadow-lg overflow-hidden mb-4 bg-gray-100">
-                         {member.profilePicture && (member.profilePicture.startsWith('http') || member.profilePicture.startsWith('data')) ? (
-                            <img src={member.profilePicture} alt={member.displayName} className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-4xl">{member.profilePicture || '👤'}</div>
-                        )}
+                {/* Header Section */}
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white rounded-t-2xl relative shrink-0">
+                    <button onClick={onClose} className="absolute top-4 right-4 p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors z-10">
+                        <XIcon className="w-5 h-5" />
+                    </button>
+                    
+                    <div className="flex flex-col items-center">
+                        <div className="w-20 h-20 rounded-full border-4 border-white/30 shadow-lg overflow-hidden mb-3 bg-white">
+                             {member.profilePicture && (member.profilePicture.startsWith('http') || member.profilePicture.startsWith('data')) ? (
+                                <img src={member.profilePicture} alt={member.displayName} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400">{member.profilePicture || '👤'}</div>
+                            )}
+                        </div>
+                        <h3 className="text-xl font-bold">{member.displayName}</h3>
+                        <p className="text-xs opacity-80 font-mono mb-3">@{member.username}</p>
+                        
+                        <div className="flex gap-2">
+                            <span className="px-3 py-0.5 bg-white/20 rounded-full text-[10px] font-bold backdrop-blur-sm border border-white/10">
+                                Level {member.level}
+                            </span>
+                            <span className="px-3 py-0.5 bg-yellow-400/90 text-yellow-900 rounded-full text-[10px] font-bold shadow-sm">
+                                {member.xp?.toLocaleString()} XP
+                            </span>
+                        </div>
                     </div>
+                </div>
+                
+                {/* Scrollable Content */}
+                <div className="p-6 space-y-6 overflow-y-auto">
                     
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-white text-center">{member.displayName}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 font-mono mb-4">@{member.username}</p>
-                    
-                    <div className="flex gap-2 mb-6">
-                        <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-xs font-bold">
-                            Level {member.level}
-                        </span>
-                        <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-full text-xs font-bold">
-                            {member.xp?.toLocaleString()} Group XP
-                        </span>
-                    </div>
-                    
-                    {/* Health Dashboard Grid */}
-                    <div className="w-full grid grid-cols-2 gap-3 mb-4">
-                        {/* BMI */}
+                    {/* 1. Basic Stats */}
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800 flex flex-col items-center">
                             <div className="flex items-center gap-1 mb-1">
                                 <ScaleIcon className="w-3 h-3 text-blue-500" />
                                 <span className="text-[10px] font-bold text-blue-600 dark:text-blue-300 uppercase">BMI</span>
                             </div>
-                            <span className="text-xl font-black text-gray-800 dark:text-white">{metrics.bmi}</span>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400">{metrics.bmiCategory}</span>
+                            <span className="text-2xl font-black text-gray-800 dark:text-white">{basicMetrics.bmi}</span>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">{basicMetrics.bmiCategory}</span>
                         </div>
 
-                        {/* TDEE */}
                         <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl border border-orange-100 dark:border-orange-800 flex flex-col items-center">
                             <div className="flex items-center gap-1 mb-1">
                                 <FireIcon className="w-3 h-3 text-orange-500" />
                                 <span className="text-[10px] font-bold text-orange-600 dark:text-orange-300 uppercase">TDEE</span>
                             </div>
-                            <span className="text-xl font-black text-gray-800 dark:text-white">{metrics.tdee}</span>
+                            <span className="text-2xl font-black text-gray-800 dark:text-white">{basicMetrics.tdee}</span>
                             <span className="text-[10px] text-gray-500 dark:text-gray-400">kcal/วัน</span>
                         </div>
+                    </div>
 
-                        {/* Body Stats */}
-                        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-xl border border-purple-100 dark:border-purple-800 flex flex-col items-center col-span-2">
-                            <div className="flex items-center gap-1 mb-2">
-                                <ChartBarIcon className="w-3 h-3 text-purple-500" />
-                                <span className="text-[10px] font-bold text-purple-600 dark:text-purple-300 uppercase">สัดส่วนร่างกาย</span>
+                    {/* 2. Clinical Data (Requires Fetch) */}
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">
+                            <StethoscopeIcon className="w-3 h-3" /> ข้อมูลทางคลินิก (ล่าสุด)
+                        </h4>
+                        
+                        {loading ? (
+                            <div className="flex justify-center py-4"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>
+                        ) : advancedMetrics ? (
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="p-2 border rounded-lg bg-gray-50 dark:bg-gray-700/30 dark:border-gray-600 text-center">
+                                    <span className="text-[9px] text-gray-400 block uppercase">ความดัน (BP)</span>
+                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{advancedMetrics.bp}</span>
+                                </div>
+                                <div className="p-2 border rounded-lg bg-gray-50 dark:bg-gray-700/30 dark:border-gray-600 text-center">
+                                    <span className="text-[9px] text-gray-400 block uppercase">น้ำตาล (FBS)</span>
+                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{advancedMetrics.fbs}</span>
+                                </div>
+                                <div className="p-2 border rounded-lg bg-gray-50 dark:bg-gray-700/30 dark:border-gray-600 text-center">
+                                    <span className="text-[9px] text-gray-400 block uppercase">รอบเอว</span>
+                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{advancedMetrics.waist}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-around w-full">
-                                <div className="text-center">
-                                    <span className="text-xs text-gray-400 block">น้ำหนัก</span>
-                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{member.weight || '-'} กก.</span>
+                        ) : (
+                            <p className="text-xs text-center text-gray-400">ไม่พบข้อมูลเพิ่มเติม</p>
+                        )}
+                    </div>
+
+                    {/* 3. Risk Assessment */}
+                    <div>
+                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">
+                            <HeartIcon className="w-3 h-3" /> การประเมินความเสี่ยง
+                        </h4>
+
+                        {loading ? (
+                            <div className="h-20 bg-gray-100 dark:bg-gray-700 animate-pulse rounded-xl"></div>
+                        ) : advancedMetrics ? (
+                            <div className="space-y-2">
+                                {/* CVD Risk */}
+                                <div className={`flex justify-between items-center p-3 rounded-xl border ${getRiskColor(advancedMetrics.cvd)}`}>
+                                    <div className="flex items-center gap-2">
+                                        <HeartIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold">Thai CV Risk</span>
+                                    </div>
+                                    <span className="text-xs font-black uppercase">{getCvdLabel(advancedMetrics.cvd)}</span>
                                 </div>
-                                <div className="w-[1px] bg-purple-200 dark:bg-purple-800"></div>
-                                <div className="text-center">
-                                    <span className="text-xs text-gray-400 block">ส่วนสูง</span>
-                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{member.height || '-'} ซม.</span>
+
+                                {/* Mental Health */}
+                                <div className={`flex justify-between items-center p-3 rounded-xl border ${getRiskColor(advancedMetrics.depression)}`}>
+                                    <div className="flex items-center gap-2">
+                                        <BrainIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold">สุขภาพจิต (9Q)</span>
+                                    </div>
+                                    <span className="text-xs font-black uppercase">{advancedMetrics.depression === 'normal' ? 'ปกติ' : advancedMetrics.depression}</span>
                                 </div>
-                                <div className="w-[1px] bg-purple-200 dark:bg-purple-800"></div>
-                                <div className="text-center">
-                                    <span className="text-xs text-gray-400 block">เอว</span>
-                                    <span className="text-sm font-bold text-gray-800 dark:text-white">{member.waist || '-'} นิ้ว</span>
+
+                                {/* Sleep Risk */}
+                                <div className={`flex justify-between items-center p-3 rounded-xl border ${advancedMetrics.sleep === 'high' ? getRiskColor('high') : getRiskColor('low')}`}>
+                                    <div className="flex items-center gap-2">
+                                        <MoonIcon className="w-4 h-4" />
+                                        <span className="text-xs font-bold">การนอน (STOP-BANG)</span>
+                                    </div>
+                                    <span className="text-xs font-black uppercase">{advancedMetrics.sleep === 'high' ? 'เสี่ยงสูง' : 'ปกติ'}</span>
                                 </div>
+                            </div>
+                        ) : null}
+                    </div>
+
+                    {/* 4. Bio Data */}
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">อายุ</span>
+                                <span className="font-bold dark:text-white">{member.age || '-'} ปี</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-500">ส่วนสูง</span>
+                                <span className="font-bold dark:text-white">{member.height || '-'} ซม.</span>
+                            </div>
+                            <div className="flex justify-between col-span-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg">
+                                <span className="text-gray-500">โรคประจำตัว</span>
+                                <span className="font-bold text-rose-600 dark:text-rose-400">{member.healthCondition || '-'}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="w-full bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-3 border border-gray-100 dark:border-gray-600">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400">อายุ</span>
-                            <span className="font-bold text-gray-800 dark:text-white">{member.age || '-'} ปี</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1"><HeartIcon className="w-3 h-3" /> โรคประจำตัว</span>
-                            <span className="font-bold text-rose-600 dark:text-rose-400 text-right max-w-[150px] truncate">{member.healthCondition || '-'}</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

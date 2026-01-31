@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 // Common interface for props
@@ -206,6 +205,10 @@ export const LockIcon = ({ className }: IconProps) => (
 
 export const EyeIcon = ({ className }: IconProps) => (
   <i className={`fa-solid fa-eye ${className}`}></i>
+);
+
+export const ClockIcon = ({ className }: IconProps) => (
+  <i className={`fa-solid fa-clock ${className}`}></i>
 );
 
 export const LineIcon = ({ className }: IconProps) => (

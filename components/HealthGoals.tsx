@@ -2,7 +2,7 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { HealthGoal, ClinicalHistoryEntry, BMIHistoryEntry } from '../types';
-import { TargetIcon, ScaleIcon, HeartIcon, BoltIcon, ArrowLeftIcon, XIcon, StarIcon, ChartBarIcon, TrashIcon, FireIcon } from './icons';
+import { TargetIcon, ScaleIcon, HeartIcon, BoltIcon, ArrowLeftIcon, XIcon, StarIcon, ChartBarIcon, TrashIcon, FireIcon, ClipboardListIcon, ClipboardCheckIcon, ClockIcon } from './icons';
 
 const GoalProgressCard: React.FC<{
     goal: HealthGoal;
@@ -10,8 +10,11 @@ const GoalProgressCard: React.FC<{
     unit: string;
     onUpdate: () => void;
     onDelete: () => void;
-}> = ({ goal, currentValue, unit, onUpdate, onDelete }) => {
+    history: ClinicalHistoryEntry[];
+}> = ({ goal, currentValue, unit, onUpdate, onDelete, history }) => {
     
+    const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
+
     // Calculate Progress Percentage
     const start = parseFloat(goal.startValue);
     const target = parseFloat(goal.targetValue);
@@ -23,13 +26,13 @@ const GoalProgressCard: React.FC<{
     // Logic: Is goal to Increase or Decrease?
     if (!isNaN(start) && !isNaN(target) && !isNaN(current)) {
         if (target < start) {
-            // Aiming to decrease (e.g. Weight, HbA1c, Visceral Fat)
+            // Aiming to decrease
             const totalDiff = start - target;
             const currentDiff = start - current;
             progress = Math.max(0, Math.min(100, (currentDiff / totalDiff) * 100));
             if (current <= target) isAchieved = true;
         } else {
-            // Aiming to increase (e.g. Muscle Mass, BMR)
+            // Aiming to increase
             const totalDiff = target - start;
             const currentDiff = current - start;
             progress = Math.max(0, Math.min(100, (currentDiff / totalDiff) * 100));
@@ -59,9 +62,22 @@ const GoalProgressCard: React.FC<{
         bmr: 'อัตราเผาผลาญ (BMR)'
     };
 
+    const getHistoryValue = (entry: ClinicalHistoryEntry) => {
+        if (goal.type === 'weight') return entry.weight;
+        if (goal.type === 'bp') return `${entry.systolic}/${entry.diastolic}`;
+        if (goal.type === 'fbs') return entry.fbs;
+        if (goal.type === 'waist') return entry.waist;
+        if (goal.type === 'hba1c') return entry.hba1c;
+        if (goal.type === 'visceral_fat') return entry.visceral_fat;
+        if (goal.type === 'muscle_mass') return entry.muscle_mass;
+        if (goal.type === 'bmr') return entry.bmr;
+        return '-';
+    };
+
     return (
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group">
-            <div className="flex justify-between items-start mb-3 relative z-10">
+        <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group transition-all hover:shadow-md">
+            {/* Header */}
+            <div className="flex justify-between items-start mb-4 relative z-10">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded-xl">
                         {typeIcons[goal.type] || <TargetIcon className="w-5 h-5 text-teal-500" />}
@@ -80,34 +96,97 @@ const GoalProgressCard: React.FC<{
                 </button>
             </div>
 
-            <div className="flex items-end justify-between mb-2 relative z-10">
-                <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">ปัจจุบัน</p>
-                    <p className="text-2xl font-black text-gray-800 dark:text-white leading-none">
-                        {currentValue} <span className="text-xs font-bold text-gray-400">{unit}</span>
-                    </p>
-                </div>
-                <div className="text-right">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">เป้าหมาย</p>
-                    <p className="text-lg font-bold text-teal-600 dark:text-teal-400 leading-none">
-                        {goal.targetValue} <span className="text-xs">{unit}</span>
-                    </p>
-                </div>
+            {/* In-Card Tabs */}
+            <div className="flex p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg mb-4 relative z-10">
+                <button
+                    onClick={() => setActiveTab('status')}
+                    className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        activeTab === 'status' 
+                        ? 'bg-white dark:bg-gray-600 text-teal-600 dark:text-teal-400 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    }`}
+                >
+                    <TargetIcon className="w-3 h-3" /> สถานะ
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    className={`flex-1 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                        activeTab === 'history' 
+                        ? 'bg-white dark:bg-gray-600 text-teal-600 dark:text-teal-400 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                    }`}
+                >
+                    <ClockIcon className="w-3 h-3" /> ประวัติ ({history.length})
+                </button>
             </div>
 
-            <div className="relative h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3 z-10">
-                <div 
-                    className={`h-full rounded-full transition-all duration-1000 ${isAchieved ? 'bg-green-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'}`} 
-                    style={{ width: `${progress}%` }}
-                ></div>
-            </div>
+            {/* Tab Content */}
+            <div className="relative z-10 min-h-[120px]">
+                {activeTab === 'status' ? (
+                    <div className="animate-fade-in">
+                        <div className="flex items-end justify-between mb-2">
+                            <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">ปัจจุบัน</p>
+                                <p className="text-2xl font-black text-gray-800 dark:text-white leading-none">
+                                    {currentValue} <span className="text-xs font-bold text-gray-400">{unit}</span>
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">เป้าหมาย</p>
+                                <p className="text-lg font-bold text-teal-600 dark:text-teal-400 leading-none">
+                                    {goal.targetValue} <span className="text-xs">{unit}</span>
+                                </p>
+                            </div>
+                        </div>
 
-            <button 
-                onClick={onUpdate}
-                className="w-full py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs font-bold rounded-lg transition-colors border border-gray-200 dark:border-gray-600 relative z-10"
-            >
-                อัปเดตผลล่าสุด
-            </button>
+                        <div className="relative h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-4">
+                            <div 
+                                className={`h-full rounded-full transition-all duration-1000 ${isAchieved ? 'bg-green-500' : 'bg-gradient-to-r from-blue-400 to-indigo-500'}`} 
+                                style={{ width: `${progress}%` }}
+                            ></div>
+                        </div>
+
+                        <button 
+                            onClick={onUpdate}
+                            className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-xl transition-colors border border-indigo-100 dark:border-indigo-800 flex items-center justify-center gap-2"
+                        >
+                            <ClipboardCheckIcon className="w-4 h-4" /> อัปเดตผลล่าสุด
+                        </button>
+                    </div>
+                ) : (
+                    <div className="animate-fade-in">
+                        {history.length > 0 ? (
+                            <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                                {history.map((h) => (
+                                    <div key={h.id} className="flex justify-between items-center p-2.5 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1 h-8 bg-gray-200 dark:bg-gray-600 rounded-full"></div>
+                                            <div>
+                                                <p className="text-[10px] text-gray-400 font-medium">
+                                                    {new Date(h.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                                                </p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                    {new Date(h.date).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">
+                                                {getHistoryValue(h)} <span className="text-[10px] font-normal text-gray-400">{unit}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-32 text-gray-400">
+                                <ClipboardListIcon className="w-8 h-8 opacity-30 mb-2" />
+                                <p className="text-xs">ยังไม่มีประวัติการบันทึก</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
             
             {/* Background decoration */}
             <div className="absolute top-0 right-0 p-4 opacity-5 transform rotate-12 scale-150 pointer-events-none">
@@ -266,35 +345,44 @@ const HealthGoals: React.FC = () => {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [updatingGoal, setUpdatingGoal] = useState<HealthGoal | null>(null);
 
+    // Filter History for specific Goal Type
+    const getFilteredHistory = (goalType: string) => {
+        return [...clinicalHistory]
+            .filter(h => {
+                if (goalType === 'weight') return h.weight;
+                if (goalType === 'bp') return h.systolic || h.diastolic;
+                if (goalType === 'fbs') return h.fbs;
+                if (goalType === 'waist') return h.waist;
+                if (goalType === 'hba1c') return h.hba1c;
+                if (goalType === 'visceral_fat') return h.visceral_fat;
+                if (goalType === 'muscle_mass') return h.muscle_mass;
+                if (goalType === 'bmr') return h.bmr;
+                return false;
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    };
+
     // Helper to get latest value
     const getLatestValue = (goal: HealthGoal): string => {
-        // Sort clinical history by date descending to ensure we get the latest entry
-        const sortedHistory = [...clinicalHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const sortedHistory = getFilteredHistory(goal.type);
+        const entry = sortedHistory[0];
 
         if (goal.type === 'weight') {
-            const entry = sortedHistory.find(c => c.weight !== undefined && c.weight !== null && c.weight > 0);
-            return entry ? String(entry.weight) : goal.startValue;
+            return entry?.weight ? String(entry.weight) : goal.startValue;
         } else if (goal.type === 'bp') {
-            const entry = sortedHistory.find(c => c.systolic);
-            return entry ? `${entry.systolic}/${entry.diastolic}` : goal.startValue;
+            return entry?.systolic ? `${entry.systolic}/${entry.diastolic}` : goal.startValue;
         } else if (goal.type === 'fbs') {
-            const entry = sortedHistory.find(c => c.fbs);
-            return entry ? String(entry.fbs) : goal.startValue;
+            return entry?.fbs ? String(entry.fbs) : goal.startValue;
         } else if (goal.type === 'waist') {
-            const entry = sortedHistory.find(c => c.waist);
-            return entry ? String(entry.waist) : (userProfile.waist || goal.startValue);
+            return entry?.waist ? String(entry.waist) : (userProfile.waist || goal.startValue);
         } else if (goal.type === 'hba1c') {
-            const entry = sortedHistory.find(c => c.hba1c);
-            return entry ? String(entry.hba1c) : goal.startValue;
+            return entry?.hba1c ? String(entry.hba1c) : goal.startValue;
         } else if (goal.type === 'visceral_fat') {
-            const entry = sortedHistory.find(c => c.visceral_fat);
-            return entry ? String(entry.visceral_fat) : goal.startValue;
+            return entry?.visceral_fat ? String(entry.visceral_fat) : goal.startValue;
         } else if (goal.type === 'muscle_mass') {
-            const entry = sortedHistory.find(c => c.muscle_mass);
-            return entry ? String(entry.muscle_mass) : goal.startValue;
+            return entry?.muscle_mass ? String(entry.muscle_mass) : goal.startValue;
         } else if (goal.type === 'bmr') {
-            const entry = sortedHistory.find(c => c.bmr);
-            return entry ? String(entry.bmr) : goal.startValue;
+            return entry?.bmr ? String(entry.bmr) : goal.startValue;
         }
         return goal.startValue;
     };
@@ -362,65 +450,44 @@ const HealthGoals: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-800 dark:text-white">เป้าหมายสุขภาพ (Goals)</h1>
             </div>
 
-            <div className="bg-gradient-to-r from-teal-500 to-green-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-                <div className="relative z-10">
-                    <h2 className="text-lg font-bold flex items-center gap-2"><StarIcon className="w-5 h-5" /> My Health Journey</h2>
-                    <p className="text-teal-100 text-sm mt-1">ตั้งเป้าหมายและบันทึกความก้าวหน้าเพื่อสุขภาพที่ดีขึ้น</p>
-                    <button 
-                        onClick={() => setIsAddOpen(true)}
-                        className="mt-4 bg-white text-teal-600 px-4 py-2 rounded-xl text-sm font-bold shadow-md active:scale-95 transition-all flex items-center gap-2"
-                    >
-                        + ตั้งเป้าหมายใหม่
-                    </button>
-                </div>
-                <div className="absolute right-0 bottom-0 p-4 opacity-20">
-                    <TargetIcon className="w-24 h-24" />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-                {goals.length > 0 ? (
-                    goals.map(goal => (
-                        <GoalProgressCard 
-                            key={goal.id} 
-                            goal={goal} 
-                            currentValue={getLatestValue(goal)}
-                            unit={getUnit(goal.type)}
-                            onUpdate={() => setUpdatingGoal(goal)}
-                            onDelete={() => { if(confirm('ต้องการลบเป้าหมายนี้?')) deleteGoal(goal.id); }}
-                        />
-                    ))
-                ) : (
-                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-                        <TargetIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-500 font-medium">ยังไม่มีเป้าหมายที่ตั้งไว้</p>
+            <div className="space-y-6 animate-slide-up">
+                <div className="bg-gradient-to-r from-teal-500 to-green-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                    <div className="relative z-10">
+                        <h2 className="text-lg font-bold flex items-center gap-2"><StarIcon className="w-5 h-5" /> My Health Journey</h2>
+                        <p className="text-teal-100 text-sm mt-1">ตั้งเป้าหมายและบันทึกความก้าวหน้าเพื่อสุขภาพที่ดีขึ้น</p>
+                        <button 
+                            onClick={() => setIsAddOpen(true)}
+                            className="mt-4 bg-white text-teal-600 px-4 py-2 rounded-xl text-sm font-bold shadow-md active:scale-95 transition-all flex items-center gap-2"
+                        >
+                            + ตั้งเป้าหมายใหม่
+                        </button>
                     </div>
-                )}
-            </div>
-
-            {/* History Link */}
-            {clinicalHistory.length > 0 && (
-                <div className="bg-gray-50 dark:bg-gray-700/30 p-4 rounded-xl">
-                    <h3 className="text-sm font-bold text-gray-600 dark:text-gray-300 mb-2">ประวัติการบันทึก (Clinical Logs)</h3>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {clinicalHistory.map(h => (
-                            <div key={h.id} className="flex flex-col text-xs text-gray-500 bg-white dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700">
-                                <div className="font-bold mb-1">{new Date(h.date).toLocaleDateString('th-TH')} {new Date(h.date).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</div>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                    {h.weight && <span>Wt: {h.weight} kg</span>}
-                                    {h.systolic && <span>BP: {h.systolic}/{h.diastolic}</span>}
-                                    {h.fbs && <span>FBS: {h.fbs}</span>}
-                                    {h.waist && <span>Waist: {h.waist}</span>}
-                                    {h.hba1c && <span>HbA1c: {h.hba1c}%</span>}
-                                    {h.visceral_fat && <span>V.Fat: {h.visceral_fat}</span>}
-                                    {h.muscle_mass && <span>Muscle: {h.muscle_mass} kg</span>}
-                                    {h.bmr && <span>BMR: {h.bmr}</span>}
-                                </div>
-                            </div>
-                        ))}
+                    <div className="absolute right-0 bottom-0 p-4 opacity-20">
+                        <TargetIcon className="w-24 h-24" />
                     </div>
                 </div>
-            )}
+
+                <div className="grid grid-cols-1 gap-4">
+                    {goals.length > 0 ? (
+                        goals.map(goal => (
+                            <GoalProgressCard 
+                                key={goal.id} 
+                                goal={goal} 
+                                currentValue={getLatestValue(goal)}
+                                unit={getUnit(goal.type)}
+                                history={getFilteredHistory(goal.type)}
+                                onUpdate={() => setUpdatingGoal(goal)}
+                                onDelete={() => { if(confirm('ต้องการลบเป้าหมายนี้?')) deleteGoal(goal.id); }}
+                            />
+                        ))
+                    ) : (
+                        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                            <TargetIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                            <p className="text-gray-500 font-medium">ยังไม่มีเป้าหมายที่ตั้งไว้</p>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {isAddOpen && <AddGoalModal onClose={() => setIsAddOpen(false)} onSave={saveGoal} />}
             {updatingGoal && <UpdateProgressModal goal={updatingGoal} onClose={() => setUpdatingGoal(null)} onSave={handleSaveProgress} />}

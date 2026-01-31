@@ -1,12 +1,13 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9.9)
+ * Satun Smart Life - Backend Script (Production v20.9.18)
+ * Update: Added RiskHistory for Thai CVD, 2Q/9Q, and STOP-BANG data storage.
  * Features: 
- * - Leaderboard Caching (Performance Fix)
- * - Admin Filtering on ALL Leaderboards
- * - Clinical History with Weight support + New Metrics (HbA1c, V.Fat, Muscle, BMR)
- * - BMI / TDEE Calculation & History
- * - Group Management & Member Tracking
+ * - Leaderboard Caching
+ * - Admin Filtering
+ * - Clinical History
+ * - Risk Assessment History (NEW)
+ * - Group Management
  * - Data Reset & Factory Reset
  */
 
@@ -62,7 +63,8 @@ const SHEET_NAMES = {
   REDEMPTION: "RedemptionHistory",
   FEEDBACK: "Feedback",
   GOALS: "Goals",
-  CLINICAL: "ClinicalHistory"
+  CLINICAL: "ClinicalHistory",
+  RISK: "RiskHistory" // NEW SHEET
 };
 
 // --- 2. CORE UTILITIES & LOCK SERVICE ---
@@ -94,7 +96,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9.9 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.18 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -566,6 +568,7 @@ function handleSave(type, payload, user) {
   else if (type === 'feedback') sheetName = SHEET_NAMES.FEEDBACK;
   else if (type === 'goal') sheetName = SHEET_NAMES.GOALS; 
   else if (type === 'clinical') sheetName = SHEET_NAMES.CLINICAL; 
+  else if (type === 'risk') sheetName = SHEET_NAMES.RISK; // NEW
   else {
       const key = Object.keys(SHEET_NAMES).find(k => k.toLowerCase() === type.toLowerCase().replace('history',''));
       if (key) sheetName = SHEET_NAMES[key];
@@ -573,7 +576,10 @@ function handleSave(type, payload, user) {
   }
 
   let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) sheet = ss.insertSheet(sheetName);
+  if (!sheet) {
+      setupSheets();
+      sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+  }
 
   const timestamp = new Date();
   const item = Array.isArray(payload) ? payload[0] : payload;
@@ -609,10 +615,8 @@ function handleSave(type, payload, user) {
     case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
     case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break;
     case SHEET_NAMES.FEEDBACK: newRow = [timestamp, user.username, user.displayName, item.category, item.message, item.rating, 'Pending']; break;
-    case SHEET_NAMES.GOALS: newRow = [timestamp, user.username, item.id, item.type, item.startValue, item.targetValue, item.startDate, item.deadline || '', item.status]; break; // NEW
+    case SHEET_NAMES.GOALS: newRow = [timestamp, user.username, item.id, item.type, item.startValue, item.targetValue, item.startDate, item.deadline || '', item.status]; break;
     case SHEET_NAMES.CLINICAL: 
-        // Updated Clean Schema with weight + new metrics
-        // 0:time, 1:user, 2:sys, 3:dia, 4:fbs, 5:waist, 6:weight, 7:note, 8:hba1c, 9:visceral, 10:muscle, 11:bmr
         newRow = [
             timestamp, user.username, 
             item.systolic || '', item.diastolic || '', item.fbs || '', item.waist || '', 
@@ -620,6 +624,14 @@ function handleSave(type, payload, user) {
             item.hba1c || '', item.visceral_fat || '', item.muscle_mass || '', item.bmr || ''
         ]; 
         break; 
+    case SHEET_NAMES.RISK: // NEW
+        newRow = [
+            timestamp, user.username, 
+            item.cvdRiskLevel || '', item.cvdScore || 0,
+            item.depressionRisk || false, item.depressionScore || 0, item.depressionSeverity || '',
+            item.sleepApneaRisk || '', JSON.stringify(item)
+        ];
+        break;
     default: newRow = [timestamp, user.username, JSON.stringify(item)];
   }
   
@@ -633,10 +645,10 @@ function handleDelete(type, id, user) {
 
     if (type === 'goal') {
         sheetName = SHEET_NAMES.GOALS;
-        idColIndex = 2; // Goals ID is at index 2
+        idColIndex = 2; 
     } else if (type === 'clinical') {
         sheetName = SHEET_NAMES.CLINICAL;
-        idColIndex = 0; // Clinical ID (timestamp) is at index 0 (as per getAllHistoryForUser)
+        idColIndex = 0; // Clinical ID (timestamp) is at index 0
     }
     else return createErrorResponse("Unsupported delete type");
 
@@ -651,9 +663,8 @@ function handleDelete(type, id, user) {
         
         if (type === 'clinical') {
              const rowDate = new Date(data[i][0]);
-             // Try to match ISO string or exact value
              if (rowDate.toISOString() === id || String(data[i][0]) === id) {
-                 rowId = id; // Match found
+                 rowId = id; 
              }
         }
 
@@ -716,7 +727,7 @@ function handleResetUser(user, targetUsername) {
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
         "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
-        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL // Add new sheets to reset
+        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL, SHEET_NAMES.RISK // Added RISK
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -758,7 +769,7 @@ function handleSystemFactoryReset(adminUser) {
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
         "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
-        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL
+        SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL, SHEET_NAMES.RISK
     ];
 
     sheetsToClear.forEach(sheetName => {
@@ -870,7 +881,8 @@ function getUserFullData(username) {
       quizHistory: getAllHistoryForUser('QuizHistory', username),
       redemptionHistory: getAllHistoryForUser(SHEET_NAMES.REDEMPTION, username),
       goals: getAllHistoryForUser(SHEET_NAMES.GOALS, username), 
-      clinicalHistory: getAllHistoryForUser(SHEET_NAMES.CLINICAL, username) 
+      clinicalHistory: getAllHistoryForUser(SHEET_NAMES.CLINICAL, username),
+      riskHistory: getAllHistoryForUser(SHEET_NAMES.RISK, username) // Added
     };
 }
 
@@ -916,20 +928,8 @@ function getAllHistoryForUser(sheetName, username) {
     if (sheetName === 'QuizHistory') return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
     if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
     if (sheetName === SHEET_NAMES.GOALS) return rows.map(r => ({ id: r[2], type: r[3], startValue: r[4], targetValue: r[5], startDate: r[6], deadline: r[7], status: r[8] })); 
-    if (sheetName === SHEET_NAMES.CLINICAL) return rows.map(r => ({ 
-        date: new Date(r[0]).toISOString(), 
-        id: r[0], 
-        systolic: r[2], 
-        diastolic: r[3], 
-        fbs: r[4], 
-        waist: r[5], 
-        weight: r[6], 
-        note: r[7],
-        hba1c: r[8],       // New
-        visceral_fat: r[9], // New
-        muscle_mass: r[10], // New
-        bmr: r[11]         // New
-    })); 
+    if (sheetName === SHEET_NAMES.CLINICAL) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], systolic: r[2], diastolic: r[3], fbs: r[4], waist: r[5], weight: r[6], note: r[7], hba1c: r[8], visceral_fat: r[9], muscle_mass: r[10], bmr: r[11] })); 
+    if (sheetName === SHEET_NAMES.RISK) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], cvdRiskLevel: r[2], cvdScore: r[3], depressionRisk: r[4], depressionScore: r[5], depressionSeverity: r[6], sleepApneaRisk: r[7] })); // Added
     return [];
   } catch(e) { return []; }
 }
@@ -951,7 +951,8 @@ function handleAdminFetch() {
       { name: SHEET_NAMES.ACTIVITY, key: 'activityHistory', limit: 500 },
       { name: SHEET_NAMES.BMI, key: 'bmiHistory', limit: 500 },
       { name: SHEET_NAMES.EVALUATION, key: 'evaluationHistory', limit: 500 },
-      { name: SHEET_NAMES.LOGIN_LOGS, key: 'loginLogs', limit: 100 }
+      { name: SHEET_NAMES.LOGIN_LOGS, key: 'loginLogs', limit: 100 },
+      { name: SHEET_NAMES.RISK, key: 'riskHistory', limit: 1000 } // Added to admin fetch
   ];
 
   fetchConfig.forEach(conf => {
@@ -1052,6 +1053,7 @@ function getDailyFlexMessage() {
   const date = new Date();
   const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const dateString = date.toLocaleDateString('th-TH', options);
+  const LIFF_URL = "https://liff.line.me/2006765792-V5wrjpTX";
   return {
     "type": "flex",
     "altText": "อรุณสวัสดิ์! ถึงเวลาดูแลสุขภาพกับ Satun Smart Life",
@@ -1124,7 +1126,14 @@ function setupSheets() {
       return sheet;
   };
 
-  ensureSheet(SHEET_NAMES.PROFILE, ["timestamp", "username", "displayName", "profilePicture", "gender", "age", "weight", "height", "waist", "hip", "activityLevel", "role", "xp", "level", "badges", "email", "password", "healthCondition", "lineUserId", "receiveDailyReminders", "researchId", "pdpaAccepted", "pdpaAcceptedDate", "organization", "deltaXp"]);
+  const profileHeaders = [
+    "timestamp", "username", "displayName", "profilePicture", "gender", 
+    "age", "weight", "height", "waist", "hip", "activityLevel", 
+    "role", "xp", "level", "badges", "email", "password", 
+    "healthCondition", "lineUserId", "receiveDailyReminders", 
+    "researchId", "pdpaAccepted", "pdpaAcceptedDate", "organization", "deltaXp"
+  ];
+  ensureSheet(SHEET_NAMES.PROFILE, profileHeaders);
   ensureSheet(SHEET_NAMES.USERS, ["email", "password", "username", "userDataJson", "timestamp"]);
   ensureSheet(SHEET_NAMES.LOGIN_LOGS, ["timestamp", "username", "displayName", "role", "organization"]);
   ensureSheet(SHEET_NAMES.GROUPS, ["GroupId", "Name", "Code", "Description", "LineLink", "AdminUsername", "CreatedAt", "Image"]);
@@ -1142,16 +1151,15 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.MOOD, [...common, "moodEmoji", "stressLevel", "gratitude"]);
   ensureSheet(SHEET_NAMES.HABIT, [...common, "type", "amount", "isClean"]);
   ensureSheet(SHEET_NAMES.SOCIAL, [...common, "interaction", "feeling"]);
+  ensureSheet(SHEET_NAMES.PLANNER, [...common, "cuisine", "diet", "tdee", "plan_json"]);
   ensureSheet(SHEET_NAMES.EVALUATION, ["timestamp", "username", "displayName", "role", "satisfaction_json", "outcomes_json"]);
   ensureSheet(SHEET_NAMES.REDEMPTION, [...common, "rewardId", "rewardName", "cost"]); 
   ensureSheet(SHEET_NAMES.FEEDBACK, ["timestamp", "username", "displayName", "category", "message", "rating", "status"]); 
+  ensureSheet(SHEET_NAMES.QUIZ, [...common, "score", "totalQuestions", "correctAnswers", "type", "weekNumber"]);
   
-  // NEW SHEETS FOR GOALS & CLINICAL HISTORY
   ensureSheet(SHEET_NAMES.GOALS, ["timestamp", "username", "id", "type", "startValue", "targetValue", "startDate", "deadline", "status"]);
-  
-  // Updated Clean Schema with weight + new metrics (12 cols)
-  // Ensure the script can write all columns
   ensureSheet(SHEET_NAMES.CLINICAL, ["timestamp", "username", "systolic", "diastolic", "fbs", "waist", "weight", "note", "hba1c", "visceral_fat", "muscle_mass", "bmr"]);
+  ensureSheet(SHEET_NAMES.RISK, ["timestamp", "username", "cvd_level", "cvd_score", "depression_risk", "depression_score", "depression_severity", "sleep_risk", "json_data"]); // New Sheet
 
-  return "Setup Complete (v20.9.9) - Clinical Metrics Added";
+  return "Setup Complete (v20.9.18) - Risk History Added";
 }

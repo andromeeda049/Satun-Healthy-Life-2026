@@ -1,7 +1,7 @@
 
 import React, { createContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry, HealthGoal, ClinicalHistoryEntry } from '../types';
+import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry, HealthGoal, ClinicalHistoryEntry, RiskHistoryEntry } from '../types';
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
 import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService, resetUserData, deleteDataFromSheet } from '../services/googleSheetService';
 
@@ -62,9 +62,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [latestFoodAnalysis, setLatestFoodAnalysis] = useLocalStorage<NutrientInfo | null>('latestFoodAnalysis', null);
   const [userProfile, _setUserProfile] = useLocalStorage<UserProfile>('userProfile', defaultProfile);
   
-  // New States for Goals & Clinical
+  // New States for Goals, Clinical, and Risk
   const [goals, setGoals] = useLocalStorage<HealthGoal[]>('goals', []);
   const [clinicalHistory, setClinicalHistory] = useLocalStorage<ClinicalHistoryEntry[]>('clinicalHistory', []);
+  const [riskHistory, setRiskHistory] = useLocalStorage<RiskHistoryEntry[]>('riskHistory', []);
 
   // Updated key to force refresh to new Hardcoded URL (v17)
   const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v17', DEFAULT_SCRIPT_URL);
@@ -101,7 +102,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
         _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
         _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]); _setRedemptionHistory([]);
-        setGoals([]); setClinicalHistory([]);
+        setGoals([]); setClinicalHistory([]); setRiskHistory([]);
         setMyGroups([]);
     }
 
@@ -147,9 +148,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       _setUserProfile(newProfile);
       
       if (currentUser && isDataSynced) {
-          // CRITICAL FIX: Protect Super Admin 'all' organization
-          // If the user is originally a Super Admin, do NOT overwrite their session organization with the profile organization.
-          // This prevents Admins from losing their 'all' status when they update their personal health profile.
           const isSuperAdmin = currentUser.organization === 'all' || currentUser.originalOrganization === 'all';
           const orgToSet = isSuperAdmin ? 'all' : newProfile.organization;
 
@@ -220,6 +218,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const saveRiskEntry = (entry: RiskHistoryEntry) => {
+      setRiskHistory(prev => [entry, ...prev]);
+      if (currentUser && isDataSynced) {
+          saveDataToSheet(scriptUrl, 'risk', entry, currentUser);
+      }
+  };
+
   const resetData = async (): Promise<boolean> => {
       if (!currentUser || !scriptUrl) return false;
       try {
@@ -229,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
               _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); 
               _setQuizHistory([]); _setRedemptionHistory([]);
-              setGoals([]); setClinicalHistory([]);
+              setGoals([]); setClinicalHistory([]); setRiskHistory([]);
               
               const resetProfile = { ...userProfile, xp: 0, level: 1, badges: ['novice'], deltaXp: 0 };
               _setUserProfile(resetProfile);
@@ -358,7 +363,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
           if (data) {
-              if (data.profile) _setUserProfile(data.profile);
+              if (data.profile) {
+                  // --- SMART MERGE LOGIC FOR RISK ASSESSMENT ---
+                  // Reconstruct current risk status from history to persist across reloads
+                  let riskProfile: any = {};
+                  if (data.riskHistory && data.riskHistory.length > 0) {
+                      // Sort Oldest -> Newest to let newer entries overwrite older ones
+                      const sortedHistory = [...data.riskHistory].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      
+                      sortedHistory.forEach((entry: any) => {
+                          // Merge CVD if present
+                          if (entry.cvdRiskLevel && entry.cvdRiskLevel !== '') {
+                              riskProfile.cvdRiskLevel = entry.cvdRiskLevel;
+                              riskProfile.cvdScore = entry.cvdScore;
+                          }
+                          
+                          // Merge Depression if present (Use severity as indicator of valid entry)
+                          if (entry.depressionSeverity && entry.depressionSeverity !== '') {
+                              riskProfile.depressionRisk = entry.depressionRisk;
+                              riskProfile.depressionScore = entry.depressionScore;
+                              riskProfile.depressionSeverity = entry.depressionSeverity;
+                          }
+
+                          // Merge Sleep if present
+                          if (entry.sleepApneaRisk && entry.sleepApneaRisk !== '') {
+                              riskProfile.sleepApneaRisk = entry.sleepApneaRisk;
+                          }
+
+                          // Update date to the latest entry processed
+                          riskProfile.lastAssessmentDate = entry.date;
+                      });
+                  }
+                  
+                  // Merge constructed risk profile into main profile
+                  const fullProfile = {
+                      ...data.profile,
+                      riskAssessment: riskProfile
+                  };
+                  _setUserProfile(fullProfile);
+              }
+
               if (data.bmiHistory) _setBmiHistory(data.bmiHistory);
               if (data.tdeeHistory) _setTdeeHistory(data.tdeeHistory);
               if (data.foodHistory) _setFoodHistory(data.foodHistory);
@@ -373,8 +417,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (data.evaluationHistory) _setEvaluationHistory(data.evaluationHistory);
               if (data.quizHistory) _setQuizHistory(data.quizHistory);
               if (data.redemptionHistory) _setRedemptionHistory(data.redemptionHistory);
-              if (data.goals) setGoals(data.goals); // Sync Goals
-              if (data.clinicalHistory) setClinicalHistory(data.clinicalHistory); // Sync Clinical
+              if (data.goals) setGoals(data.goals);
+              if (data.clinicalHistory) setClinicalHistory(data.clinicalHistory);
+              if (data.riskHistory) setRiskHistory(data.riskHistory);
               
               setIsDataSynced(true);
               refreshGroups();
@@ -462,6 +507,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // GOALS & CLINICAL EXPORTS
       goals, setGoals, saveGoal, deleteGoal,
       clinicalHistory, setClinicalHistory, saveClinicalEntry,
+      riskHistory, saveRiskEntry,
       // SIMULATION
       simulateUserMode, exitSimulationMode
     }}>

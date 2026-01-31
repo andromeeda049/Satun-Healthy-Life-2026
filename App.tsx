@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect, useRef, useMemo, ErrorInfo } from 'react';
+import React, { useState, useContext, useEffect, useRef, useMemo, ErrorInfo, Component } from 'react';
 import BMICalculator from './components/BMICalculator';
 import TDEECalculator from './components/TDEECalculator';
 import FoodAnalyzer from './components/FoodAnalyzer';
@@ -32,7 +32,8 @@ import RewardsRedemption from './components/RewardsRedemption';
 import MenuGridPage from './components/MenuGridPage';
 import FeedbackForm from './components/FeedbackForm';
 import HealthGoals from './components/HealthGoals'; 
-import HealthRiskAssessment from './components/HealthRiskAssessment'; // NEW IMPORT
+import HealthRiskAssessment from './components/HealthRiskAssessment'; 
+import HistoryLog from './components/HistoryLog'; // NEW IMPORT
 import { AppProvider, AppContext } from './context/AppContext';
 import { AppView, User, WaterHistoryEntry } from './types';
 import { HomeIcon, CameraIcon, SparklesIcon, MenuIcon, XIcon, SquaresIcon, UserCircleIcon, WaterDropIcon, HeartIcon, BellIcon, UserGroupIcon, PhoneIcon, BeakerIcon, BoltIcon, ExclamationTriangleIcon } from './components/icons';
@@ -51,14 +52,17 @@ interface ErrorBoundaryState {
 }
 
 // --- Production Error Boundary ---
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false };
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   static getDerivedStateFromError(error: any): ErrorBoundaryState {
     return { hasError: true };
   }
 
-  componentDidCatch(error: any, errorInfo: any) {
+  componentDidCatch(error: any, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
@@ -263,7 +267,8 @@ const AppContent: React.FC = () => {
       case 'rewards': return <RewardsRedemption />;
       case 'feedback': return <FeedbackForm />;
       case 'goals': return <HealthGoals />;
-      case 'riskAssessment': return <HealthRiskAssessment />; // NEW COMPONENT
+      case 'riskAssessment': return <HealthRiskAssessment />;
+      case 'history': return <HistoryLog />; // NEW PAGE
       case 'adminDashboard': return currentUser?.role === 'admin' ? <AdminDashboard /> : <HomeMenu />;
       case 'groupManagement': return currentUser?.role === 'admin' ? <GroupManagement /> : <HomeMenu />;
       default: return <HomeMenu />;

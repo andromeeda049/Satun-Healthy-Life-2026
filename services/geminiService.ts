@@ -107,7 +107,6 @@ export const getHealthCoachingTip = async (data: any): Promise<string> => {
   const specialist = SPECIALIST_TEAM.find(s => s.id === data.specialistId);
   const specialistName = specialist?.name || "AI Coach";
   const role = specialist?.role || "General Wellness";
-  const personality = (specialist as any)?.personality || "Friendly and helpful";
   
   const userContext = `
     User Profile: Age ${data.userProfile?.age}, Gender ${data.userProfile?.gender}, BMI ${data.bmi?.value?.toFixed(1) || '-'}, TDEE ${data.tdee?.value?.toFixed(0) || '-'}.
@@ -116,14 +115,64 @@ export const getHealthCoachingTip = async (data: any): Promise<string> => {
     Recent Food: ${data.food?.description || 'No recent log'}.
   `;
 
+  // --- Dynamic Persona Construction based on Department of Health Guidelines ---
+  let specificInstructions = "";
+  
+  if (data.specialistId === 'nutritionist') {
+      specificInstructions = `
+      Persona: You are a strict but encouraging Nutritionist following Thai Department of Health standards.
+      MANDATORY: Always reference the "2:1:1 Formula" (Vegetables 2 : Rice 1 : Meat 1) in your advice.
+      Keywords to use: "ลดหวาน มัน เค็ม" (Reduce Sweet, Oily, Salty).
+      `;
+  } else if (data.specialistId === 'trainer') {
+      specificInstructions = `
+      Persona: You are a certified Physical Trainer adhering to WHO/Thai Health guidelines.
+      MANDATORY: Reference the standard of "150 minutes per week" of moderate-intensity activity.
+      Encourage consistency over intensity for beginners.
+      `;
+  } else if (data.specialistId === 'ncd_doctor') {
+      specificInstructions = `
+      Persona: You are a medical doctor specializing in NCDs (Diabetes, Hypertension).
+      MANDATORY: Emphasize "Medication Adherence" (การกินยาต่อเนื่อง ห้ามหยุดยาเอง).
+      Advise on preparation for doctor visits (fasting food/water for blood tests).
+      Tone: Professional, caring, authoritative yet accessible.
+      `;
+  } else if (data.specialistId === 'psychologist') {
+      specificInstructions = `
+      Persona: You are a mental health counselor.
+      Focus: Stress management, sleep hygiene, and emotional well-being.
+      `;
+  }
+
+  // --- 5A Model Logic for Quitting Plan ---
+  let quittingInstruction = "";
+  const isQuittingTopic = data.focusTopic && (data.focusTopic.includes('เลิก') || data.focusTopic.includes('Quitting') || data.focusTopic.includes('บุหรี่') || data.focusTopic.includes('สุรา'));
+  
+  if (isQuittingTopic) {
+      quittingInstruction = `
+      CRITICAL: The user is asking about Quitting Smoking or Alcohol.
+      You MUST structure your response using the "5A Model" (Ask, Advise, Assess, Assist, Arrange).
+      
+      Structure your response exactly like this:
+      1. **Ask/Advise**: Acknowledge their intention and strongly advise quitting for their health.
+      2. **Assess**: Ask them to reflect on their readiness (e.g., "Are you ready to set a quit date?").
+      3. **Assist**: Give ONE specific tip to cope with cravings (e.g., drink water, deep breathing).
+      4. **Arrange**: Suggest calling the hotline (1600 for Smoking, 1413 for Alcohol) if they need more help.
+      
+      Keep it concise but empathetic.
+      `;
+  }
+
   let prompt = `
     Act as ${specialistName} (${role}).
-    Personality: ${personality}.
+    ${specificInstructions}
+    ${quittingInstruction}
+    
     ${data.focusTopic ? `Focus STRICTLY on this topic: "${data.focusTopic}".` : `Provide general advice based on the user's data.`}
     
     Context: ${userContext}
     
-    Task: Give a short, actionable advice (max 3 sentences) in Thai.
+    Task: Give a short, actionable advice (max 4 sentences) in Thai.
     ${CLEAN_FORMAT_INSTRUCTION}
   `;
 
