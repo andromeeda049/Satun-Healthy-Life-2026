@@ -452,4 +452,12 @@ export interface AppContextType {
   // --- ADMIN SIMULATION ---
   simulateUserMode: () => void;
   exitSimulationMode: () => void;
+
+  // --- PIN SECURITY ---
+  userPin: string | null;
+  isPinVerified: boolean;
+  setPin: (pin: string | null) => void;
+  verifyPin: (pin: string) => boolean;
+  unlockApp: () => void;
+  lockApp: () => void;
 }

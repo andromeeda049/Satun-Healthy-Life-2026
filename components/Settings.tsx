@@ -1,18 +1,22 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
-import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon, TrashIcon, ExclamationTriangleIcon, EyeIcon } from './icons';
+import { SunIcon, MoonIcon, BellIcon, LineIcon, SparklesIcon, ClipboardDocumentCheckIcon, SquaresIcon, UserGroupIcon, TrashIcon, ExclamationTriangleIcon, EyeIcon, LockIcon } from './icons';
 import { sendTestNotification, systemFactoryReset } from '../services/googleSheetService';
 import PDPAModal from './PDPAModal';
+import PinLock from './PinLock';
 
 const Settings: React.FC = () => {
-    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout, resetData, simulateUserMode } = useContext(AppContext);
+    const { scriptUrl, setScriptUrl, theme, setTheme, currentUser, userProfile, setUserProfile, logout, resetData, simulateUserMode, userPin, setPin } = useContext(AppContext);
     
     const [currentScriptUrl, setCurrentScriptUrl] = useState(scriptUrl);
     const [saved, setSaved] = useState<'none' | 'sheets' | 'notifications' | 'ai'>('none');
     const [showPDPA, setShowPDPA] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
     const [isFactoryResetting, setIsFactoryResetting] = useState(false);
+    
+    // PIN Setup State
+    const [showPinSetup, setShowPinSetup] = useState(false);
     
     const [aiInstruction, setAiInstruction] = useState(userProfile.aiSystemInstruction || '');
 
@@ -50,6 +54,18 @@ const Settings: React.FC = () => {
         });
         setSaved('notifications');
         setTimeout(() => setSaved('none'), 2000);
+    };
+
+    const handlePinToggle = () => {
+        if (userPin) {
+            // Remove PIN
+            if (window.confirm("คุณต้องการยกเลิกรหัสผ่าน (PIN) ใช่หรือไม่?")) {
+                setPin(null); 
+            }
+        } else {
+            // Setup PIN
+            setShowPinSetup(true);
+        }
     };
 
     const handleRevokePDPA = () => {
@@ -93,9 +109,18 @@ const Settings: React.FC = () => {
     const isRemindersOn = !!userProfile.receiveDailyReminders;
     const isAdmin = currentUser?.role === 'admin';
     const isSuperAdmin = isAdmin && currentUser?.organization === 'all';
+    const hasPin = !!userPin && userPin.length === 4;
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
+             {showPinSetup && (
+                 <PinLock 
+                    isSetupMode={true} 
+                    onUnlock={() => setShowPinSetup(false)} 
+                    onCancelSetup={() => setShowPinSetup(false)}
+                 />
+             )}
+
              <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg w-full">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6 text-center uppercase tracking-tight">Appearance</h2>
                 <div className="flex justify-center gap-4">
@@ -195,20 +220,40 @@ const Settings: React.FC = () => {
 
             {currentUser?.role !== 'guest' && (
                 <>
-                    {/* Notification Management */}
+                    {/* Security & Notification Management */}
                     <div className="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-md w-full border-l-4 border-[#06C755]">
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <BellIcon className={`w-6 h-6 ${isRemindersOn ? 'text-[#06C755]' : 'text-slate-300'}`} />
-                                <h2 className="text-lg font-bold text-slate-800 dark:text-white">การแจ้งเตือน & กลุ่ม</h2>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" className="sr-only peer" checked={isRemindersOn} onChange={toggleNotifications} />
-                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06C755]"></div>
-                            </label>
+                        <div className="flex items-center gap-3 mb-6">
+                            <LockIcon className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">ความปลอดภัยและการแจ้งเตือน</h2>
                         </div>
 
                         <div className="space-y-4">
+                            {/* PIN Toggle */}
+                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-800 dark:text-white">ล็อกแอปด้วยรหัสผ่าน (PIN Lock)</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        {hasPin ? <span className="text-green-600 font-bold">เปิดใช้งานอยู่ (Active)</span> : "เพิ่มความปลอดภัยก่อนเข้าใช้งาน"}
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" className="sr-only peer" checked={hasPin} onChange={handlePinToggle} />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                                </label>
+                            </div>
+
+                            {/* Notifications */}
+                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-800 dark:text-white">การแจ้งเตือนรายวัน</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">เตือนให้บันทึกสุขภาพประจำวัน</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" className="sr-only peer" checked={isRemindersOn} onChange={toggleNotifications} />
+                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06C755]"></div>
+                                </label>
+                            </div>
+
                             {/* LINE Group Section */}
                             <div className="p-5 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
                                 <div className="flex flex-col gap-3">

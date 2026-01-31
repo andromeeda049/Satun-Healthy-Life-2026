@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { createContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEntry, UserProfile, Theme, WaterHistoryEntry, CalorieHistoryEntry, ActivityHistoryEntry, SleepEntry, MoodEntry, HabitEntry, SocialEntry, EvaluationEntry, QuizEntry, User, AppContextType, NotificationState, Organization, HealthGroup, RedemptionHistoryEntry, PlannerHistoryEntry, HealthGoal, ClinicalHistoryEntry, RiskHistoryEntry } from '../types';
@@ -70,7 +71,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Updated key to force refresh to new Hardcoded URL (v17)
   const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v17', DEFAULT_SCRIPT_URL);
   
-  const [isDataSynced, setIsDataSynced] = useState(false); 
+  // CACHE-FIRST STRATEGY: 
+  // If we have a currentUser and matching profile data in localStorage, assume synced initially.
+  // This allows the app to open INSTANTLY. The syncData will run in background to update.
+  const [isDataSynced, setIsDataSynced] = useState(() => {
+      if (typeof window !== 'undefined') {
+          // Check if we have essential data cached
+          const hasUser = !!localStorage.getItem('currentUser');
+          const hasProfile = !!localStorage.getItem('userProfile');
+          return hasUser && hasProfile;
+      }
+      return false;
+  });
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -80,6 +93,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [organizations, setOrganizations] = useLocalStorage<Organization[]>('organizations', DEFAULT_ORGANIZATIONS);
   
   const [myGroups, setMyGroups] = useState<HealthGroup[]>([]);
+
+  // --- PIN SECURITY STATE ---
+  const [userPin, setUserPin] = useLocalStorage<string | null>('user_pin', null);
+  
+  const [isPinVerified, setIsPinVerified] = useState<boolean>(() => {
+      try {
+          if (typeof window === 'undefined') return true;
+          const storedPinRaw = window.localStorage.getItem('user_pin');
+          if (!storedPinRaw) return true; // No PIN = Verified
+          const parsedPin = JSON.parse(storedPinRaw);
+          if (typeof parsedPin === 'string' && parsedPin.length === 4) {
+              return false; // Locked
+          }
+          return true;
+      } catch (e) {
+          return true; 
+      }
+  });
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -93,9 +124,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   }, []);
 
+  useEffect(() => {
+      if (!userPin) {
+          setIsPinVerified(true);
+      }
+  }, [userPin]);
+
   const login = (user: User) => {
     const lastLogonUser = localStorage.getItem('lastLogonUser');
     
+    // Check if switching users
     if (lastLogonUser && lastLogonUser !== user.username) {
         console.log("User switch detected. Clearing previous user data.");
         _setUserProfile(defaultProfile);
@@ -104,11 +142,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]); _setRedemptionHistory([]);
         setGoals([]); setClinicalHistory([]); setRiskHistory([]);
         setMyGroups([]);
+        setUserPin(null);
+        setIsPinVerified(true);
+        // User changed, force sync blocking
+        setIsDataSynced(false);
+    } else {
+        // Same user, assume cached data is good enough for start
+        setIsDataSynced(true);
     }
 
     localStorage.setItem('lastLogonUser', user.username);
     setCurrentUser(user);
-    setIsDataSynced(false);
     setIsSyncing(false);
     setSyncError(null);
   };
@@ -120,8 +164,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsSyncing(false);
     setActiveView('home');
     setMyGroups([]);
+    setIsPinVerified(false);
   };
 
+  // ... (Update Helpers remain unchanged) ...
   const handleHistoryUpdate = (setter: any, currentVal: any, newVal: any, type: string) => {
       const valueToSave = newVal instanceof Function ? newVal(currentVal) : newVal;
       setter(valueToSave);
@@ -187,10 +233,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // --- GOAL & CLINICAL FUNCTIONS ---
   const saveGoal = (goal: HealthGoal) => {
       setGoals(prev => {
-          // If update existing, replace it. Else add new.
           const existingIdx = prev.findIndex(g => g.id === goal.id);
           if (existingIdx >= 0) {
               const newGoals = [...prev];
@@ -351,12 +395,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  const setPin = (pin: string | null) => {
+      setUserPin(pin);
+      setIsPinVerified(true);
+  };
+
+  const verifyPin = (pin: string): boolean => {
+      if (userPin === pin) {
+          setIsPinVerified(true);
+          return true;
+      }
+      return false;
+  };
+
+  const unlockApp = () => setIsPinVerified(true);
+  const lockApp = () => setIsPinVerified(false);
+
   const syncData = useCallback(async () => {
       if (!currentUser || currentUser.role === 'guest' || !scriptUrl) {
           setIsDataSynced(true);
           return;
       }
 
+      // DO NOT set isDataSynced(false) here. 
+      // We want to keep the UI interactive with cached data while we fetch in background.
       setIsSyncing(true);
       setSyncError(null);
 
@@ -364,42 +426,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
           if (data) {
               if (data.profile) {
-                  // --- SMART MERGE LOGIC FOR RISK ASSESSMENT ---
-                  // Reconstruct current risk status from history to persist across reloads
                   let riskProfile: any = {};
                   if (data.riskHistory && data.riskHistory.length > 0) {
-                      // Sort Oldest -> Newest to let newer entries overwrite older ones
                       const sortedHistory = [...data.riskHistory].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                      
                       sortedHistory.forEach((entry: any) => {
-                          // Merge CVD if present
-                          if (entry.cvdRiskLevel && entry.cvdRiskLevel !== '') {
-                              riskProfile.cvdRiskLevel = entry.cvdRiskLevel;
-                              riskProfile.cvdScore = entry.cvdScore;
-                          }
-                          
-                          // Merge Depression if present (Use severity as indicator of valid entry)
-                          if (entry.depressionSeverity && entry.depressionSeverity !== '') {
-                              riskProfile.depressionRisk = entry.depressionRisk;
-                              riskProfile.depressionScore = entry.depressionScore;
-                              riskProfile.depressionSeverity = entry.depressionSeverity;
-                          }
-
-                          // Merge Sleep if present
-                          if (entry.sleepApneaRisk && entry.sleepApneaRisk !== '') {
-                              riskProfile.sleepApneaRisk = entry.sleepApneaRisk;
-                          }
-
-                          // Update date to the latest entry processed
+                          if (entry.cvdRiskLevel && entry.cvdRiskLevel !== '') { riskProfile.cvdRiskLevel = entry.cvdRiskLevel; riskProfile.cvdScore = entry.cvdScore; }
+                          if (entry.depressionSeverity && entry.depressionSeverity !== '') { riskProfile.depressionRisk = entry.depressionRisk; riskProfile.depressionScore = entry.depressionScore; riskProfile.depressionSeverity = entry.depressionSeverity; }
+                          if (entry.sleepApneaRisk && entry.sleepApneaRisk !== '') { riskProfile.sleepApneaRisk = entry.sleepApneaRisk; }
                           riskProfile.lastAssessmentDate = entry.date;
                       });
                   }
                   
-                  // Merge constructed risk profile into main profile
-                  const fullProfile = {
-                      ...data.profile,
-                      riskAssessment: riskProfile
-                  };
+                  const fullProfile = { ...data.profile, riskAssessment: riskProfile };
+                  // Smart Merge: Only update if server has meaningful data, or force update to sync state
                   _setUserProfile(fullProfile);
               }
 
@@ -421,25 +460,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (data.clinicalHistory) setClinicalHistory(data.clinicalHistory);
               if (data.riskHistory) setRiskHistory(data.riskHistory);
               
-              setIsDataSynced(true);
+              setIsDataSynced(true); // Ensure synced state is true after success
               refreshGroups();
-          } else {
-              throw new Error("ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์");
           }
       } catch (e: any) {
-          console.error("Sync Error:", e);
-          setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
-          setIsDataSynced(false);
+          console.error("Background Sync Error:", e);
+          // Silent failure is okay for background sync, user still has cached data
+          // But if it was the *first* load (isDataSynced is false), show error
+          if (!isDataSynced) {
+             setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
+          }
       } finally {
           setIsSyncing(false);
       }
-  }, [currentUser, scriptUrl, refreshGroups]);
+  }, [currentUser, scriptUrl, refreshGroups]); // Removed dependencies that cause loops
 
   useEffect(() => {
-      if (currentUser && currentUser.role !== 'guest' && !isDataSynced && !isSyncing && !syncError) {
+      // Trigger sync only if logged in and not currently syncing
+      if (currentUser && currentUser.role !== 'guest' && !isSyncing) {
           syncData();
       }
-  }, [currentUser, isDataSynced, isSyncing, syncError, syncData]);
+  }, [currentUser, syncData]);
 
   const retrySync = () => {
       setSyncError(null);
@@ -451,15 +492,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsDataSynced(true);
   };
 
-  // --- ADMIN SIMULATION MODE ---
   const simulateUserMode = () => {
       if (currentUser && currentUser.role === 'admin') {
-          const updatedUser: User = { 
-              ...currentUser, 
-              role: 'user', 
-              originalRole: 'admin',
-              originalOrganization: currentUser.organization // Backup Org
-          };
+          const updatedUser: User = { ...currentUser, role: 'user', originalRole: 'admin', originalOrganization: currentUser.organization };
           setCurrentUser(updatedUser);
           setActiveView('home');
           setNotification({ show: true, message: 'เข้าสู่โหมดจำลองผู้ใช้งาน (User View)', type: 'info' });
@@ -468,22 +503,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const exitSimulationMode = () => {
       if (currentUser && currentUser.originalRole) {
-          // Restore Role
-          // Restore Organization (prefer backup, fallback to current)
           const restoredOrg = currentUser.originalOrganization || currentUser.organization;
-          
-          const updatedUser: User = { 
-              ...currentUser, 
-              role: currentUser.originalRole as 'admin' | 'user' | 'guest',
-              organization: restoredOrg
-          };
-          
+          const updatedUser: User = { ...currentUser, role: currentUser.originalRole as 'admin' | 'user' | 'guest', organization: restoredOrg };
           delete updatedUser.originalRole;
           delete updatedUser.originalOrganization;
-          
           setCurrentUser(updatedUser);
           setNotification({ show: true, message: 'กลับสู่โหมดผู้ดูแลระบบ', type: 'success' });
-          setActiveView('settings'); // Go back to settings
+          setActiveView('settings');
       }
   };
 
@@ -501,15 +527,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
       organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
       redemptionHistory, setRedemptionHistory,
-      isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData,
-      resetData,
-      saveFeedback,
-      // GOALS & CLINICAL EXPORTS
+      isSyncing, syncError, retrySync, useOfflineData,
+      resetData, saveFeedback,
       goals, setGoals, saveGoal, deleteGoal,
       clinicalHistory, setClinicalHistory, saveClinicalEntry,
       riskHistory, saveRiskEntry,
-      // SIMULATION
-      simulateUserMode, exitSimulationMode
+      simulateUserMode, exitSimulationMode,
+      userPin, isPinVerified, setPin, verifyPin, unlockApp, lockApp
     }}>
       {children}
     </AppContext.Provider>
