@@ -1,12 +1,12 @@
 
 /**
- * Satun Smart Life - Backend Script (Production v20.9.19)
- * Update: Added QuizHistory to Admin Fetch & RiskHistory
+ * Satun Smart Life - Backend Script (Production v20.9.18)
+ * Update: Added RiskHistory for Thai CVD, 2Q/9Q, and STOP-BANG data storage.
  * Features: 
  * - Leaderboard Caching
  * - Admin Filtering
  * - Clinical History
- * - Risk Assessment History
+ * - Risk Assessment History (NEW)
  * - Group Management
  * - Data Reset & Factory Reset
  */
@@ -56,7 +56,6 @@ const SHEET_NAMES = {
   HABIT: "HabitHistory",
   SOCIAL: "SocialHistory",
   EVALUATION: "EvaluationHistory",
-  QUIZ: "QuizHistory", // Added QUIZ mapping
   CATEGORY_RANKINGS: "CategoryRankings", 
   ORGANIZATIONS: "Organization",
   GROUPS: "Groups",
@@ -65,7 +64,7 @@ const SHEET_NAMES = {
   FEEDBACK: "Feedback",
   GOALS: "Goals",
   CLINICAL: "ClinicalHistory",
-  RISK: "RiskHistory" 
+  RISK: "RiskHistory" // NEW SHEET
 };
 
 // --- 2. CORE UTILITIES & LOCK SERVICE ---
@@ -97,7 +96,7 @@ function createErrorResponse(error) {
 
 function doGet(e) {
   if (!e || !e.parameter || Object.keys(e.parameter).length === 0) {
-      return ContentService.createTextOutput("Satun Smart Life API v20.9.19 is Online").setMimeType(ContentService.MimeType.TEXT);
+      return ContentService.createTextOutput("Satun Smart Life API v20.9.18 is Online").setMimeType(ContentService.MimeType.TEXT);
   }
   return handleRequest(e, 'GET');
 }
@@ -613,7 +612,7 @@ function handleSave(type, payload, user) {
     case SHEET_NAMES.SOCIAL: newRow = [...commonPrefix, item.interaction, item.feeling]; break;
     case SHEET_NAMES.PLANNER: newRow = [...commonPrefix, item.cuisine, item.diet, item.tdee, JSON.stringify(item.plan)]; break;
     case SHEET_NAMES.EVALUATION: newRow = [timestamp, user.username, user.displayName, user.role, JSON.stringify(item.satisfaction || {}), JSON.stringify(item.outcomes || {})]; break;
-    case SHEET_NAMES.QUIZ: newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
+    case 'QuizHistory': newRow = [timestamp, user.username, item.score, item.totalQuestions, item.correctAnswers, item.type, item.weekNumber]; break;
     case SHEET_NAMES.REDEMPTION: newRow = [...commonPrefix, item.rewardId, item.rewardName, item.cost]; break;
     case SHEET_NAMES.FEEDBACK: newRow = [timestamp, user.username, user.displayName, item.category, item.message, item.rating, 'Pending']; break;
     case SHEET_NAMES.GOALS: newRow = [timestamp, user.username, item.id, item.type, item.startValue, item.targetValue, item.startDate, item.deadline || '', item.status]; break;
@@ -727,7 +726,7 @@ function handleResetUser(user, targetUsername) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        SHEET_NAMES.QUIZ, SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
         SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL, SHEET_NAMES.RISK // Added RISK
     ];
 
@@ -747,7 +746,7 @@ function handleResetUser(user, targetUsername) {
 }
 
 function handleSystemFactoryReset(adminUser) {
-    if (adminUser.role !== 'admin' && adminUser.organization !== 'all') {
+    if (adminUser.role !== 'admin' || adminUser.organization !== 'all') {
         return createErrorResponse("CRITICAL: Permission Denied. Super Admin only.");
     }
 
@@ -769,7 +768,7 @@ function handleSystemFactoryReset(adminUser) {
         SHEET_NAMES.BMI, SHEET_NAMES.TDEE, SHEET_NAMES.FOOD, SHEET_NAMES.PLANNER,
         SHEET_NAMES.WATER, SHEET_NAMES.CALORIE, SHEET_NAMES.ACTIVITY, SHEET_NAMES.SLEEP,
         SHEET_NAMES.MOOD, SHEET_NAMES.HABIT, SHEET_NAMES.SOCIAL, SHEET_NAMES.EVALUATION,
-        SHEET_NAMES.QUIZ, SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
+        "QuizHistory", SHEET_NAMES.REDEMPTION, SHEET_NAMES.FEEDBACK,
         SHEET_NAMES.GOALS, SHEET_NAMES.CLINICAL, SHEET_NAMES.RISK
     ];
 
@@ -879,7 +878,7 @@ function getUserFullData(username) {
       habitHistory: getAllHistoryForUser(SHEET_NAMES.HABIT, username),
       socialHistory: getAllHistoryForUser(SHEET_NAMES.SOCIAL, username),
       evaluationHistory: getAllHistoryForUser(SHEET_NAMES.EVALUATION, username),
-      quizHistory: getAllHistoryForUser(SHEET_NAMES.QUIZ, username),
+      quizHistory: getAllHistoryForUser('QuizHistory', username),
       redemptionHistory: getAllHistoryForUser(SHEET_NAMES.REDEMPTION, username),
       goals: getAllHistoryForUser(SHEET_NAMES.GOALS, username), 
       clinicalHistory: getAllHistoryForUser(SHEET_NAMES.CLINICAL, username),
@@ -926,7 +925,7 @@ function getAllHistoryForUser(sheetName, username) {
     if (sheetName === SHEET_NAMES.SOCIAL) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], interaction: r[4], feeling: r[5] }));
     if (sheetName === SHEET_NAMES.PLANNER) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], cuisine: r[4], diet: r[5], tdee: r[6], plan: JSON.parse(r[7]) }));
     if (sheetName === SHEET_NAMES.EVALUATION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], satisfaction: JSON.parse(r[4]||'{}'), outcomes: JSON.parse(r[5]||'{}') }));
-    if (sheetName === SHEET_NAMES.QUIZ) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
+    if (sheetName === 'QuizHistory') return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], score: r[4], totalQuestions: r[5], correctAnswers: r[6], type: r[7], weekNumber: r[8] }));
     if (sheetName === SHEET_NAMES.REDEMPTION) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], rewardId: r[4], rewardName: r[5], cost: r[6] })); 
     if (sheetName === SHEET_NAMES.GOALS) return rows.map(r => ({ id: r[2], type: r[3], startValue: r[4], targetValue: r[5], startDate: r[6], deadline: r[7], status: r[8] })); 
     if (sheetName === SHEET_NAMES.CLINICAL) return rows.map(r => ({ date: new Date(r[0]).toISOString(), id: r[0], systolic: r[2], diastolic: r[3], fbs: r[4], waist: r[5], weight: r[6], note: r[7], hba1c: r[8], visceral_fat: r[9], muscle_mass: r[10], bmr: r[11] })); 
@@ -952,7 +951,6 @@ function handleAdminFetch() {
       { name: SHEET_NAMES.ACTIVITY, key: 'activityHistory', limit: 500 },
       { name: SHEET_NAMES.BMI, key: 'bmiHistory', limit: 500 },
       { name: SHEET_NAMES.EVALUATION, key: 'evaluationHistory', limit: 500 },
-      { name: SHEET_NAMES.QUIZ, key: 'quizHistory', limit: 1000 }, // Added QuizHistory fetch
       { name: SHEET_NAMES.LOGIN_LOGS, key: 'loginLogs', limit: 100 },
       { name: SHEET_NAMES.RISK, key: 'riskHistory', limit: 1000 } // Added to admin fetch
   ];
@@ -1163,5 +1161,5 @@ function setupSheets() {
   ensureSheet(SHEET_NAMES.CLINICAL, ["timestamp", "username", "systolic", "diastolic", "fbs", "waist", "weight", "note", "hba1c", "visceral_fat", "muscle_mass", "bmr"]);
   ensureSheet(SHEET_NAMES.RISK, ["timestamp", "username", "cvd_level", "cvd_score", "depression_risk", "depression_score", "depression_severity", "sleep_risk", "json_data"]); // New Sheet
 
-  return "Setup Complete (v20.9.19) - QuizHistory & Risk Added";
+  return "Setup Complete (v20.9.18) - Risk History Added";
 }

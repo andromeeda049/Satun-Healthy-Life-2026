@@ -6,6 +6,7 @@ import { AppView, BMIHistoryEntry, TDEEHistoryEntry, NutrientInfo, FoodHistoryEn
 import { PLANNER_ACTIVITY_LEVELS, HEALTH_CONDITIONS, LEVEL_THRESHOLDS, GAMIFICATION_LIMITS, XP_VALUES, DEFAULT_ORGANIZATIONS } from '../constants';
 import { fetchAllDataFromSheet, saveDataToSheet, clearHistoryInSheet, getUserGroups, joinGroup as joinGroupService, leaveGroup as leaveGroupService, resetUserData, deleteDataFromSheet } from '../services/googleSheetService';
 
+// ... constants and defaultProfile ...
 // HARDCODED URL (v17.0) - Updated Verified URL
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaH1AGEMnL0FAuvGKynIT-s-A06zGg73YYG3l6CgUwwiPBXhQrLCHOMlb01fANkxTx_w/exec';
 
@@ -40,6 +41,7 @@ const getInitialTheme = (): Theme => {
 export const AppContext = createContext<AppContextType>({} as AppContextType);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // ... other states ...
   const initialUrlParams = useRef(new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''));
 
   const [activeView, setActiveView] = useState<AppView>('home');
@@ -71,19 +73,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Updated key to force refresh to new Hardcoded URL (v17)
   const [scriptUrl, setScriptUrl] = useLocalStorage<string>('googleScriptUrl_v17', DEFAULT_SCRIPT_URL);
   
-  // CACHE-FIRST STRATEGY: 
-  // If we have a currentUser and matching profile data in localStorage, assume synced initially.
-  // This allows the app to open INSTANTLY. The syncData will run in background to update.
-  const [isDataSynced, setIsDataSynced] = useState(() => {
-      if (typeof window !== 'undefined') {
-          // Check if we have essential data cached
-          const hasUser = !!localStorage.getItem('currentUser');
-          const hasProfile = !!localStorage.getItem('userProfile');
-          return hasUser && hasProfile;
-      }
-      return false;
-  });
-
+  const [isDataSynced, setIsDataSynced] = useState(false); 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -97,18 +87,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // --- PIN SECURITY STATE ---
   const [userPin, setUserPin] = useLocalStorage<string | null>('user_pin', null);
   
+  // Initialize verified state: Force check from localStorage to prevent sync delay
   const [isPinVerified, setIsPinVerified] = useState<boolean>(() => {
       try {
           if (typeof window === 'undefined') return true;
           const storedPinRaw = window.localStorage.getItem('user_pin');
           if (!storedPinRaw) return true; // No PIN = Verified
+          
           const parsedPin = JSON.parse(storedPinRaw);
+          // Only if there is a valid 4-digit PIN string, it counts as locked initially
           if (typeof parsedPin === 'string' && parsedPin.length === 4) {
               return false; // Locked
           }
           return true;
       } catch (e) {
-          return true; 
+          return true; // Fallback to verified if error
       }
   });
 
@@ -124,7 +117,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   }, []);
 
+  // Sync isPinVerified with userPin changes (e.g. after setup/removal)
   useEffect(() => {
+      // Logic: If user sets a PIN, we don't lock immediately (they just entered it).
+      // If user removes PIN (userPin becomes null), we ensure it's verified (unlocked).
       if (!userPin) {
           setIsPinVerified(true);
       }
@@ -136,23 +132,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Check if switching users
     if (lastLogonUser && lastLogonUser !== user.username) {
         console.log("User switch detected. Clearing previous user data.");
-        _setUserProfile(defaultProfile);
-        _setBmiHistory([]); _setTdeeHistory([]); _setFoodHistory([]); _setPlannerHistory([]); 
-        _setWaterHistory([]); _setCalorieHistory([]); _setActivityHistory([]); _setSleepHistory([]);
-        _setMoodHistory([]); _setHabitHistory([]); _setSocialHistory([]); _setEvaluationHistory([]); _setQuizHistory([]); _setRedemptionHistory([]);
-        setGoals([]); setClinicalHistory([]); setRiskHistory([]);
-        setMyGroups([]);
-        setUserPin(null);
-        setIsPinVerified(true);
-        // User changed, force sync blocking
-        setIsDataSynced(false);
-    } else {
-        // Same user, assume cached data is good enough for start
-        setIsDataSynced(true);
+        // DO NOT Clear PIN here automatically to prevent accidental data loss preference, 
+        // unless strictly required. For now, let's keep PIN per device.
+        // If you want per-user PIN, you need to store it in user profile or keyed by username.
+        // Current implementation is simple "App Lock".
     }
 
     localStorage.setItem('lastLogonUser', user.username);
     setCurrentUser(user);
+    setIsDataSynced(false);
     setIsSyncing(false);
     setSyncError(null);
   };
@@ -164,10 +152,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsSyncing(false);
     setActiveView('home');
     setMyGroups([]);
+    // Lock on logout so next login/open requires PIN if set
     setIsPinVerified(false);
   };
 
-  // ... (Update Helpers remain unchanged) ...
+  // ... (rest of methods: setHistory, saveEvaluation, etc. - UNCHANGED) ...
   const handleHistoryUpdate = (setter: any, currentVal: any, newVal: any, type: string) => {
       const valueToSave = newVal instanceof Function ? newVal(currentVal) : newVal;
       setter(valueToSave);
@@ -233,8 +222,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  // --- GOAL & CLINICAL FUNCTIONS ---
   const saveGoal = (goal: HealthGoal) => {
       setGoals(prev => {
+          // If update existing, replace it. Else add new.
           const existingIdx = prev.findIndex(g => g.id === goal.id);
           if (existingIdx >= 0) {
               const newGoals = [...prev];
@@ -395,8 +386,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
+  // --- PIN FUNCTIONS ---
   const setPin = (pin: string | null) => {
       setUserPin(pin);
+      // If setting a pin, assume verified for this session
       setIsPinVerified(true);
   };
 
@@ -417,8 +410,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return;
       }
 
-      // DO NOT set isDataSynced(false) here. 
-      // We want to keep the UI interactive with cached data while we fetch in background.
       setIsSyncing(true);
       setSyncError(null);
 
@@ -426,6 +417,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const data = await fetchAllDataFromSheet(scriptUrl, currentUser);
           if (data) {
               if (data.profile) {
+                  // --- SMART MERGE LOGIC FOR RISK ASSESSMENT ---
                   let riskProfile: any = {};
                   if (data.riskHistory && data.riskHistory.length > 0) {
                       const sortedHistory = [...data.riskHistory].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -437,8 +429,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                       });
                   }
                   
-                  const fullProfile = { ...data.profile, riskAssessment: riskProfile };
-                  // Smart Merge: Only update if server has meaningful data, or force update to sync state
+                  const fullProfile = {
+                      ...data.profile,
+                      riskAssessment: riskProfile
+                  };
                   _setUserProfile(fullProfile);
               }
 
@@ -460,27 +454,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (data.clinicalHistory) setClinicalHistory(data.clinicalHistory);
               if (data.riskHistory) setRiskHistory(data.riskHistory);
               
-              setIsDataSynced(true); // Ensure synced state is true after success
+              setIsDataSynced(true);
               refreshGroups();
+          } else {
+              throw new Error("ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์");
           }
       } catch (e: any) {
-          console.error("Background Sync Error:", e);
-          // Silent failure is okay for background sync, user still has cached data
-          // But if it was the *first* load (isDataSynced is false), show error
-          if (!isDataSynced) {
-             setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
-          }
+          console.error("Sync Error:", e);
+          setSyncError(e.message || "การเชื่อมต่อขัดข้อง");
+          setIsDataSynced(false);
       } finally {
           setIsSyncing(false);
       }
-  }, [currentUser, scriptUrl, refreshGroups]); // Removed dependencies that cause loops
+  }, [currentUser, scriptUrl, refreshGroups]);
 
   useEffect(() => {
-      // Trigger sync only if logged in and not currently syncing
-      if (currentUser && currentUser.role !== 'guest' && !isSyncing) {
+      // Sync data even if PIN is locked. This allows "Background Loading".
+      if (currentUser && currentUser.role !== 'guest' && !isDataSynced && !isSyncing && !syncError) {
           syncData();
       }
-  }, [currentUser, syncData]);
+  }, [currentUser, isDataSynced, isSyncing, syncError, syncData]);
 
   const retrySync = () => {
       setSyncError(null);
@@ -492,9 +485,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsDataSynced(true);
   };
 
+  // --- ADMIN SIMULATION MODE ---
   const simulateUserMode = () => {
       if (currentUser && currentUser.role === 'admin') {
-          const updatedUser: User = { ...currentUser, role: 'user', originalRole: 'admin', originalOrganization: currentUser.organization };
+          const updatedUser: User = { 
+              ...currentUser, 
+              role: 'user', 
+              originalRole: 'admin',
+              originalOrganization: currentUser.organization // Backup Org
+          };
           setCurrentUser(updatedUser);
           setActiveView('home');
           setNotification({ show: true, message: 'เข้าสู่โหมดจำลองผู้ใช้งาน (User View)', type: 'info' });
@@ -504,12 +503,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const exitSimulationMode = () => {
       if (currentUser && currentUser.originalRole) {
           const restoredOrg = currentUser.originalOrganization || currentUser.organization;
-          const updatedUser: User = { ...currentUser, role: currentUser.originalRole as 'admin' | 'user' | 'guest', organization: restoredOrg };
+          const updatedUser: User = { 
+              ...currentUser, 
+              role: currentUser.originalRole as 'admin' | 'user' | 'guest',
+              organization: restoredOrg
+          };
           delete updatedUser.originalRole;
           delete updatedUser.originalOrganization;
+          
           setCurrentUser(updatedUser);
           setNotification({ show: true, message: 'กลับสู่โหมดผู้ดูแลระบบ', type: 'success' });
-          setActiveView('settings');
+          setActiveView('settings'); // Go back to settings
       }
   };
 
@@ -527,12 +531,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       notification, closeNotification, isSOSOpen, openSOS, closeSOS,
       organizations, myGroups, joinGroup, leaveGroup, refreshGroups,
       redemptionHistory, setRedemptionHistory,
-      isSyncing, syncError, retrySync, useOfflineData,
-      resetData, saveFeedback,
+      isSyncing, syncError, retrySync: retrySync, useOfflineData: useOfflineData,
+      resetData,
+      saveFeedback,
+      // GOALS & CLINICAL EXPORTS
       goals, setGoals, saveGoal, deleteGoal,
       clinicalHistory, setClinicalHistory, saveClinicalEntry,
       riskHistory, saveRiskEntry,
+      // SIMULATION
       simulateUserMode, exitSimulationMode,
+      // PIN
       userPin, isPinVerified, setPin, verifyPin, unlockApp, lockApp
     }}>
       {children}
