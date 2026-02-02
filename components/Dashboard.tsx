@@ -244,7 +244,8 @@ const HealthTrendChart: React.FC<{
     colorHex: string;
     unit: string;
     targetValue?: number;
-}> = ({ data, dataKey, dateKey, colorHex, unit, targetValue }) => {
+    onRecord?: () => void;
+}> = ({ data, dataKey, dateKey, colorHex, unit, targetValue, onRecord }) => {
     
     const chartData = useMemo(() => {
         // Safe mapping with strict Number conversion
@@ -276,7 +277,15 @@ const HealthTrendChart: React.FC<{
                     <ChartBarIcon className="w-8 h-8 text-gray-300 dark:text-gray-500" />
                 </div>
                 <p className="text-sm font-bold text-gray-500 dark:text-gray-400">ยังไม่มีข้อมูล {unit}</p>
-                <p className="text-xs text-gray-400">เริ่มบันทึกข้อมูลเพื่อดูแนวโน้มสุขภาพ</p>
+                <p className="text-xs text-gray-400 mb-3">เริ่มบันทึกข้อมูลเพื่อดูแนวโน้มสุขภาพ</p>
+                {onRecord && (
+                    <button 
+                        onClick={onRecord}
+                        className="px-5 py-2.5 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 text-xs font-bold rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm"
+                    >
+                        + บันทึกค่าเป้าหมาย
+                    </button>
+                )}
             </div>
         );
     }
@@ -752,6 +761,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#3b82f6'} 
                             unit="BMI" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'weight' && (
@@ -762,6 +772,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#8b5cf6'} 
                             unit="Weight (kg)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'systolic' && (
@@ -772,6 +783,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#f43f5e'} 
                             unit="BP (Systolic)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'fbs' && (
@@ -782,6 +794,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#f59e0b'} 
                             unit="FBS (mg/dL)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'hba1c' && (
@@ -792,6 +805,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#ef4444'} 
                             unit="HbA1c (%)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'waist' && (
@@ -802,6 +816,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#14b8a6'} 
                             unit="Waist (cm)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'visceral_fat' && (
@@ -812,6 +827,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#f97316'} 
                             unit="Visceral Fat (Lv)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'muscle_mass' && (
@@ -822,6 +838,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#6366f1'} 
                             unit="Muscle (kg)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                     {activeChartTab === 'bmr' && (
@@ -832,6 +849,7 @@ const Dashboard: React.FC = () => {
                             colorHex={currentTabInfo?.colorHex || '#22c55e'} 
                             unit="BMR (kcal)" 
                             targetValue={targetValue}
+                            onRecord={() => setActiveView('goals')}
                         />
                     )}
                 </div>
